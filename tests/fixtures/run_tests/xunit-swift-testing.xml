@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic, in SwiftPM 6.2's <name>-swift-testing.xml shape: 2 passed (1 learning), 1 skipped. -->
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="2" failures="0" skipped="1" time="0.001">
+    <testcase classname="DictationAppCoreTests" name="holdKeyDefaultsToRightCommand()" time="0.0002" />
+    <testcase classname="DictationLearningTests" name="aTaughtWordKeepsItsCasing()" time="0.0002" />
+    <testcase classname="DictationAudioCaptureTests" name="bluetoothRouteFlipKeepsCapture()" >
+      <skipped>needs hardware</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

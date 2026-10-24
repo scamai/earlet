@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0, matching Dictation.Speech exactly: same TFM, same
+         ImplicitUsings, same Nullable, and, like it, no LangVersion and no
+         per-project analyzer settings, so both take the SDK defaults and
+         whatever Directory.Build.props applies. That parity is the point:
+         dictation consumes the speech layer's insert seams, and a project that
+         quietly ran under a different nullable or analyser regime would let a
+         warning-clean build here mean something different than it means one
+         project over.
+
+         Not net9.0-windows, even though Win32FocusedApplicationResolver holds
+         P/Invokes. A DllImport declaration compiles under any TFM; it is the
+         *call* that needs Windows, and that call sits behind
+         IFocusedApplicationResolver so no test reaches it. Keeping the TFM
+         narrow is what lets this policy layer be compiled and tested on a
+         Linux or macOS checkout, the same trade Dictation.Speech makes. -->
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Dictation.Services</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Abstractions only, the same version every other project here takes:
+         this layer logs, it never picks a sink. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- For IClipboard and IPasteKeystroke. Dictation uses the insert seams
+         the speech layer declares rather than growing a second pair: one
+         clipboard abstraction and one paste abstraction in the product means
+         one place where "what actually types" is decided, and one Win32
+         implementation to get right. Dictation.Speech is zero-platform
+         net9.0, so this costs the portable lane nothing. -->
+    <ProjectReference Include="..\Dictation.Speech\Dictation.Speech.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The dictation test project, and nothing else: a fake inserter there
+         builds its FocusedInsertionResult through the internal factory the
+         real inserter uses (DictationSpokenCommandTests). -->
+    <InternalsVisibleTo Include="Dictation.Services.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The distinctiveness dictionary, shipped rather than borrowed.
+
+         macOS reads /usr/share/dict/words, which every Mac has at a fixed
+         path; Windows ships no word list at any path. This is that same BSD
+         web2 subset - Webster's Second International, 1934, copyright lapsed -
+         gzipped, 235,642 lines and ~2.4 MB decompressed into
+         a FrozenSet on first use.
+
+         Embedded rather than a loose file beside the exe: an installer that
+         can drop a file can also fail to, and the gate failing open (see
+         VocabularyLexicon) would then be a silent, invisible degradation on
+         some machines and not others. An embedded resource cannot be absent
+         from an assembly that loaded.
+
+         A fixed LogicalName, not the default one: without it the resource id
+         is the root namespace plus the folder path, so renaming the project
+         or moving the file would silently break the lookup and the gate would
+         fail open. VocabularyLexicon.WordListResourceName is the other half of
+         this pair, and VocabularyLexiconTests pins both. -->
+    <EmbeddedResource Include="Resources/web2-words.txt.gz"
+                      LogicalName="web2-words.txt.gz" />
+  </ItemGroup>
+
+</Project>

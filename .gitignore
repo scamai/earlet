@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/.build/
+**/__pycache__/
+**/.pytest_cache/
+.venv/
+dist/
+evidence/
+**/TestResults/
+*.wav
+*.onnx
+*.safetensors
+*.mlmodelc/
+*.mlpackage/
+runtime/python/
+runtime/models/

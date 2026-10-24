@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic, in pytest's junitxml shape: 1 passed, 1 failure, 1 error (a learned_vocabulary test). -->
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="1" failures="1" skipped="0" tests="3" time="0.300">
+    <testcase classname="tests.test_boundary" name="test_an_external_path_is_refused" time="0.010"/>
+    <testcase classname="tests.test_package" name="test_links_in_the_supplied_inputs_are_copied_as_files" time="0.020">
+      <failure message="assert False">synthetic failure</failure>
+    </testcase>
+    <testcase classname="runtime.transcription_worker.test_learned_vocabulary" name="test_reload_on_change" time="0.001">
+      <error message="fixture failed">synthetic error</error>
+    </testcase>
+  </testsuite>
+</testsuites>

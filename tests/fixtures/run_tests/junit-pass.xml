@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic, in pytest's junitxml shape: 3 passed (2 learning), 1 skipped. -->
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="1" tests="4" time="0.412">
+    <testcase classname="tests.test_learning_golden" name="test_sequences_agree[teach-then-remove]" time="0.011"/>
+    <testcase classname="tests.test_learning_golden" name="test_extract_cases_agree" time="0.009"/>
+    <testcase classname="tests.test_package" name="test_the_package_ships_exactly_the_declared_worker" time="0.120"/>
+    <testcase classname="tests.test_package" name="test_a_macos_binary_is_stripped_before_signing" time="0.000">
+      <skipped type="pytest.skip" message="needs a Mac">needs a Mac</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

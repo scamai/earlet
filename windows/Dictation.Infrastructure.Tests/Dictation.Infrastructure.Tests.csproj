@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0-windows, matching Dictation.Infrastructure exactly. It has to
+         be: a net9.0 project cannot reference a net9.0-windows one, so there
+         is no version of this file that both tests Win32ReadableClipboard and
+         stays on the portable lane.
+
+         That is the whole reason this is a separate project rather than more
+         files in Dictation.Services.Tests. Adding a Windows-bound reference
+         there would take away the one thing that project is for, being
+         executable evidence the dictation state machine works on any
+         checkout, and DictationProjectStructureTests would (correctly) fail
+         the moment it happened. -->
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dictation.Infrastructure.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The versions the rest of the tree pins, and nothing beyond them; the
+         logging abstractions this project's NullLogger needs arrive through
+         Dictation.Infrastructure, which already references them. -->
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- All three named explicitly rather than leaning on the transitive flow,
+         because the tests bind a type from each: Win32ReadableClipboard from
+         the adapter under test, IClipboard from the speech layer it delegates
+         writes to, and IClipboardTextSnapshot from the dictation core it adds
+         reads for. A reader should be able to see the three layers this one
+         class straddles without opening another csproj. -->
+    <ProjectReference Include="..\Dictation.Infrastructure\Dictation.Infrastructure.csproj" />
+    <ProjectReference Include="..\Dictation.Services\Dictation.Services.csproj" />
+    <ProjectReference Include="..\Dictation.Speech\Dictation.Speech.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- WindowsOnlyFact has one owner, TestSupport/, and is linked rather than
+         copied into each suite that needs it: a copy per project would drift. -->
+    <Compile Include="..\TestSupport\WindowsOnlyFactAttribute.cs" Link="WindowsOnlyFactAttribute.cs" />
+    <Using Include="Dictation.TestSupport" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The clipboard writer Win32ReadableClipboard composes in the app,
+         compiled in rather than referenced, for the reason Dictation.Core.Tests
+         gives for its worker process: Dictation.Platform brings NAudio, whose
+         WinForms half stops a test host from starting on Linux. These two
+         files need nothing beyond the speech contracts this project already
+         references, and compiling the shipped source means the format plan
+         that is tested is the one that ships. -->
+    <Compile Include="..\Dictation.Platform\Insert\Win32Clipboard.cs" Link="Linked\Win32Clipboard.cs" />
+    <Compile Include="..\Dictation.Platform\Insert\Win32InsertInterop.cs" Link="Linked\Win32InsertInterop.cs" />
+  </ItemGroup>
+
+</Project>

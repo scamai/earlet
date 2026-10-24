@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0 (not -windows) — deliberately. This project holds the
+         cross-platform half of the speech path: the worker host and its wire
+         protocol, push-to-talk, the microphone tap, the transcription
+         contracts and the insert seams the Windows adapters implement.
+         Keeping the TFM narrow is what lets that policy layer be tested on a
+         Linux checkout; everything that needs Win32 (microphone capture,
+         clipboard, paste keystroke, the worker process) lives in
+         Dictation.Platform instead. -->
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Dictation.Speech</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Abstractions only, the same version every other project here takes.
+         The speech layer logs; it never picks a sink. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

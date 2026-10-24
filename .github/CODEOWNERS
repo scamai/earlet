@@ -1,0 +1,5 @@
+# Earlet source ownership. The existing engineering team reviews all paths.
+# GitHub activates this file in the independent repository; the team must
+# have write access there for review requests to work.
+
+* @scamai/engineering

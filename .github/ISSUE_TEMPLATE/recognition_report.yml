@@ -1,0 +1,70 @@
+name: Recognition report
+description: The app typed different words from the ones you said.
+labels: ["recognition"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Recognition reports help most when the same words go wrong more than
+        once. Type out what you said; never attach a recording of anyone
+        else's voice, and think twice before attaching your own.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - Windows x64
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and build
+      description: The app's window shows both under Troubleshooting.
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: The language setting in the app's window, and the language you spoke if it was Automatic.
+      placeholder: Automatic, speaking English
+    validations:
+      required: true
+  - type: textarea
+    id: said
+    attributes:
+      label: What you said
+    validations:
+      required: true
+  - type: textarea
+    id: typed
+    attributes:
+      label: What was typed
+    validations:
+      required: true
+  - type: dropdown
+    id: vocabulary
+    attributes:
+      label: Is the missed word in your Vocabulary list?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+        - No single word was missed
+    validations:
+      required: true
+  - type: dropdown
+    id: microphone
+    attributes:
+      label: Microphone
+      options:
+        - Built-in
+        - USB or wired
+        - Bluetooth
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Background noise, accent, speaking speed, how often it happens.

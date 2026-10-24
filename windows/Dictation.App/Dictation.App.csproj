@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- For the notification-area icon (NotifyIcon) and nothing else: WPF has
+         no tray control of its own. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Dictation</AssemblyName>
+    <RootNamespace>Dictation.App</RootNamespace>
+    <Version>0.1.0</Version>
+    <!-- Per-monitor DPI awareness, long paths and no elevation; app.manifest
+         says why. The SDK copies it into the Dictation.exe apphost too, also
+         when the package is built on Linux. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFO0003 is Windows Forms' advice to move DPI settings out of the
+         manifest into ApplicationHighDpiMode, which only Windows Forms'
+         generated ApplicationConfiguration.Initialize() reads. This is a WPF
+         app that uses Windows Forms for the tray icon alone; WPF takes its
+         DPI awareness from the manifest. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Windows Forms' implicit namespaces would make Application, Button and
+         MessageBox ambiguous with WPF's. DictationTray names its types in full. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <!-- tools/package.py passes -p:DictationBuild=<UTC yyyyMMddHHmmss>; the
+       launch line names it (DictationInstallation). A build without it, a
+       developer's, logs "Build not recorded". -->
+  <ItemGroup Condition="'$(DictationBuild)' != ''">
+    <AssemblyMetadata Include="DictationBuild" Value="$(DictationBuild)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Dictation.Core/Dictation.Core.csproj" />
+    <ProjectReference Include="../Dictation.Infrastructure/Dictation.Infrastructure.csproj" />
+    <ProjectReference Include="../Dictation.Platform/Dictation.Platform.csproj" />
+  </ItemGroup>
+</Project>

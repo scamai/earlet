@@ -1,0 +1,5 @@
+# The license texts keep LF line endings on every checkout, Git for Windows'
+# core.autocrlf included, so their bytes stay the published Apache-2.0 text.
+LICENSE text eol=lf
+LICENSES/** text eol=lf
+NOTICE text eol=lf

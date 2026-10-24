@@ -1,0 +1,12 @@
+Public domain
+
+This identifier marks a work in this repository that is in the public domain
+and carries no license. REUSE.toml names the files it covers.
+
+It covers the web2 word list: the headwords of Webster's Second International
+Dictionary (1934), as distributed with BSD and macOS in /usr/share/dict/web2,
+gzip-compressed. Its provenance is the statement in the BSD share/dict
+README, by James A. Woods:
+
+    Welcome to web2 (Webster's Second International) all 234,936 words worth.
+    The 1934 copyright has lapsed, according to the supplier.

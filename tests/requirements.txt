@@ -1,0 +1,14 @@
+# The Python gate's own dependencies (tests/ and the worker tests VERIFY.md
+# names). Not shipped. Regenerate:
+#   printf 'numpy\npytest\n' | uv pip compile - --python-version 3.11 \
+#     --python-platform x86_64-unknown-linux-gnu --no-header
+iniconfig==2.3.0
+    # via pytest
+numpy==2.4.6
+packaging==26.3
+    # via pytest
+pluggy==1.6.0
+    # via pytest
+pygments==2.21.0
+    # via pytest
+pytest==9.1.1

@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <!--
+    A Release build must not name the builder's checkout or a private source
+    repository. Without this the SDK's SourceLink wrote a map from the absolute
+    checkout path to the source repository's raw-file URL at the commit into every
+    PDB, and each DLL's debug directory named its obj/ path. Source paths map to
+    /_/, git is not queried, and no commit hash is appended to the version.
+    tools/package.py additionally publishes with DebugType=none, deletes any
+    *.pdb and fails a package that still carries a builder path.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <EnableSourceLink>false</EnableSourceLink>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

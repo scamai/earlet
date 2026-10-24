@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0 (no -windows): the project under test is plain net9.0, and
+         these tests have to keep running on the portable lane. That is not a
+         nicety: the WPF app needs a Windows machine to run, and when none is
+         reachable this project is executable evidence the dictation state
+         machine still works on any checkout. A Windows type reaching this
+         project would take that away (DictationProjectStructureTests). -->
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dictation.Services.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same versions the rest of the tree pins. -->
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dictation.Services\Dictation.Services.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Fixtures travel with the assembly, so tests read them from their own
+         output directory (TestPaths.Fixture) and never search the tree for
+         anything outside this product. No test needs one today. A new fixture
+         goes under Fixtures/, with its provenance beside it. -->
+    <None Update="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- WindowsOnlyFact has one owner, TestSupport/, and is linked rather than
+         copied into each suite that needs it: a copy per project would drift. -->
+    <Compile Include="..\TestSupport\WindowsOnlyFactAttribute.cs" Link="WindowsOnlyFactAttribute.cs" />
+    <Using Include="Dictation.TestSupport" />
+  </ItemGroup>
+
+</Project>

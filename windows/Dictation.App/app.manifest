@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <!--
+    This file replaces the manifest the compiler would otherwise embed, so it
+    restates the one thing that one said: run with the rights of whoever
+    started Dictation, and never ask for elevation.
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!--
+        Per-monitor DPI awareness, version 2. Without it WPF runs system-DPI
+        aware: on a laptop with an external monitor at a different scale, the
+        window is drawn for one scale and bitmap-stretched on the other, which
+        blurs its text. PerMonitorV2 (Windows 10 1703 and later) lets WPF lay
+        the window out again at each monitor's scale; PerMonitor is the
+        fallback for earlier Windows 10, and dpiAware True/PM is for loaders
+        that ignore the 2016 schema.
+      -->
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2,PerMonitor</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">True/PM</dpiAware>
+      <!--
+        The model, the log and learning.json live under
+        %LOCALAPPDATA%\Dictation, which a long user name or a deep install
+        folder can push past MAX_PATH. Takes effect where the system's
+        LongPathsEnabled policy is on, and costs nothing where it is off.
+      -->
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>

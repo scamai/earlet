@@ -1,0 +1,92 @@
+name: Bug report
+description: Something in the app or the build does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through private reporting
+        (see SECURITY.md), never a public issue. Words recognised wrongly have
+        their own form, the recognition report. Do not include dictated text,
+        recordings, vocabulary files, or log contents in a public issue.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - Windows x64
+        - Windows on ARM (the x64 app under emulation, or an app-only ARM64 build)
+        - Building or testing from source (any platform)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and build
+      description: The app's window shows both under Troubleshooting. For a source build, give the commit.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version and computer
+      placeholder: macOS 15.5 on a MacBook Air M2, or Windows 11 24H2 on a desktop PC
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open TextEdit and click into a new document.
+        2. Hold Right Command, say a sentence, release.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: What the window, the indicator and the target app showed.
+    validations:
+      required: true
+  - type: input
+    id: hold-key
+    attributes:
+      label: Hold key
+      placeholder: Right Command
+  - type: input
+    id: target-app
+    attributes:
+      label: The app you dictated into
+      placeholder: TextEdit, Notepad, a browser text box, a terminal
+  - type: dropdown
+    id: microphone
+    attributes:
+      label: Microphone
+      options:
+        - Built-in
+        - USB or wired
+        - Bluetooth
+        - Not relevant
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Additional diagnostic details
+      description: |
+        Include the approximate time, indicator state, and any error shown in
+        the app. Do not paste logs or dictated text. Maintainers may ask for
+        a redacted excerpt through a private channel if it is needed. If you
+        are asked to locate diagnostics, use **Open Log Folder** on macOS or
+        **Open log folder** on Windows. The files are at
+        `~/Library/Logs/Dictation/dictation.log` and
+        `%LOCALAPPDATA%\Dictation\logs\dictation.log`. Logs do not contain
+        dictated words, but can name the app you dictated into or the title of
+        a window whose app could not be identified; review anything before
+        sharing it privately.

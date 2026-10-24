@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0-windows, and deliberately *not* WPF. This is the platform half
+         of the speech path: the Win32 calls Dictation.Speech only declares as
+         interfaces (WASAPI microphone capture, the clipboard, the paste
+         keystroke and the worker process). Keeping UseWPF off means nothing
+         here can reach for a Window, which keeps message-pump concerns in
+         Dictation.App, where the windows live. -->
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Dictation.Platform</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dictation.Speech\Dictation.Speech.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The same logging abstractions every other project here takes. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+
+    <!-- NAudio, for WASAPI microphone capture. -->
+    <PackageReference Include="NAudio" Version="3.0.1" />
+  </ItemGroup>
+
+</Project>

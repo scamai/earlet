@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0, so the Windows entry point's decisions run on Linux and macOS.
+         The Win32 edges are faked; the session, push-to-talk controller,
+         microphone tap, worker host and text insertion are the real classes. -->
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dictation.Core.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Dictation.Core/Dictation.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The worker process class itself, compiled in rather than referenced.
+         Its project brings NAudio, whose WinForms half needs the Windows
+         Desktop runtime, so a test host that references it cannot start on
+         Linux. The file needs nothing but the net9.0 worker contracts, and
+         compiling the same source here means the launch that is tested is
+         the launch that ships. -->
+    <Compile Include="../Dictation.Platform/Transcription/PythonAsrWorkerProcess.cs"
+             Link="Linked/PythonAsrWorkerProcess.cs" />
+    <!-- WindowsOnlyFact has one owner, TestSupport/, and is linked rather
+         than copied, as in the other test projects. -->
+    <Compile Include="../TestSupport/WindowsOnlyFactAttribute.cs" Link="Linked/WindowsOnlyFactAttribute.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The learning rules' shared cases (LEARNING.md), the same file the
+         Python reference and the Swift port are held to. Linked, not copied,
+         so there is one copy to edit. -->
+    <None Include="../../tests/fixtures/learning-golden.json"
+          Link="Fixtures/learning-golden.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

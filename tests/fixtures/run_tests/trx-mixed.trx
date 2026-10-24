@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic, in the dotnet test TRX logger's shape. Direct results: 3 passed (2 learning:
+     one by its test name, one only through its TestMethod className), 2 failed (a Failed
+     learning test and a Timeout), 1 NotExecuted. The data-driven parent's InnerResults
+     must not be counted again. -->
+<TestRun id="00000000-0000-0000-0000-000000000001" name="synthetic" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Results>
+    <UnitTestResult executionId="e1" testId="t1" testName="Dictation.Services.Tests.Learning.CorrectionLearnerTests.LearnsADistinctiveWordOnTheFirstFix" outcome="Passed" />
+    <UnitTestResult executionId="e2" testId="t2" testName="Dictation.Services.Tests.Learning.CorrectionLearnerTests.SoundAlikeNeedsTwoDictations" outcome="Failed">
+      <Output><ErrorInfo><Message>synthetic failure</Message></ErrorInfo></Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e3" testId="t3" testName="Dictation.Services.Tests.StoreTests.AppendsAreSerialized" outcome="Passed">
+      <InnerResults>
+        <UnitTestResult executionId="e3a" testId="t3" testName="AppendsAreSerialized (8 writers)" outcome="Passed" />
+        <UnitTestResult executionId="e3b" testId="t3" testName="AppendsAreSerialized (1 writer)" outcome="Passed" />
+      </InnerResults>
+    </UnitTestResult>
+    <UnitTestResult executionId="e4" testId="t4" testName="Dictation.Services.Tests.StoreTests.TheStoreIsPrivateToTheUser" outcome="NotExecuted" />
+    <UnitTestResult executionId="e5" testId="t5" testName="RemoveOneEntry" outcome="Passed" />
+    <UnitTestResult executionId="e6" testId="t6" testName="Dictation.Core.Tests.WorkerLaunchTests.StartsWithinTheDeadline" outcome="Timeout" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="RemoveOneEntry" storage="dictation.core.tests.dll" id="t5">
+      <Execution id="e5" />
+      <TestMethod codeBase="Dictation.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Dictation.Core.Tests.LearnedVocabularyViewTests" name="RemoveOneEntry" />
+    </UnitTest>
+    <UnitTest name="StartsWithinTheDeadline" storage="dictation.core.tests.dll" id="t6">
+      <Execution id="e6" />
+      <TestMethod codeBase="Dictation.Core.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Dictation.Core.Tests.WorkerLaunchTests" name="StartsWithinTheDeadline" />
+    </UnitTest>
+  </TestDefinitions>
+  <ResultSummary outcome="Failed">
+    <Counters total="6" executed="5" passed="3" failed="1" error="0" timeout="1" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="1" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+  </ResultSummary>
+</TestRun>

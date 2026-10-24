@@ -1,0 +1,237 @@
+<Window x:Class="Dictation.App.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Earlet" Width="520" Height="600" MinWidth="420" MinHeight="360"
+ Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+ Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}">
+ <!-- Every sentence comes from DictationCopy through the controller; this
+      file holds only labels. -->
+ <ScrollViewer VerticalScrollBarVisibility="Auto">
+  <StackPanel Margin="32">
+   <!-- The status header, the Mac's (DictationStatusHeader): the glyph the
+        notification-area icon shows, a one-line headline, the status line,
+        and Enable/Pause as one button, with Cancel dictation beside it only
+        while there is something to cancel. The title bar already says
+        "Dictation". The glyph is the icon's own picture (TrayIconArt.Mask)
+        drawn in a tint; the headline says the state in words. -->
+   <Grid x:Name="HeaderSection">
+    <Grid.ColumnDefinitions>
+     <ColumnDefinition Width="Auto" />
+     <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <Rectangle x:Name="StateGlyph" Grid.Column="0" Width="28" Height="28" Margin="0,0,12,0"
+      VerticalAlignment="Top" IsHitTestVisible="False" />
+    <StackPanel Grid.Column="1">
+     <TextBlock x:Name="Headline" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+     <TextBlock x:Name="Status" Margin="0,4,0,0" MinHeight="48" TextWrapping="Wrap"
+       AutomationProperties.LiveSetting="Polite" />
+     <!-- Shown while Windows is blocking the microphone: the link to the
+          privacy page, and Check again to ask Windows once the switch is on.
+          Coming back to this window asks too; the button is for a user who
+          changed the switch without leaving it. -->
+     <WrapPanel x:Name="MicrophoneActions" Margin="0,8,0,0" Visibility="Collapsed">
+      <Button x:Name="MicrophoneSettingsButton" Margin="0,0,8,8" Padding="16,8"
+        Click="MicrophoneSettingsClick" Content="Open _microphone settings" />
+      <Button x:Name="MicrophoneRecheckButton" Margin="0,0,8,8" Padding="16,8"
+        Click="MicrophoneRecheckClick" Content="C_heck again" />
+     </WrapPanel>
+     <WrapPanel Margin="0,8,0,0">
+      <Button x:Name="EnablePauseButton" Margin="0,0,8,8" Padding="16,8" Click="EnablePauseClick" />
+      <Button x:Name="CancelButton" Margin="0,0,8,8" Padding="16,8" Click="CancelClick" Visibility="Collapsed" />
+     </WrapPanel>
+    </StackPanel>
+   </Grid>
+   <!-- Saved recording: a take that could not be transcribed, or that a
+        closing Dictation left, kept on this PC for Recover last dictation
+        (MainWindow.SavedTake.cs draws it, DictationController.Takes.cs decides
+        it). Never a word of it: the recording is transcribed only when asked.
+        No live region: the status line says what happened to it. -->
+   <StackPanel x:Name="SavedTakeSection" Margin="0,16,0,0" Visibility="Collapsed">
+    <TextBlock x:Name="SavedTakeTitle" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+    <DockPanel Margin="0,8,0,0">
+     <TextBlock x:Name="SavedTakeTime" DockPanel.Dock="Right" Margin="8,0,0,0"
+       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     <TextBlock x:Name="SavedTakeDetail" TextWrapping="Wrap" />
+    </DockPanel>
+    <WrapPanel Margin="0,8,0,0">
+     <Button x:Name="RecoverButton" Margin="0,0,8,8" Padding="16,8" Click="RecoverClick" />
+     <Button x:Name="DiscardSavedTakeButton" Margin="0,0,8,8" Padding="16,8" Click="DiscardSavedTakeClick" />
+    </WrapPanel>
+    <TextBlock x:Name="SavedTakeFootnote" Margin="0,0,0,0" TextWrapping="Wrap" FontSize="12"
+      Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+   </StackPanel>
+   <!-- Recent result: the last usable text, in memory only (MainWindow.Recent.cs
+        draws it). The words stay collapsed under Show text until asked for. The
+        copy message is not a live region: the floating indicator announces the
+        same ending, and two would be read one after the other. -->
+   <StackPanel x:Name="RecentSection" Margin="0,16,0,8" Visibility="Collapsed">
+    <TextBlock x:Name="RecentTitle" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+    <DockPanel Margin="0,8,0,0">
+     <TextBlock x:Name="RecentTime" DockPanel.Dock="Right" Margin="8,0,0,0"
+       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     <TextBlock x:Name="RecentDetail" TextWrapping="Wrap" />
+    </DockPanel>
+    <WrapPanel Margin="0,8,0,0">
+     <Button x:Name="CopyLastTextButton" Margin="0,0,8,8" Padding="16,8" Click="CopyLastTextClick" />
+     <Button x:Name="DismissLastTextButton" Margin="0,0,8,8" Padding="16,8" Click="DismissLastTextClick" />
+    </WrapPanel>
+    <TextBlock x:Name="RecentCopyMessage" TextWrapping="Wrap" Visibility="Collapsed" />
+    <Expander x:Name="RecentTextExpander" Margin="0,8,0,0" IsExpanded="False">
+     <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+      <!-- No undo: WPF records every Text set from code as an undo unit, which
+           would keep every result ever shown, dismissed ones too, in memory. -->
+      <TextBox x:Name="RecentText" IsReadOnly="True" IsUndoEnabled="False" TextWrapping="Wrap"
+        BorderThickness="0" Background="Transparent" />
+     </ScrollViewer>
+    </Expander>
+    <TextBlock x:Name="RecentFootnote" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="12"
+      Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+   </StackPanel>
+   <!-- Learning from you: a correction remembered, with Undo learning and
+        Dismiss, as the Mac's section has them. VocabularyModel decides what
+        shows, and the line never names a word. -->
+   <StackPanel x:Name="LearningReceiptSection" Margin="0,8,0,0" Visibility="Collapsed">
+    <TextBlock x:Name="LearningReceiptHeading" FontWeight="SemiBold" />
+    <TextBlock x:Name="LearningReceipt" Margin="0,4,0,0" TextWrapping="Wrap"
+      AutomationProperties.LiveSetting="Polite" />
+    <WrapPanel Margin="0,8,0,0">
+     <Button x:Name="UndoLearningButton" Margin="0,0,8,8" Padding="16,8" Click="UndoLearningClick" />
+     <Button x:Name="DismissLearningButton" Margin="0,0,8,8" Padding="16,8" Click="DismissLearningClick" />
+    </WrapPanel>
+   </StackPanel>
+   <!-- Try dictation: a practice field for the real hold, shown while
+        dictation is on and the microphone is not blocked. PracticeDisclosure
+        opens and closes it; the text is never read, saved or logged, and no
+        line here is a live region, so a hold into the field hears nothing
+        from this section. -->
+   <Expander x:Name="PracticeSection" Margin="0,8,0,0" Visibility="Collapsed">
+    <StackPanel Margin="0,8,0,0">
+     <TextBlock x:Name="PracticeInstructions" TextWrapping="Wrap" />
+     <Grid Margin="0,8,0,0">
+      <TextBox x:Name="PracticeBox" Padding="4" TextWrapping="Wrap" AcceptsReturn="True" MinLines="3"
+        MaxLines="5" VerticalScrollBarVisibility="Auto" TextChanged="PracticeTextChanged" />
+      <TextBlock x:Name="PracticeHint" Margin="7,5,0,0" IsHitTestVisible="False"
+        Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     </Grid>
+     <TextBlock x:Name="PracticeNotSaved" Margin="0,4,0,0" TextWrapping="Wrap"
+       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+    </StackPanel>
+   </Expander>
+   <!-- Shortcut and language, the Mac's two sections: the how-to line, the
+        pickers and the hold-key notice; and how much silence ends a
+        hands-free dictation (DictationHoldPolicy), which the Mac has not got
+        yet. -->
+   <TextBlock x:Name="Instructions" Margin="0,24,0,0" FontSize="16" TextWrapping="Wrap" />
+   <Grid Margin="0,16,0,0">
+    <Grid.ColumnDefinitions>
+     <ColumnDefinition Width="Auto" />
+     <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+     <RowDefinition Height="Auto" />
+     <RowDefinition Height="Auto" />
+     <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Label Grid.Row="0" Grid.Column="0" Padding="0,0,8,0" VerticalAlignment="Center" Content="Hold _key:"
+      Target="{Binding ElementName=HoldKeyPicker}" />
+    <ComboBox x:Name="HoldKeyPicker" Grid.Row="0" Grid.Column="1" MinWidth="180" HorizontalAlignment="Left"
+      DisplayMemberPath="KeyName" AutomationProperties.Name="Hold key" SelectionChanged="HoldKeyChanged" />
+    <Label Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Padding="0,0,8,0" VerticalAlignment="Center"
+      Content="_Language:" Target="{Binding ElementName=LanguagePicker}" />
+    <ComboBox x:Name="LanguagePicker" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
+      HorizontalAlignment="Left" DisplayMemberPath="Name" AutomationProperties.Name="Language"
+      SelectionChanged="LanguageChanged" />
+    <Label Grid.Row="2" Grid.Column="0" Margin="0,8,0,0" Padding="0,0,8,0" VerticalAlignment="Center"
+      Content="S_ilence stops hands-free:" Target="{Binding ElementName=SilenceStopPicker}" />
+    <ComboBox x:Name="SilenceStopPicker" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
+      HorizontalAlignment="Left" DisplayMemberPath="Name" AutomationProperties.Name="Silence stops hands-free"
+      SelectionChanged="SilenceStopChanged" />
+   </Grid>
+   <TextBlock x:Name="HoldKeyNotice" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+     AutomationProperties.LiveSetting="Polite" />
+   <!-- Vocabulary: the words Dictation learned from the user's fixes and the
+        ones the user added. VocabularyModel decides what shows; its text,
+        like every sentence here, comes from DictationCopy. -->
+   <StackPanel x:Name="VocabularySection" Margin="0,32,0,0">
+    <TextBlock x:Name="VocabularyHeading" FontSize="20" FontWeight="SemiBold" />
+    <CheckBox x:Name="LearnBox" Margin="0,16,0,0" Click="LearnClick" />
+    <TextBlock x:Name="LearnDisclosure" Margin="0,4,0,0" TextWrapping="Wrap"
+      Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+    <!-- How the last correction watch went, above the teach row, in the
+         disclosure's secondary style. Never a dictated word. -->
+    <TextBlock x:Name="CorrectionNotice" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+      Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+      AutomationProperties.LiveSetting="Polite" />
+    <Grid Margin="0,16,0,0">
+     <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+     </Grid.ColumnDefinitions>
+     <Grid Grid.Column="0" Margin="0,0,8,0">
+      <TextBox x:Name="TeachWord" Padding="4" MaxLength="200" TextChanged="TeachTextChanged" KeyDown="TeachKeyDown" />
+      <TextBlock x:Name="TeachWordHint" Margin="7,5,0,0" IsHitTestVisible="False"
+        Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     </Grid>
+     <Grid Grid.Column="1" Margin="0,0,8,0">
+      <TextBox x:Name="TeachSoundsLike" Padding="4" MaxLength="200" TextChanged="TeachTextChanged" KeyDown="TeachKeyDown" />
+      <TextBlock x:Name="TeachSoundsLikeHint" Margin="7,5,0,0" IsHitTestVisible="False"
+        Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     </Grid>
+     <Button x:Name="TeachButton" Grid.Column="2" Padding="16,4" Click="TeachClick" />
+    </Grid>
+    <TextBlock x:Name="TeachMessage" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+      AutomationProperties.LiveSetting="Polite" />
+    <!-- Save outcomes: the latest Remove, Forget all or Save again receipt
+         while everything is on disk; otherwise the one unsaved warning, with
+         Save again under it. Never a word. -->
+    <TextBlock x:Name="VocabularySaveReceipt" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+      AutomationProperties.LiveSetting="Polite" />
+    <TextBlock x:Name="VocabularyNotSaved" Margin="0,16,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+      AutomationProperties.LiveSetting="Polite" />
+    <Button x:Name="SaveAgainButton" Margin="0,8,0,0" Padding="16,8" HorizontalAlignment="Left"
+      Visibility="Collapsed" Click="SaveAgainClick" />
+    <TextBlock x:Name="VocabularyEmpty" Margin="0,16,0,0" TextWrapping="Wrap" />
+    <StackPanel x:Name="VocabularyList" Margin="0,8,0,0" />
+    <Button x:Name="ForgetAllButton" Margin="0,16,0,0" Padding="16,8" HorizontalAlignment="Left"
+      Click="ForgetAllClick" />
+    <StackPanel x:Name="ForgetAllConfirmation" Margin="0,16,0,0" Visibility="Collapsed">
+     <TextBlock x:Name="ForgetAllQuestion" TextWrapping="Wrap" AutomationProperties.LiveSetting="Assertive" />
+     <WrapPanel Margin="0,8,0,0">
+      <Button x:Name="ConfirmForgetAllButton" Margin="0,0,8,8" Padding="16,8" Click="ConfirmForgetAllClick" />
+      <Button x:Name="CancelForgetAllButton" Margin="0,0,8,8" Padding="16,8" Click="CancelForgetAllClick" />
+     </WrapPanel>
+    </StackPanel>
+   </StackPanel>
+   <!-- General, the Mac's: start at sign-in, with a note under it when
+        Windows refused a change or Settings switched the entry off. -->
+   <CheckBox x:Name="LaunchAtLoginBox" Margin="0,32,0,0" Content="_Start Earlet when I sign in"
+     Click="LaunchAtLoginClick" />
+   <TextBlock x:Name="LaunchAtLoginNote" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+     Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+     AutomationProperties.LiveSetting="Polite" />
+   <!-- Troubleshooting, the Mac's closed disclosure: this copy's version,
+        build and path (the launch line's identity), Show this copy in File
+        Explorer, and Open log folder. No Restart: Pause, then Enable, starts
+        the speech engine again. -->
+   <Expander x:Name="TroubleshootingSection" Margin="0,24,0,0" IsExpanded="False">
+    <StackPanel Margin="0,8,0,0">
+     <TextBlock x:Name="ThisCopyHeading" FontWeight="SemiBold" TextWrapping="Wrap" />
+     <TextBlock x:Name="ThisCopyVersion" Margin="0,4,0,0" TextWrapping="Wrap"
+       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     <!-- Selectable, as the Mac's path is. No undo: it is set once. -->
+     <TextBox x:Name="ThisCopyPath" Margin="0,4,0,0" Padding="0" IsReadOnly="True" IsUndoEnabled="False"
+       TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+     <WrapPanel Margin="0,8,0,0">
+      <Button x:Name="ShowThisCopyButton" Margin="0,0,8,8" Padding="16,8" Click="ShowThisCopyClick" />
+      <Button x:Name="OpenLogFolderButton" Margin="0,0,8,8" Padding="16,8"
+        Click="OpenLogFolderClick" Content="Open log _folder" />
+     </WrapPanel>
+    </StackPanel>
+   </Expander>
+   <TextBlock x:Name="Footer" Margin="0,16,0,0" TextWrapping="Wrap"
+     Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+  </StackPanel>
+ </ScrollViewer>
+</Window>

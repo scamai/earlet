@@ -1,0 +1,44 @@
+# Dependency updates for the public repository. This file does nothing in the
+# development repository; publication makes it the repository's own
+# .github/dependabot.yml.
+#
+# Security updates only: open-pull-requests-limit: 0 turns version updates
+# off and leaves security updates on, which GitHub caps separately. Only the
+# publication writes main here, so a Dependabot pull request is applied in the
+# development repository like any other pull request and then closed; weekly
+# version updates would be a queue of hand imports. Version updates are made
+# in the development repository and arrive with a publication. Swift has no
+# entry: the package has no external dependencies (tools/verify.py refuses
+# one).
+version: 2
+updates:
+  # The pinned actions used by the standalone CI workflow.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+
+  # Every project under windows/.
+  - package-ecosystem: "nuget"
+    directories:
+      - "/windows/*"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+
+  # The test gate's own dependencies (numpy and pytest, pinned).
+  - package-ecosystem: "pip"
+    directory: "/tests"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+
+  # The speech runtime's pinned closures (requirements-macos.txt and
+  # requirements-windows.txt), each regenerated with the uv command in its
+  # header.
+  - package-ecosystem: "pip"
+    directory: "/runtime"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0

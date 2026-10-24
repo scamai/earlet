@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0-windows, and deliberately *not* WPF, the same shape and for the
+         same reason as Dictation.Platform: this is the platform half of
+         dictation, holding the Win32 calls the policy layer in
+         Dictation.Services only declares as interfaces (the low-level
+         hold-key hook, the reading clipboard, foreground elevation and the
+         microphone privacy probe). UseWPF off means nothing here can reach
+         for a Window, so message-pump concerns stay in Dictation.App, where
+         the windows live.
+
+         A separate project rather than adding to Dictation.Platform: the
+         reading clipboard implements IClipboardTextSnapshot, which is a
+         dictation type, and putting it in the speech platform layer would
+         make that layer depend on dictation. The dependency runs the other
+         way: dictation uses the speech layer's insert seams. -->
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Dictation.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dictation.Services\Dictation.Services.csproj" />
+    <ProjectReference Include="..\Dictation.Speech\Dictation.Speech.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The same logging abstractions every other project here takes. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

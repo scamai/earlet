@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic: every collected test skipped. -->
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="2" tests="2" time="0.010">
+    <testcase classname="tests.test_package" name="test_a_macos_binary_is_stripped_before_signing" time="0.000">
+      <skipped type="pytest.skip" message="needs a Mac">needs a Mac</skipped>
+    </testcase>
+    <testcase classname="tests.test_package" name="test_the_macos_bundle_is_its_own_single_instance_app" time="0.000">
+      <skipped type="pytest.skip" message="needs a Mac">needs a Mac</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

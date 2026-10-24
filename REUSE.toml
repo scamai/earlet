@@ -1,0 +1,24 @@
+# Licensing of every file in this directory, in the REUSE format
+# (https://reuse.software/spec-3.3/). The license texts are in LICENSES/;
+# LICENSE is the same Apache-2.0 text, where GitHub looks for it.
+#
+# Files carry no per-file license headers. Code derived from a third party
+# must keep its upstream notice and get its own annotation below, after the
+# default: when several annotations match a file, the last one wins.
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 Reality Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# The web2 word list (Webster's Second International, 1934), as distributed
+# with BSD and macOS in /usr/share/dict/web2. The BSD share/dict README, by
+# James A. Woods: "The 1934 copyright has lapsed, according to the supplier."
+# Keep this the last annotation that matches the word list; "override" keeps a
+# REUSE.toml nested closer to it from relabelling it.
+[[annotations]]
+path = "windows/Dictation.Services/Resources/web2-words.txt.gz"
+precedence = "override"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "LicenseRef-Public-Domain"

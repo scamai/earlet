@@ -1,0 +1,10 @@
+[
+  {"name":"always_on_ignored","timeline":{"presses":[{"time":1,"duration":1,"test":false,"doubleTap":false}],"recorders":[{"time":0,"pid":20,"identity":"Call","active":true},{"time":1.1,"pid":20,"identity":"Call","active":true}],"reactions":[]},"confirmed":false,"kind":null},
+  {"name":"own_pid_ignored","timeline":{"presses":[{"time":1,"duration":1,"test":false,"doubleTap":false}],"recorders":[{"time":1.1,"pid":10,"identity":"Self","active":true}],"reactions":[]},"confirmed":false,"kind":null},
+  {"name":"single_runtime_tentative","timeline":{"presses":[{"time":1,"duration":1,"test":false,"doubleTap":false}],"recorders":[{"time":0,"pid":21,"identity":"Other","active":false},{"time":1.1,"pid":21,"identity":"Other","active":true}],"reactions":[]},"confirmed":false,"kind":"recorder"},
+  {"name":"test_one_press","timeline":{"presses":[{"time":1,"duration":1,"test":true,"doubleTap":false}],"recorders":[{"time":0,"pid":21,"identity":"Other","active":false},{"time":1.1,"pid":21,"identity":"Other","active":true}],"reactions":[]},"confirmed":true,"kind":"recorder"},
+  {"name":"correlated_stop","timeline":{"presses":[{"time":1,"duration":1,"test":false,"doubleTap":false}],"recorders":[{"time":0,"pid":21,"identity":"Other","active":false},{"time":1.1,"pid":21,"identity":"Other","active":true},{"time":2.2,"pid":21,"identity":"Other","active":false}],"reactions":[]},"confirmed":true,"kind":"recorder"},
+  {"name":"foreground","timeline":{"presses":[{"time":1,"duration":1,"test":true,"doubleTap":false}],"recorders":[],"reactions":[{"kind":"foreground","time":1.2,"pid":22,"identity":"Front"}]},"confirmed":true,"kind":"foreground"},
+  {"name":"window","timeline":{"presses":[{"time":1,"duration":1,"test":true,"doubleTap":false}],"recorders":[],"reactions":[{"kind":"window","time":1.2,"pid":23,"identity":"Window"}]},"confirmed":true,"kind":"window"},
+  {"name":"short_tap","timeline":{"presses":[{"time":1,"duration":0.2,"test":false,"doubleTap":false}],"recorders":[{"time":1.1,"pid":21,"identity":"Other","active":true}],"reactions":[]},"confirmed":false,"kind":null}
+]

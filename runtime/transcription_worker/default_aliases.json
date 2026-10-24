@@ -1,0 +1,7 @@
+{
+  "schema": "spoken_aliases/0.1.0",
+  "_what": "The spoken-form rewrites Dictation ships with. Deliberately empty: a shipped alias rewrites every user's text on every install, so an entry belongs here only if it is product-neutral and passes _admission. Company or product vocabulary goes in the user's own bias_aliases.json. ONE file: the worker reads it from beside this module on both platforms. There is no second copy to drift.",
+  "_precedence": "Shipped defaults sit UNDER the user's own bias_aliases.json and are never written into it. A spoken form the user declared wins outright; a spoken form listed in that file's `removed` array is suppressed; everything else here applies. So updating this file can never overwrite a hand-tuned alias and can never resurrect one somebody deliberately removed.",
+  "_admission": "Every entry is a form a recogniser was MEASURED emitting for a declared term, and every single-token spoken form must be absent from the shipped web2 dictionary. An alias fires on a literal word-boundary match, so a shipped default that is an ordinary English word rewrites ordinary speech on every install. test_shipped_defaults_are_not_ordinary_english_words enforces this.",
+  "aliases": {}
+}

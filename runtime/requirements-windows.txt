@@ -1,0 +1,73 @@
+# Windows x64 speech provider for the Dictation worker: CPython 3.11, win_amd64.
+# Direct inputs are numpy and faster-whisper; the rest is their resolved closure,
+# pinned so two release runtimes built a week apart carry the same provider.
+# Install these into the relocatable Python passed to tools/package.py.
+# Regenerate (then restore this header):
+#   printf 'numpy\nfaster-whisper\n' | uv pip compile - --python-version 3.11 \
+#     --python-platform x86_64-pc-windows-msvc --no-header
+# Windows ARM64 has no provider: ctranslate2 publishes no win_arm64 wheel, and
+# tools/package.py refuses a complete win-arm64 package.
+# QNN, diarization, detection, accounts and billing are not installed by this app.
+anyio==4.15.1
+    # via httpx
+av==18.1.0
+    # via faster-whisper
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+click==8.5.0
+    # via huggingface-hub
+colorama==0.4.6
+    # via tqdm
+ctranslate2==4.8.2
+    # via faster-whisper
+faster-whisper==1.2.1
+filelock==4.0.5
+    # via huggingface-hub
+flatbuffers==25.12.19
+    # via onnxruntime
+fsspec==2026.9.0
+    # via huggingface-hub
+h11==0.16.0
+    # via httpcore
+hf-xet==1.6.0
+    # via huggingface-hub
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via huggingface-hub
+huggingface-hub==1.33.0
+    # via
+    #   faster-whisper
+    #   tokenizers
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+numpy==2.4.6
+    # via
+    #   ctranslate2
+    #   onnxruntime
+onnxruntime==1.30.0
+    # via faster-whisper
+packaging==26.3
+    # via
+    #   huggingface-hub
+    #   onnxruntime
+protobuf==7.36.2
+    # via onnxruntime
+pyyaml==6.0.3
+    # via
+    #   ctranslate2
+    #   huggingface-hub
+tokenizers==0.23.2
+    # via faster-whisper
+tqdm==4.70.1
+    # via
+    #   faster-whisper
+    #   huggingface-hub
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   huggingface-hub

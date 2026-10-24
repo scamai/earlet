@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic, in SwiftPM 6.2's parallel XCTest xUnit output (xunit-output flag): 3 passed (1 learning). -->
+<testsuites>
+<testsuite name="TestResults" errors="0" tests="3" failures="0" time="0.120">
+<testcase classname="DictationAppCoreTests.DictationLearningStoreTests" name="testARemovedEntryIsNeverRelearned" time="0.010">
+</testcase>
+<testcase classname="DictationIPCTests.FramingTests" name="testLengthPrefixIsBigEndian" time="0.010">
+</testcase>
+<testcase classname="DictationKitTests.DictationCaptureIdleTests" name="testIdleCaptureStops" time="0.100">
+</testcase>
+</testsuite>
+</testsuites>

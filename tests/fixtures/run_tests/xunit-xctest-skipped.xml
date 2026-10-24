@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic, in SwiftPM 6.2's parallel XCTest xUnit shape: 4 plain testcases, 3 learning. Two of them called
+     XCTSkip; the parallel runner writes a skip exactly like a pass, with no skipped element or attribute. -->
+<testsuites>
+<testsuite name="TestResults" errors="0" tests="4" failures="0" time="1.180">
+<testcase classname="DictationLearningTests.LearningLexiconTests" name="testTheWindowsCopyOfTheWordList" time="1.058">
+</testcase>
+<testcase classname="DictationLearningTests.LearningLexiconTests" name="testTheSystemWordList" time="1.058">
+</testcase>
+<testcase classname="DictationLearningTests.LearningLexiconTests" name="testThreePluralRules" time="1.058">
+</testcase>
+<testcase classname="DictationIPCTests.FramingTests" name="testLengthPrefixIsBigEndian" time="0.010">
+</testcase>
+</testsuite>
+</testsuites>

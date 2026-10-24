@@ -1,0 +1,3450 @@
+{
+ "schema": "dictation.learning-golden/1",
+ "about": "Shared learning-policy cases (LEARNING.md). Checked against tests/learning_reference.py, windows/Dictation.Core/Learning and macos/Sources/DictationLearning. Edit a case only together with LEARNING.md and all three implementations.",
+ "lexicon": [
+  "a",
+  "all",
+  "and",
+  "app",
+  "my",
+  "miles",
+  "ask",
+  "at",
+  "big",
+  "box",
+  "call",
+  "control",
+  "cube",
+  "day",
+  "deck",
+  "deploy",
+  "e",
+  "email",
+  "fast",
+  "file",
+  "files",
+  "flow",
+  "follow",
+  "for",
+  "get",
+  "have",
+  "here",
+  "hunter",
+  "i",
+  "in",
+  "instead",
+  "is",
+  "it",
+  "its",
+  "jason",
+  "large",
+  "library",
+  "log",
+  "mail",
+  "me",
+  "meeting",
+  "met",
+  "new",
+  "now",
+  "of",
+  "okay",
+  "on",
+  "open",
+  "our",
+  "pie",
+  "please",
+  "pods",
+  "run",
+  "said",
+  "send",
+  "server",
+  "sever",
+  "sky",
+  "sunshine",
+  "talk",
+  "team",
+  "tell",
+  "thanks",
+  "the",
+  "their",
+  "there",
+  "this",
+  "to",
+  "today",
+  "tomorrow",
+  "tool",
+  "torch",
+  "up",
+  "use",
+  "we",
+  "wrapper",
+  "you"
+ ],
+ "extract": [
+  {
+   "name": "spelling",
+   "dictated": "we use trovio for this",
+   "edited": "we use Trovioo for this",
+   "candidates": [
+    [
+     "trovio",
+     "Trovioo",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "casing",
+   "dictated": "open the iphone app",
+   "edited": "open the iPhone app",
+   "candidates": [
+    [
+     "iphone",
+     "iPhone",
+     "casing"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "respacing",
+   "dictated": "we met at sky dock today",
+   "edited": "we met at SkyDock today",
+   "candidates": [
+    [
+     "sky dock",
+     "SkyDock",
+     "respacing"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "respacing across a joiner",
+   "dictated": "run node js now",
+   "edited": "run Node.js now",
+   "candidates": [
+    [
+     "node js",
+     "Node.js",
+     "respacing"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "punctuation only",
+   "dictated": "send the email now",
+   "edited": "send the e-mail now",
+   "candidates": [],
+   "rejections": [
+    [
+     "email",
+     "e-mail",
+     "punctuation"
+    ]
+   ]
+  },
+  {
+   "name": "inflection of an ordinary word",
+   "dictated": "send the file now",
+   "edited": "send the files now",
+   "candidates": [],
+   "rejections": [
+    [
+     "file",
+     "files",
+     "inflection"
+    ]
+   ]
+  },
+  {
+   "name": "inflection rule spares a distinctive word",
+   "dictated": "run postgress now",
+   "edited": "run postgres now",
+   "candidates": [
+    [
+     "postgress",
+     "postgres",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "rewording",
+   "dictated": "we have a big meeting",
+   "edited": "we have a large meeting",
+   "candidates": [],
+   "rejections": [
+    [
+     "big",
+     "large",
+     "rewording"
+    ]
+   ]
+  },
+  {
+   "name": "transliteration",
+   "dictated": "我们用阿里斯服务器",
+   "edited": "我们用Miles服务器",
+   "candidates": [
+    [
+     "阿里斯",
+     "Miles",
+     "transliteration"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "single CJK character is rewording",
+   "dictated": "这是我的权利",
+   "edited": "这是我的权力",
+   "candidates": [],
+   "rejections": [
+    [
+     "利",
+     "力",
+     "rewording"
+    ]
+   ]
+  },
+  {
+   "name": "two hunks in one dictation",
+   "dictated": "ask javis to deploy the sever",
+   "edited": "ask Jarvis to deploy the server",
+   "candidates": [
+    [
+     "javis",
+     "Jarvis",
+     "spelling"
+    ],
+    [
+     "sever",
+     "server",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "a rewrite of the whole sentence yields nothing",
+   "dictated": "please send it to the team today",
+   "edited": "call me tomorrow instead okay",
+   "candidates": [],
+   "rejections": []
+  },
+  {
+   "name": "pure insertion yields nothing",
+   "dictated": "send the file",
+   "edited": "send the new file",
+   "candidates": [],
+   "rejections": []
+  },
+  {
+   "name": "span longer than four words",
+   "dictated": "i said tell cube control tool fast now please thanks to all of you here",
+   "edited": "i said tell kubectl please thanks to all of you here",
+   "candidates": [],
+   "rejections": [
+    [
+     "cube control tool fast now",
+     "kubectl",
+     "too_long"
+    ]
+   ]
+  },
+  {
+   "name": "single-word dictation",
+   "dictated": "trovio",
+   "edited": "Trovioo",
+   "candidates": [
+    [
+     "trovio",
+     "Trovioo",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "kubectl",
+   "dictated": "run cube control get pods",
+   "edited": "run kubectl get pods",
+   "candidates": [
+    [
+     "cube control",
+     "kubectl",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "empty dictation",
+   "dictated": "",
+   "edited": "anything",
+   "candidates": [],
+   "rejections": []
+  },
+  {
+   "name": "identical text",
+   "dictated": "we use trovio",
+   "edited": "we use trovio",
+   "candidates": [],
+   "rejections": []
+  },
+  {
+   "name": "dotted capital I lowercases to two code points",
+   "dictated": "visit istanbul now",
+   "edited": "visit İstanbul now",
+   "candidates": [
+    [
+     "istanbul",
+     "İstanbul",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "Greek final sigma",
+   "dictated": "the οδοσ sign",
+   "edited": "the ΟΔΟΣ sign",
+   "candidates": [
+    [
+     "οδοσ",
+     "ΟΔΟΣ",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "a word typed after the span is a continuation, not a correction",
+   "dictated": "Call trovio",
+   "edited": "Call Trovioo now",
+   "candidates": [],
+   "rejections": [
+    [
+     "trovio",
+     "Trovioo now",
+     "boundary"
+    ]
+   ]
+  },
+  {
+   "name": "a word typed before the span is a continuation too",
+   "dictated": "trovio is great",
+   "edited": "Hey Trovioo is great",
+   "candidates": [],
+   "rejections": [
+    [
+     "trovio",
+     "Hey Trovioo",
+     "boundary"
+    ]
+   ]
+  },
+  {
+   "name": "growing in the middle is still a correction",
+   "dictated": "ask javis to deploy",
+   "edited": "ask Jarvis AI to deploy",
+   "candidates": [
+    [
+     "javis",
+     "Jarvis AI",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "uncommitted pinyin is input-method composition",
+   "dictated": "我们用阿里斯服务器",
+   "edited": "我们用alisi服务器",
+   "candidates": [],
+   "rejections": [
+    [
+     "阿里斯",
+     "alisi",
+     "composition"
+    ]
+   ]
+  },
+  {
+   "name": "a CJK number written as digits is a transliteration candidate (and is never learned)",
+   "dictated": "我的号码是四四七一谢谢大家",
+   "edited": "我的号码是4471谢谢大家",
+   "candidates": [
+    [
+     "四四七一",
+     "4471",
+     "transliteration"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "a number fix is a spelling candidate (and is never learned)",
+   "dictated": "my pin is 4471 ok",
+   "edited": "my pin is 4417 ok",
+   "candidates": [
+    [
+     "4471",
+     "4417",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "decomposed and precomposed e-acute are different text",
+   "dictated": "a café here",
+   "edited": "a café here",
+   "candidates": [
+    [
+     "café",
+     "café",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "a symbol typed after the last word stays out of the span",
+   "dictated": "the wifi password is sunshine",
+   "edited": "the wifi password is Sunshine42x!",
+   "candidates": [
+    [
+     "sunshine",
+     "Sunshine42x",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "a high-distance ordinary wrapper to distinctive repo is still spelling",
+   "dictated": "wrapper",
+   "edited": "repo",
+   "candidates": [
+    [
+     "wrapper",
+     "repo",
+     "spelling"
+    ]
+   ],
+   "rejections": []
+  },
+  {
+   "name": "a phrase target stays rewording under the one-token exception",
+   "dictated": "use wrapper now",
+   "edited": "use repo project now",
+   "candidates": [],
+   "rejections": [
+    [
+     "wrapper",
+     "repo project",
+     "rewording"
+    ]
+   ]
+  },
+  {
+   "name": "a phrase source stays rewording under the one-token exception",
+   "dictated": "wrapper project now",
+   "edited": "repo now",
+   "candidates": [],
+   "rejections": [
+    [
+     "wrapper project",
+     "repo",
+     "rewording"
+    ]
+   ]
+  },
+  {
+   "name": "a whole-sentence rewrite remains filtered before token rules",
+   "dictated": "use wrapper in the app today",
+   "edited": "send repository files now",
+   "candidates": [],
+   "rejections": []
+  }
+ ],
+ "sequences": [
+  {
+   "name": "a distinctive word is learned on the first correction",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "an alias needs the same correction on two dictations",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {
+     "trovio": "Trovioo"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "the same dictation twice counts once",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "an ordinary heard word never becomes an alias",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use jason files",
+     "edited": "we use JSON files",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use jason files",
+     "edited": "we use JSON files",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [
+     "JSON"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a casing fix learns the word and no alias",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "open the iphone app",
+     "edited": "open the iPhone app",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "open the iphone app",
+     "edited": "open the iPhone app",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [
+     "iPhone"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "capitalising an ordinary word learns nothing",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the miles server",
+     "edited": "the Miles server",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "respacing learns the word, then the alias",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we met at sky dock",
+     "edited": "we met at SkyDock",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we met at sky dock",
+     "edited": "we met at SkyDock",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [
+     "SkyDock"
+    ],
+    "aliases": {
+     "sky dock": "SkyDock"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "an alias whose written form contains its spoken form is refused",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "ask zupong now",
+     "edited": "ask Zupong Ai now",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "ask zupong now",
+     "edited": "ask Zupong Ai now",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [
+     "Zupong Ai"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "removing a word tombstones it and its alias",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "remove_word",
+     "text": "Trovioo",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000003
+    },
+    {
+     "op": "observe",
+     "dictation": "d4",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000004
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [
+     "trovioo"
+    ],
+    "removed_aliases": [
+     [
+      "trovio",
+      "trovioo"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "teaching revives a removed word and sets its own alias",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "remove_word",
+     "text": "Trovioo",
+     "at": 1790000000002
+    },
+    {
+     "op": "teach",
+     "written": "Trovioo",
+     "sounds_like": "true leo",
+     "at": 1790000000003,
+     "result": "ok"
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {
+     "true leo": "Trovioo"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": [
+     [
+      "trovio",
+      "trovioo"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "teaching an alias that contains its spoken form is refused",
+   "steps": [
+    {
+     "op": "teach",
+     "written": "Fable Flow",
+     "sounds_like": "flow",
+     "at": 1790000000000,
+     "result": "self_containing"
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "teaching validates its input",
+   "steps": [
+    {
+     "op": "teach",
+     "written": "   ",
+     "sounds_like": null,
+     "at": 1790000000000,
+     "result": "empty"
+    },
+    {
+     "op": "teach",
+     "written": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "sounds_like": null,
+     "at": 1790000000000,
+     "result": "too_long"
+    },
+    {
+     "op": "teach",
+     "written": "one two three four five six seven",
+     "sounds_like": null,
+     "at": 1790000000000,
+     "result": "too_long"
+    },
+    {
+     "op": "teach",
+     "written": "Trovioo",
+     "sounds_like": "t",
+     "at": 1790000000000,
+     "result": "empty"
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "removing an alias keeps the word and blocks relearning",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "remove_alias",
+     "heard": "trovio",
+     "meant": "Trovioo",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000003
+    },
+    {
+     "op": "observe",
+     "dictation": "d4",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000004
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": [
+     [
+      "trovio",
+      "trovioo"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "a pending correction expires after 30 days",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1792678400000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "conflicting learned spellings suspend a tied alias",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use trovio",
+     "edited": "we use TrovioAI",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "d4",
+     "dictated": "we use trovio",
+     "edited": "we use TrovioAI",
+     "at": 1790000000003
+    }
+   ],
+   "expect": {
+    "words": [
+     "TrovioAI",
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "TrovioAI",
+      "count": 2
+     },
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 2
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a taught alias is never overridden by learning",
+   "steps": [
+    {
+     "op": "teach",
+     "written": "Trovioo",
+     "sounds_like": "trovio",
+     "at": 1790000000000,
+     "result": "ok"
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use TrovioAI",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use TrovioAI",
+     "at": 1790000000002
+    }
+   ],
+   "expect": {
+    "words": [
+     "TrovioAI",
+     "Trovioo"
+    ],
+    "aliases": {
+     "trovio": "Trovioo"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_worker_words": [
+    "Trovioo",
+    "TrovioAI"
+   ]
+  },
+  {
+   "name": "clear forgets everything, tombstones included",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "remove_word",
+     "text": "Trovioo",
+     "at": 1790000000002
+    },
+    {
+     "op": "clear"
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000003
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "with no lexicon nothing is learned",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "lexicon": []
+  },
+  {
+   "name": "a transliteration becomes an alias; an ordinary written form is not a word",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "我们用阿里斯服务器",
+     "edited": "我们用Miles服务器",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "我们用阿里斯服务器",
+     "edited": "我们用Miles服务器",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {
+     "阿里斯": "Miles"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "two corrections in one dictation",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "ask javis to deploy the sever",
+     "edited": "ask Jarvis to deploy the server",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Jarvis"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "javis",
+      "meant": "Jarvis",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "numbers are never learned, as words or as rewrites",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "my pin is 4471 ok",
+     "edited": "my pin is 4417 ok",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "my pin is 4471 ok",
+     "edited": "my pin is 4417 ok",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "我的号码是四四七一谢谢大家",
+     "edited": "我的号码是4471谢谢大家",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "d4",
+     "dictated": "我的号码是四四七一谢谢大家",
+     "edited": "我的号码是4471谢谢大家",
+     "at": 1790000000003
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a continuation typed after the span is never learned",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "Call trovio",
+     "edited": "Call Trovioo now",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "Call trovio",
+     "edited": "Call Trovioo now",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "letters and digits together are still vocabulary",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "use gpt 4 now",
+     "edited": "use GPT4 now",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "GPT4"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "gpt 4",
+      "meant": "GPT4",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a short word with one digit is learned on the first correction",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the password is hunter now",
+     "edited": "the password is Hunter2 now",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Hunter2"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a two-character model name is learned on the first correction",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "buy the m4 today",
+     "edited": "buy the M4 today",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "M4"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a long word with letters and two digits waits; the same dictation twice is one sighting",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "sunshine",
+      "meant": "Sunshine42x",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a secret-shaped word is learned when a second dictation repeats it",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Sunshine42x"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "eight characters with two digits wait; one digit does not",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "use hunter today",
+     "edited": "use Hunter42 today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "use sunshine today",
+     "edited": "use Sunshine4 today",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Sunshine4"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "hunter",
+      "meant": "Hunter42",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a long number fixed beside a distinctive word waits",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio 44171243 now",
+     "edited": "we use Trovioo 44171234 now",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio 44171243",
+      "meant": "Trovioo 44171234",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "words glued together by a symbol wait",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "set it to sunshine today",
+     "edited": "set it to Sun$hine42 today",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "sunshine",
+      "meant": "Sun$hine42",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a space or a doubled joiner between words is not a symbol",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio inc now",
+     "edited": "we use Trovioo, Inc now",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio inc now",
+     "edited": "we use Trovioo--Inc now",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo--Inc",
+     "Trovioo, Inc"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio inc",
+      "meant": "Trovioo, Inc",
+      "count": 1
+     },
+     {
+      "heard": "trovio inc",
+      "meant": "Trovioo--Inc",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "punctuation next to a CJK character is not a symbol",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "用trovio，号",
+     "edited": "用Trovioo，好",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo，好"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio，号",
+      "meant": "Trovioo，好",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "punctuation after a CJK character is not a symbol either",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "说号，trovio吧",
+     "edited": "说好，Trovioo吧",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "好，Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "号，trovio",
+      "meant": "好，Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a secret-shaped word and its alias are learned together on the second dictation",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio now",
+     "edited": "we use Trovioo42 now",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio now",
+     "edited": "we use Trovioo42 now",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo42"
+    ],
+    "aliases": {
+     "trovio": "Trovioo42"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a taught word is counted, not parked, even when it is secret-shaped",
+   "steps": [
+    {
+     "op": "teach",
+     "written": "Hunter42",
+     "sounds_like": null,
+     "at": 1790000000000,
+     "result": "ok"
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "use hunter today",
+     "edited": "use Hunter42 today",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Hunter42"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a secret-shaped word already learned is counted, not parked, when it is fixed again",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000001000
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000002000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Sunshine42x"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a taught alias also blocks a secret-shaped word under its sound",
+   "steps": [
+    {
+     "op": "teach",
+     "written": "Trovioo",
+     "sounds_like": "trovio",
+     "at": 1790000000000,
+     "result": "ok"
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio now",
+     "edited": "we use Trovioo42 now",
+     "at": 1790000001000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio now",
+     "edited": "we use Trovioo42 now",
+     "at": 1790000002000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {
+     "trovio": "Trovioo"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "removing a waiting word forgets its sighting and blocks it",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000000000
+    },
+    {
+     "op": "remove_word",
+     "text": "Sunshine42x",
+     "at": 1790000001000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "the wifi password is sunshine",
+     "edited": "the wifi password is Sunshine42x!",
+     "at": 1790000002000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [
+     "sunshine42x"
+    ],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "removing a word also blocks a pending alias that writes it",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "remove_word",
+     "text": "Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000003
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [
+     "trovioo"
+    ],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "teaching text with no word in it is empty",
+   "steps": [
+    {
+     "op": "teach",
+     "written": "!!!",
+     "sounds_like": null,
+     "at": 1790000000000,
+     "result": "empty"
+    },
+    {
+     "op": "teach",
+     "written": "Trovioo",
+     "sounds_like": "   ",
+     "at": 1790000000000,
+     "result": "ok"
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "words seen at the same moment sort by code point, not UTF-16",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "use zqx1 and aqx1 now",
+     "edited": "use Ｚqx1 and 𝐀qx1 now",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Ｚqx1",
+     "𝐀qx1"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "aqx1",
+      "meant": "𝐀qx1",
+      "count": 1
+     },
+     {
+      "heard": "zqx1",
+      "meant": "Ｚqx1",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "learned words are capped at 100, oldest first out",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d0",
+     "dictated": "use zqx000 now",
+     "edited": "use Zqx000 now",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "use zqx001 now",
+     "edited": "use Zqx001 now",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "use zqx002 now",
+     "edited": "use Zqx002 now",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "use zqx003 now",
+     "edited": "use Zqx003 now",
+     "at": 1790000000003
+    },
+    {
+     "op": "observe",
+     "dictation": "d4",
+     "dictated": "use zqx004 now",
+     "edited": "use Zqx004 now",
+     "at": 1790000000004
+    },
+    {
+     "op": "observe",
+     "dictation": "d5",
+     "dictated": "use zqx005 now",
+     "edited": "use Zqx005 now",
+     "at": 1790000000005
+    },
+    {
+     "op": "observe",
+     "dictation": "d6",
+     "dictated": "use zqx006 now",
+     "edited": "use Zqx006 now",
+     "at": 1790000000006
+    },
+    {
+     "op": "observe",
+     "dictation": "d7",
+     "dictated": "use zqx007 now",
+     "edited": "use Zqx007 now",
+     "at": 1790000000007
+    },
+    {
+     "op": "observe",
+     "dictation": "d8",
+     "dictated": "use zqx008 now",
+     "edited": "use Zqx008 now",
+     "at": 1790000000008
+    },
+    {
+     "op": "observe",
+     "dictation": "d9",
+     "dictated": "use zqx009 now",
+     "edited": "use Zqx009 now",
+     "at": 1790000000009
+    },
+    {
+     "op": "observe",
+     "dictation": "d10",
+     "dictated": "use zqx010 now",
+     "edited": "use Zqx010 now",
+     "at": 1790000000010
+    },
+    {
+     "op": "observe",
+     "dictation": "d11",
+     "dictated": "use zqx011 now",
+     "edited": "use Zqx011 now",
+     "at": 1790000000011
+    },
+    {
+     "op": "observe",
+     "dictation": "d12",
+     "dictated": "use zqx012 now",
+     "edited": "use Zqx012 now",
+     "at": 1790000000012
+    },
+    {
+     "op": "observe",
+     "dictation": "d13",
+     "dictated": "use zqx013 now",
+     "edited": "use Zqx013 now",
+     "at": 1790000000013
+    },
+    {
+     "op": "observe",
+     "dictation": "d14",
+     "dictated": "use zqx014 now",
+     "edited": "use Zqx014 now",
+     "at": 1790000000014
+    },
+    {
+     "op": "observe",
+     "dictation": "d15",
+     "dictated": "use zqx015 now",
+     "edited": "use Zqx015 now",
+     "at": 1790000000015
+    },
+    {
+     "op": "observe",
+     "dictation": "d16",
+     "dictated": "use zqx016 now",
+     "edited": "use Zqx016 now",
+     "at": 1790000000016
+    },
+    {
+     "op": "observe",
+     "dictation": "d17",
+     "dictated": "use zqx017 now",
+     "edited": "use Zqx017 now",
+     "at": 1790000000017
+    },
+    {
+     "op": "observe",
+     "dictation": "d18",
+     "dictated": "use zqx018 now",
+     "edited": "use Zqx018 now",
+     "at": 1790000000018
+    },
+    {
+     "op": "observe",
+     "dictation": "d19",
+     "dictated": "use zqx019 now",
+     "edited": "use Zqx019 now",
+     "at": 1790000000019
+    },
+    {
+     "op": "observe",
+     "dictation": "d20",
+     "dictated": "use zqx020 now",
+     "edited": "use Zqx020 now",
+     "at": 1790000000020
+    },
+    {
+     "op": "observe",
+     "dictation": "d21",
+     "dictated": "use zqx021 now",
+     "edited": "use Zqx021 now",
+     "at": 1790000000021
+    },
+    {
+     "op": "observe",
+     "dictation": "d22",
+     "dictated": "use zqx022 now",
+     "edited": "use Zqx022 now",
+     "at": 1790000000022
+    },
+    {
+     "op": "observe",
+     "dictation": "d23",
+     "dictated": "use zqx023 now",
+     "edited": "use Zqx023 now",
+     "at": 1790000000023
+    },
+    {
+     "op": "observe",
+     "dictation": "d24",
+     "dictated": "use zqx024 now",
+     "edited": "use Zqx024 now",
+     "at": 1790000000024
+    },
+    {
+     "op": "observe",
+     "dictation": "d25",
+     "dictated": "use zqx025 now",
+     "edited": "use Zqx025 now",
+     "at": 1790000000025
+    },
+    {
+     "op": "observe",
+     "dictation": "d26",
+     "dictated": "use zqx026 now",
+     "edited": "use Zqx026 now",
+     "at": 1790000000026
+    },
+    {
+     "op": "observe",
+     "dictation": "d27",
+     "dictated": "use zqx027 now",
+     "edited": "use Zqx027 now",
+     "at": 1790000000027
+    },
+    {
+     "op": "observe",
+     "dictation": "d28",
+     "dictated": "use zqx028 now",
+     "edited": "use Zqx028 now",
+     "at": 1790000000028
+    },
+    {
+     "op": "observe",
+     "dictation": "d29",
+     "dictated": "use zqx029 now",
+     "edited": "use Zqx029 now",
+     "at": 1790000000029
+    },
+    {
+     "op": "observe",
+     "dictation": "d30",
+     "dictated": "use zqx030 now",
+     "edited": "use Zqx030 now",
+     "at": 1790000000030
+    },
+    {
+     "op": "observe",
+     "dictation": "d31",
+     "dictated": "use zqx031 now",
+     "edited": "use Zqx031 now",
+     "at": 1790000000031
+    },
+    {
+     "op": "observe",
+     "dictation": "d32",
+     "dictated": "use zqx032 now",
+     "edited": "use Zqx032 now",
+     "at": 1790000000032
+    },
+    {
+     "op": "observe",
+     "dictation": "d33",
+     "dictated": "use zqx033 now",
+     "edited": "use Zqx033 now",
+     "at": 1790000000033
+    },
+    {
+     "op": "observe",
+     "dictation": "d34",
+     "dictated": "use zqx034 now",
+     "edited": "use Zqx034 now",
+     "at": 1790000000034
+    },
+    {
+     "op": "observe",
+     "dictation": "d35",
+     "dictated": "use zqx035 now",
+     "edited": "use Zqx035 now",
+     "at": 1790000000035
+    },
+    {
+     "op": "observe",
+     "dictation": "d36",
+     "dictated": "use zqx036 now",
+     "edited": "use Zqx036 now",
+     "at": 1790000000036
+    },
+    {
+     "op": "observe",
+     "dictation": "d37",
+     "dictated": "use zqx037 now",
+     "edited": "use Zqx037 now",
+     "at": 1790000000037
+    },
+    {
+     "op": "observe",
+     "dictation": "d38",
+     "dictated": "use zqx038 now",
+     "edited": "use Zqx038 now",
+     "at": 1790000000038
+    },
+    {
+     "op": "observe",
+     "dictation": "d39",
+     "dictated": "use zqx039 now",
+     "edited": "use Zqx039 now",
+     "at": 1790000000039
+    },
+    {
+     "op": "observe",
+     "dictation": "d40",
+     "dictated": "use zqx040 now",
+     "edited": "use Zqx040 now",
+     "at": 1790000000040
+    },
+    {
+     "op": "observe",
+     "dictation": "d41",
+     "dictated": "use zqx041 now",
+     "edited": "use Zqx041 now",
+     "at": 1790000000041
+    },
+    {
+     "op": "observe",
+     "dictation": "d42",
+     "dictated": "use zqx042 now",
+     "edited": "use Zqx042 now",
+     "at": 1790000000042
+    },
+    {
+     "op": "observe",
+     "dictation": "d43",
+     "dictated": "use zqx043 now",
+     "edited": "use Zqx043 now",
+     "at": 1790000000043
+    },
+    {
+     "op": "observe",
+     "dictation": "d44",
+     "dictated": "use zqx044 now",
+     "edited": "use Zqx044 now",
+     "at": 1790000000044
+    },
+    {
+     "op": "observe",
+     "dictation": "d45",
+     "dictated": "use zqx045 now",
+     "edited": "use Zqx045 now",
+     "at": 1790000000045
+    },
+    {
+     "op": "observe",
+     "dictation": "d46",
+     "dictated": "use zqx046 now",
+     "edited": "use Zqx046 now",
+     "at": 1790000000046
+    },
+    {
+     "op": "observe",
+     "dictation": "d47",
+     "dictated": "use zqx047 now",
+     "edited": "use Zqx047 now",
+     "at": 1790000000047
+    },
+    {
+     "op": "observe",
+     "dictation": "d48",
+     "dictated": "use zqx048 now",
+     "edited": "use Zqx048 now",
+     "at": 1790000000048
+    },
+    {
+     "op": "observe",
+     "dictation": "d49",
+     "dictated": "use zqx049 now",
+     "edited": "use Zqx049 now",
+     "at": 1790000000049
+    },
+    {
+     "op": "observe",
+     "dictation": "d50",
+     "dictated": "use zqx050 now",
+     "edited": "use Zqx050 now",
+     "at": 1790000000050
+    },
+    {
+     "op": "observe",
+     "dictation": "d51",
+     "dictated": "use zqx051 now",
+     "edited": "use Zqx051 now",
+     "at": 1790000000051
+    },
+    {
+     "op": "observe",
+     "dictation": "d52",
+     "dictated": "use zqx052 now",
+     "edited": "use Zqx052 now",
+     "at": 1790000000052
+    },
+    {
+     "op": "observe",
+     "dictation": "d53",
+     "dictated": "use zqx053 now",
+     "edited": "use Zqx053 now",
+     "at": 1790000000053
+    },
+    {
+     "op": "observe",
+     "dictation": "d54",
+     "dictated": "use zqx054 now",
+     "edited": "use Zqx054 now",
+     "at": 1790000000054
+    },
+    {
+     "op": "observe",
+     "dictation": "d55",
+     "dictated": "use zqx055 now",
+     "edited": "use Zqx055 now",
+     "at": 1790000000055
+    },
+    {
+     "op": "observe",
+     "dictation": "d56",
+     "dictated": "use zqx056 now",
+     "edited": "use Zqx056 now",
+     "at": 1790000000056
+    },
+    {
+     "op": "observe",
+     "dictation": "d57",
+     "dictated": "use zqx057 now",
+     "edited": "use Zqx057 now",
+     "at": 1790000000057
+    },
+    {
+     "op": "observe",
+     "dictation": "d58",
+     "dictated": "use zqx058 now",
+     "edited": "use Zqx058 now",
+     "at": 1790000000058
+    },
+    {
+     "op": "observe",
+     "dictation": "d59",
+     "dictated": "use zqx059 now",
+     "edited": "use Zqx059 now",
+     "at": 1790000000059
+    },
+    {
+     "op": "observe",
+     "dictation": "d60",
+     "dictated": "use zqx060 now",
+     "edited": "use Zqx060 now",
+     "at": 1790000000060
+    },
+    {
+     "op": "observe",
+     "dictation": "d61",
+     "dictated": "use zqx061 now",
+     "edited": "use Zqx061 now",
+     "at": 1790000000061
+    },
+    {
+     "op": "observe",
+     "dictation": "d62",
+     "dictated": "use zqx062 now",
+     "edited": "use Zqx062 now",
+     "at": 1790000000062
+    },
+    {
+     "op": "observe",
+     "dictation": "d63",
+     "dictated": "use zqx063 now",
+     "edited": "use Zqx063 now",
+     "at": 1790000000063
+    },
+    {
+     "op": "observe",
+     "dictation": "d64",
+     "dictated": "use zqx064 now",
+     "edited": "use Zqx064 now",
+     "at": 1790000000064
+    },
+    {
+     "op": "observe",
+     "dictation": "d65",
+     "dictated": "use zqx065 now",
+     "edited": "use Zqx065 now",
+     "at": 1790000000065
+    },
+    {
+     "op": "observe",
+     "dictation": "d66",
+     "dictated": "use zqx066 now",
+     "edited": "use Zqx066 now",
+     "at": 1790000000066
+    },
+    {
+     "op": "observe",
+     "dictation": "d67",
+     "dictated": "use zqx067 now",
+     "edited": "use Zqx067 now",
+     "at": 1790000000067
+    },
+    {
+     "op": "observe",
+     "dictation": "d68",
+     "dictated": "use zqx068 now",
+     "edited": "use Zqx068 now",
+     "at": 1790000000068
+    },
+    {
+     "op": "observe",
+     "dictation": "d69",
+     "dictated": "use zqx069 now",
+     "edited": "use Zqx069 now",
+     "at": 1790000000069
+    },
+    {
+     "op": "observe",
+     "dictation": "d70",
+     "dictated": "use zqx070 now",
+     "edited": "use Zqx070 now",
+     "at": 1790000000070
+    },
+    {
+     "op": "observe",
+     "dictation": "d71",
+     "dictated": "use zqx071 now",
+     "edited": "use Zqx071 now",
+     "at": 1790000000071
+    },
+    {
+     "op": "observe",
+     "dictation": "d72",
+     "dictated": "use zqx072 now",
+     "edited": "use Zqx072 now",
+     "at": 1790000000072
+    },
+    {
+     "op": "observe",
+     "dictation": "d73",
+     "dictated": "use zqx073 now",
+     "edited": "use Zqx073 now",
+     "at": 1790000000073
+    },
+    {
+     "op": "observe",
+     "dictation": "d74",
+     "dictated": "use zqx074 now",
+     "edited": "use Zqx074 now",
+     "at": 1790000000074
+    },
+    {
+     "op": "observe",
+     "dictation": "d75",
+     "dictated": "use zqx075 now",
+     "edited": "use Zqx075 now",
+     "at": 1790000000075
+    },
+    {
+     "op": "observe",
+     "dictation": "d76",
+     "dictated": "use zqx076 now",
+     "edited": "use Zqx076 now",
+     "at": 1790000000076
+    },
+    {
+     "op": "observe",
+     "dictation": "d77",
+     "dictated": "use zqx077 now",
+     "edited": "use Zqx077 now",
+     "at": 1790000000077
+    },
+    {
+     "op": "observe",
+     "dictation": "d78",
+     "dictated": "use zqx078 now",
+     "edited": "use Zqx078 now",
+     "at": 1790000000078
+    },
+    {
+     "op": "observe",
+     "dictation": "d79",
+     "dictated": "use zqx079 now",
+     "edited": "use Zqx079 now",
+     "at": 1790000000079
+    },
+    {
+     "op": "observe",
+     "dictation": "d80",
+     "dictated": "use zqx080 now",
+     "edited": "use Zqx080 now",
+     "at": 1790000000080
+    },
+    {
+     "op": "observe",
+     "dictation": "d81",
+     "dictated": "use zqx081 now",
+     "edited": "use Zqx081 now",
+     "at": 1790000000081
+    },
+    {
+     "op": "observe",
+     "dictation": "d82",
+     "dictated": "use zqx082 now",
+     "edited": "use Zqx082 now",
+     "at": 1790000000082
+    },
+    {
+     "op": "observe",
+     "dictation": "d83",
+     "dictated": "use zqx083 now",
+     "edited": "use Zqx083 now",
+     "at": 1790000000083
+    },
+    {
+     "op": "observe",
+     "dictation": "d84",
+     "dictated": "use zqx084 now",
+     "edited": "use Zqx084 now",
+     "at": 1790000000084
+    },
+    {
+     "op": "observe",
+     "dictation": "d85",
+     "dictated": "use zqx085 now",
+     "edited": "use Zqx085 now",
+     "at": 1790000000085
+    },
+    {
+     "op": "observe",
+     "dictation": "d86",
+     "dictated": "use zqx086 now",
+     "edited": "use Zqx086 now",
+     "at": 1790000000086
+    },
+    {
+     "op": "observe",
+     "dictation": "d87",
+     "dictated": "use zqx087 now",
+     "edited": "use Zqx087 now",
+     "at": 1790000000087
+    },
+    {
+     "op": "observe",
+     "dictation": "d88",
+     "dictated": "use zqx088 now",
+     "edited": "use Zqx088 now",
+     "at": 1790000000088
+    },
+    {
+     "op": "observe",
+     "dictation": "d89",
+     "dictated": "use zqx089 now",
+     "edited": "use Zqx089 now",
+     "at": 1790000000089
+    },
+    {
+     "op": "observe",
+     "dictation": "d90",
+     "dictated": "use zqx090 now",
+     "edited": "use Zqx090 now",
+     "at": 1790000000090
+    },
+    {
+     "op": "observe",
+     "dictation": "d91",
+     "dictated": "use zqx091 now",
+     "edited": "use Zqx091 now",
+     "at": 1790000000091
+    },
+    {
+     "op": "observe",
+     "dictation": "d92",
+     "dictated": "use zqx092 now",
+     "edited": "use Zqx092 now",
+     "at": 1790000000092
+    },
+    {
+     "op": "observe",
+     "dictation": "d93",
+     "dictated": "use zqx093 now",
+     "edited": "use Zqx093 now",
+     "at": 1790000000093
+    },
+    {
+     "op": "observe",
+     "dictation": "d94",
+     "dictated": "use zqx094 now",
+     "edited": "use Zqx094 now",
+     "at": 1790000000094
+    },
+    {
+     "op": "observe",
+     "dictation": "d95",
+     "dictated": "use zqx095 now",
+     "edited": "use Zqx095 now",
+     "at": 1790000000095
+    },
+    {
+     "op": "observe",
+     "dictation": "d96",
+     "dictated": "use zqx096 now",
+     "edited": "use Zqx096 now",
+     "at": 1790000000096
+    },
+    {
+     "op": "observe",
+     "dictation": "d97",
+     "dictated": "use zqx097 now",
+     "edited": "use Zqx097 now",
+     "at": 1790000000097
+    },
+    {
+     "op": "observe",
+     "dictation": "d98",
+     "dictated": "use zqx098 now",
+     "edited": "use Zqx098 now",
+     "at": 1790000000098
+    },
+    {
+     "op": "observe",
+     "dictation": "d99",
+     "dictated": "use zqx099 now",
+     "edited": "use Zqx099 now",
+     "at": 1790000000099
+    },
+    {
+     "op": "observe",
+     "dictation": "d100",
+     "dictated": "use zqx100 now",
+     "edited": "use Zqx100 now",
+     "at": 1790000000100
+    }
+   ],
+   "expect": {
+    "words": [
+     "Zqx100",
+     "Zqx099",
+     "Zqx098",
+     "Zqx097",
+     "Zqx096",
+     "Zqx095",
+     "Zqx094",
+     "Zqx093",
+     "Zqx092",
+     "Zqx091",
+     "Zqx090",
+     "Zqx089",
+     "Zqx088",
+     "Zqx087",
+     "Zqx086",
+     "Zqx085",
+     "Zqx084",
+     "Zqx083",
+     "Zqx082",
+     "Zqx081",
+     "Zqx080",
+     "Zqx079",
+     "Zqx078",
+     "Zqx077",
+     "Zqx076",
+     "Zqx075",
+     "Zqx074",
+     "Zqx073",
+     "Zqx072",
+     "Zqx071",
+     "Zqx070",
+     "Zqx069",
+     "Zqx068",
+     "Zqx067",
+     "Zqx066",
+     "Zqx065",
+     "Zqx064",
+     "Zqx063",
+     "Zqx062",
+     "Zqx061",
+     "Zqx060",
+     "Zqx059",
+     "Zqx058",
+     "Zqx057",
+     "Zqx056",
+     "Zqx055",
+     "Zqx054",
+     "Zqx053",
+     "Zqx052",
+     "Zqx051",
+     "Zqx050",
+     "Zqx049",
+     "Zqx048",
+     "Zqx047",
+     "Zqx046",
+     "Zqx045",
+     "Zqx044",
+     "Zqx043",
+     "Zqx042",
+     "Zqx041",
+     "Zqx040",
+     "Zqx039",
+     "Zqx038",
+     "Zqx037",
+     "Zqx036",
+     "Zqx035",
+     "Zqx034",
+     "Zqx033",
+     "Zqx032",
+     "Zqx031",
+     "Zqx030",
+     "Zqx029",
+     "Zqx028",
+     "Zqx027",
+     "Zqx026",
+     "Zqx025",
+     "Zqx024",
+     "Zqx023",
+     "Zqx022",
+     "Zqx021",
+     "Zqx020",
+     "Zqx019",
+     "Zqx018",
+     "Zqx017",
+     "Zqx016",
+     "Zqx015",
+     "Zqx014",
+     "Zqx013",
+     "Zqx012",
+     "Zqx011",
+     "Zqx010",
+     "Zqx009",
+     "Zqx008",
+     "Zqx007",
+     "Zqx006",
+     "Zqx005",
+     "Zqx004",
+     "Zqx003",
+     "Zqx002",
+     "Zqx001"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a high-distance wrapper learns distinctive repo with no alias or pending pair",
+   "lexicon": [
+    "wrapper"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "wrapper",
+     "edited": "repo",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "repo"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a second distinct wrapper correction increments only the repo word",
+   "lexicon": [
+    "wrapper"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "wrapper",
+     "edited": "repo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "wrapper",
+     "edited": "repo",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [
+     "repo"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "ordinary wrapper to ordinary repository learns nothing",
+   "lexicon": [
+    "repository",
+    "wrapper"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "wrapper",
+     "edited": "repository",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "wrapper",
+     "edited": "repository",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a whole-sentence wrapper rewrite learns nothing",
+   "lexicon": [
+    "app",
+    "in",
+    "the",
+    "today",
+    "use",
+    "wrapper"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "use wrapper in the app today",
+     "edited": "send repository files now",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "same draft revision retracts its first spelling",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Mils today",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [
+     "Mils"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "Mils": [
+     1,
+     0
+    ]
+   }
+  },
+  {
+   "name": "return to dictated text retracts the entire draft contribution",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Mies today",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {}
+  },
+  {
+   "name": "duplicate stable callbacks never promote a word",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000002
+    }
+   ],
+   "expect": {
+    "words": [
+     "Miles"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "Miles": [
+     1,
+     0
+    ]
+   }
+  },
+  {
+   "name": "independent drafts increase evidence",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000002
+    }
+   ],
+   "expect": {
+    "words": [
+     "Miles"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "Miles": [
+     3,
+     0
+    ]
+   }
+  },
+  {
+   "name": "correcting learned spelling away supplies negative evidence",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "we use Miles today",
+     "edited": "we use Mies today",
+     "at": 1790000000002
+    }
+   ],
+   "expect": {
+    "words": [
+     "Miles"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "miles",
+      "meant": "Mies",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "Miles": [
+     2,
+     1
+    ]
+   }
+  },
+  {
+   "name": "enough negative evidence suppresses a mistaken learned spelling",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use Miles today",
+     "edited": "we use Mies today",
+     "at": 1790000000001
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "miles",
+      "meant": "Mies",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {}
+  },
+  {
+   "name": "retracting negative evidence restores the original preference",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use Mies today",
+     "edited": "we use Miles today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use Miles today",
+     "edited": "we use Mies today",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use Miles today",
+     "edited": "we use Miles today",
+     "at": 1790000000002
+    }
+   ],
+   "expect": {
+    "words": [
+     "Miles"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "Miles": [
+     1,
+     0
+    ]
+   }
+  },
+  {
+   "name": "editing a promoted draft revokes the promotion",
+   "lexicon": [
+    "we",
+    "use",
+    "today",
+    "my",
+    "the",
+    "server"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio today",
+     "edited": "we use Trovioo today",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio today",
+     "edited": "we use Trovioo today",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "we use trovio today",
+     "edited": "we use TrovioAI today",
+     "at": 1790000000002
+    }
+   ],
+   "expect": {
+    "words": [
+     "TrovioAI",
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "TrovioAI",
+      "count": 1
+     },
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "TrovioAI": [
+     1,
+     0
+    ],
+    "Trovioo": [
+     1,
+     0
+    ]
+   }
+  },
+  {
+   "name": "an active alias is not overwritten by its pending rival on rebuild",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "0",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000001
+    },
+    {
+     "op": "observe",
+     "dictation": "2",
+     "dictated": "we use trovio",
+     "edited": "we use TrovioAI",
+     "at": 1790000000002
+    },
+    {
+     "op": "observe",
+     "dictation": "3",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000003
+    },
+    {
+     "op": "observe",
+     "dictation": "4",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000004
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo",
+     "TrovioAI"
+    ],
+    "aliases": {
+     "trovio": "Trovioo"
+    },
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "TrovioAI",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_word_evidence": {
+    "Trovioo": [
+     4,
+     0
+    ],
+    "TrovioAI": [
+     1,
+     0
+    ]
+   }
+  },
+  {
+   "name": "an ordinary word with -ed or -ing is not vocabulary",
+   "lexicon": [
+    "we",
+    "the",
+    "it",
+    "room",
+    "they",
+    "she",
+    "my",
+    "late",
+    "met",
+    "play",
+    "change",
+    "stop",
+    "try",
+    "make",
+    "run",
+    "y",
+    "ye"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "they play it",
+     "edited": "they played it",
+     "at": 1790000001000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "the room change",
+     "edited": "the room changed",
+     "at": 1790000002000
+    },
+    {
+     "op": "observe",
+     "dictation": "d3",
+     "dictated": "they stop it",
+     "edited": "they stopped it",
+     "at": 1790000003000
+    },
+    {
+     "op": "observe",
+     "dictation": "d4",
+     "dictated": "she tryed it",
+     "edited": "she tried it",
+     "at": 1790000004000
+    },
+    {
+     "op": "observe",
+     "dictation": "d5",
+     "dictated": "we play it",
+     "edited": "we playing it",
+     "at": 1790000005000
+    },
+    {
+     "op": "observe",
+     "dictation": "d6",
+     "dictated": "we make it",
+     "edited": "we making it",
+     "at": 1790000006000
+    },
+    {
+     "op": "observe",
+     "dictation": "d7",
+     "dictated": "we are runing late",
+     "edited": "we are running late",
+     "at": 1790000007000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a verb ending needs a base of three letters",
+   "lexicon": [
+    "we",
+    "the",
+    "it",
+    "room",
+    "they",
+    "she",
+    "my",
+    "late",
+    "met",
+    "play",
+    "change",
+    "stop",
+    "try",
+    "make",
+    "run",
+    "y",
+    "ye"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we met ying",
+     "edited": "we met Ying",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Ying"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "an inflection is never an alias",
+   "lexicon": [
+    "open",
+    "the",
+    "close",
+    "now",
+    "we",
+    "use",
+    "call"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "open the app",
+     "edited": "open the apps",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "close the app now",
+     "edited": "close the apps now",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "apps"
+    ],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a two-dictation sound-alike alias still promotes",
+   "lexicon": [
+    "open",
+    "the",
+    "close",
+    "now",
+    "we",
+    "use",
+    "call"
+   ],
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "we use trovio",
+     "edited": "we use Trovioo",
+     "at": 1790000000000
+    },
+    {
+     "op": "observe",
+     "dictation": "d2",
+     "dictated": "call trovio now",
+     "edited": "call Trovioo now",
+     "at": 1790000001000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {
+     "trovio": "Trovioo"
+    },
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   }
+  },
+  {
+   "name": "a fix with no letter is not journaled",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "my pin is 4417",
+     "edited": "my pin is 4418",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [],
+    "aliases": {},
+    "pending": [],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_journal": []
+  },
+  {
+   "name": "a mixed fix journals only the corrections with a letter",
+   "steps": [
+    {
+     "op": "observe",
+     "dictation": "d1",
+     "dictated": "call trovio at 4417",
+     "edited": "call Trovioo at 4418",
+     "at": 1790000000000
+    }
+   ],
+   "expect": {
+    "words": [
+     "Trovioo"
+    ],
+    "aliases": {},
+    "pending": [
+     {
+      "heard": "trovio",
+      "meant": "Trovioo",
+      "count": 1
+     }
+    ],
+    "removed_words": [],
+    "removed_aliases": []
+   },
+   "expect_journal": [
+    {
+     "id": "d1",
+     "corrections": [
+      [
+       "trovio",
+       "Trovioo"
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic, in SwiftPM 6.2's parallel XCTest xUnit shape: 1 passed, 1 failed. -->
+<testsuites>
+<testsuite name="TestResults" errors="0" tests="2" failures="1" time="0.020">
+<testcase classname="DictationLearningTests.LearningStoreTests" name="testTheFileIsPrivate" time="0.010">
+<failure message="failed"></failure>
+</testcase>
+<testcase classname="DictationIPCTests.FramingTests" name="testLengthPrefixIsBigEndian" time="0.010">
+</testcase>
+</testsuite>
+</testsuites>

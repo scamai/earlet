@@ -1,0 +1,96 @@
+<Window x:Class="Dictation.App.DictationHudWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:Dictation.App"
+ Title="Earlet indicator"
+ WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+ ShowActivated="False" ShowInTaskbar="False" Focusable="False" Topmost="True"
+ ResizeMode="NoResize" SizeToContent="WidthAndHeight" IsHitTestVisible="False"
+ UseLayoutRounding="True">
+ <!-- The floating indicator: one capsule near the bottom of the screen the
+      user is working on, saying what a hold is doing and how it ended.
+
+      It must never take the focus. Dictation pastes into whatever window has
+      it, so an indicator that activated on its way up would receive the
+      user's sentence. ShowActivated="False" here and WS_EX_NOACTIVATE in the
+      code-behind are what stop that; the code-behind says why each style is
+      there.
+
+      Every length lives in DictationHudGeometry, or for the level bars in
+      DictationHudWaveform and DictationHudLevel (Dictation.Core), where the
+      arithmetic that depends on them is tested; the code-behind applies
+      them. A number written here as well would be a second opinion about the
+      same value.
+
+      Always dark, like the macOS indicator, so it reads on any wallpaper and
+      in any app; under High Contrast the code-behind draws it in the contrast
+      theme's own colours instead (DictationHudContrast). The hairline is the app icon's indigo to violet, as on the
+      Mac; the tone dot is the icon's bright violet, or orange for a line that
+      needs reading. While the hold listens, the level bars take the dot's
+      place in the Mac's violet gradient (#7A4FD4 at the foot to #9F7AEA at
+      the top), the Mac's named palette exception. -->
+ <Window.Resources>
+  <LinearGradientBrush x:Key="LevelFill" StartPoint="0.5,1" EndPoint="0.5,0">
+   <GradientStop Color="#7A4FD4" Offset="0" />
+   <GradientStop Color="#9F7AEA" Offset="1" />
+  </LinearGradientBrush>
+ </Window.Resources>
+ <Border x:Name="Capsule" Background="#F21C1C1F" SnapsToDevicePixels="True">
+  <Border.BorderBrush>
+   <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+    <GradientStop Color="#9925216B" Offset="0" />
+    <GradientStop Color="#997A4FD4" Offset="1" />
+   </LinearGradientBrush>
+  </Border.BorderBrush>
+  <!-- The shadow's blur and depth are DictationHudGeometry's, set in the
+       code-behind with the transparent ring that must hold them. -->
+  <Border.Effect>
+   <DropShadowEffect Direction="270" Opacity="0.35" Color="Black" />
+  </Border.Effect>
+  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+   <!-- One slot, one width, for the tone dot and for the level bars that
+        replace it while the hold listens: three bars, or one flat line in
+        silence. Neither is in the automation tree, so a reader is never
+        given the level. -->
+   <Grid x:Name="MarkSlot" VerticalAlignment="Center">
+    <Ellipse x:Name="Mark" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <Grid x:Name="Meter" Visibility="Collapsed">
+     <Rectangle x:Name="FlatLine" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{StaticResource LevelFill}" />
+     <StackPanel x:Name="Bars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0">
+      <Rectangle x:Name="Bar0" VerticalAlignment="Center" Fill="{StaticResource LevelFill}" />
+      <Rectangle x:Name="Bar1" VerticalAlignment="Center" Fill="{StaticResource LevelFill}" />
+      <Rectangle x:Name="Bar2" VerticalAlignment="Center" Fill="{StaticResource LevelFill}" />
+     </StackPanel>
+    </Grid>
+   </Grid>
+   <Grid x:Name="Lines" VerticalAlignment="Center">
+    <Grid.RowDefinitions>
+     <RowDefinition Height="Auto" />
+     <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <!-- The one element a screen reader hears. The window never takes the
+         focus, so it is announced two ways, both raised from the code-behind
+         only when the sentence changes: as a polite live region, named with
+         the whole sentence (LiveRegionChanged), and as a UI Automation
+         notification carrying the same sentence (UiaNotification). -->
+    <TextBlock x:Name="StatusLine" Grid.Row="0" FontSize="14" FontWeight="SemiBold" Foreground="White"
+      TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
+    <!-- The live preview's words (DICTATION_PREVIEW=1), in StatusLine's place
+         and font while the hold listens. Out of the automation tree: the
+         microphone is open, and Narrator must never be given the words to
+         read into it. StatusLine stays under it, invisible, still named for
+         the state ("Listening"). Fitted by DictationHudCaption, oldest words
+         cut, so no trimming of its own. -->
+    <local:UnannouncedTextBlock x:Name="CaptionLine" Grid.Row="0" FontSize="14" FontWeight="SemiBold" Foreground="White"
+      TextWrapping="NoWrap" Visibility="Collapsed" />
+    <!-- Out of the automation tree: its words are already in StatusLine's
+         name, and a reader would otherwise say them twice. Tabular digits,
+         so the hands-free clock and the countdown do not jitter as they
+         count. An ending's wraps to two lines at the pill's width; the
+         ellipsis is for what two lines cannot hold. -->
+    <local:UnannouncedTextBlock x:Name="DetailLine" Grid.Row="1" Margin="0,2,0,0" FontSize="12" Foreground="#A6FFFFFF"
+      TextTrimming="CharacterEllipsis" Visibility="Collapsed" Typography.NumeralAlignment="Tabular" />
+   </Grid>
+  </StackPanel>
+ </Border>
+</Window>

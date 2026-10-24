@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ideas and feature requests
+    url: https://github.com/scamai/earlet/discussions
+    about: Start a feature request as a discussion, so it can be shaped before anyone writes code.
+  - name: Questions
+    url: https://github.com/scamai/earlet/discussions
+    about: Ask how to use or build the apps.
+  - name: Report a security vulnerability
+    url: https://github.com/scamai/earlet/security/advisories/new
+    about: Report it privately to the maintainers. Never open a public issue for a vulnerability.
