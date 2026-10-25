@@ -71,7 +71,7 @@ requests==2.34.2
     # via tiktoken
 scipy==1.17.1
     # via mlx-whisper
-setuptools==84.0.0
+setuptools==84.1.0
     # via torch
 sympy==1.14.0
     # via torch
