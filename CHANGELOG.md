@@ -8,6 +8,12 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-25
+
+The first release. Apple Silicon Macs can download a signed, notarized disk
+image from [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0.1.0);
+the Python runtime and speech model are inside it.
+
 - **Product name.** The source preview is now named Earlet, with a wheat
   microphone icon.
 
@@ -84,8 +90,7 @@ notice adds a line under Unreleased in the same pull request.
 - Clarify the macOS source-preview setup, platform scope and contribution
   entry points; pin CI actions and disable persisted checkout credentials.
 
-Nothing has been released yet. This section summarises what the source
-builds today. The Windows app has been built and tested on Linux only; none
+This section summarises what 0.1.0 does. The Windows app has been built and tested on Linux only; none
 of its entries has run on Windows hardware.
 
 ### Fixed
@@ -208,7 +213,7 @@ of its entries has run on Windows hardware.
 ### Known limitations
 
 - A dictation stops after 600 seconds on the Mac and five minutes on Windows.
-- No signed, notarized or installable release exists yet, and no update
-  channel.
+- No update channel: download a newer image from GitHub Releases yourself.
+  There is no Windows or Intel Mac download.
 - The Windows app has never run on Windows hardware, and Windows on ARM has
   no speech engine yet.

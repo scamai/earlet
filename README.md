@@ -10,14 +10,16 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start"><strong>Try the source preview →</strong></a>
+  <a href="https://github.com/scamai/earlet/releases/latest"><strong>Download for Mac →</strong></a>
+  &nbsp; · &nbsp;
+  <a href="#quick-start">Build from source</a>
   &nbsp; · &nbsp;
   <a href="SUPPORT.md">Get help</a>
 </p>
 
 <p align="center">
-  <sub>macOS 14+ · Apple Silicon · 0.1.0 source preview<br>
-  Build from source. No downloadable release yet.</sub>
+  <sub>macOS 14+ · Apple Silicon · 0.1.0 preview<br>
+  Signed and notarized by Apple.</sub>
 </p>
 
 <p align="center">
@@ -39,6 +41,7 @@
 
 - [What it does](#what-it-does)
 - [Platforms](#platforms)
+- [Install](#install)
 - [Quick start](#quick-start)
 - [Your first dictation](#your-first-dictation)
 - [Privacy and local data](#privacy-and-local-data)
@@ -78,15 +81,27 @@ recording. Retention and deletion stay under your control.
 
 | Platform | Availability |
 | --- | --- |
-| **macOS 14+ · Apple Silicon** | Source preview. Native SwiftUI app with MLX recognition. Supply a Python runtime and model. |
+| **macOS 14+ · Apple Silicon** | [Notarized download](#install), or build from source. Native SwiftUI app with MLX recognition. |
 | Windows x64 | WPF source and tests. Cross-built; not exercised on Windows hardware. Binary releases deferred. |
 | Windows ARM64 | App-only build target; no complete speech package. |
 | Intel Mac, Linux, Android, iOS | No supported app. Mobile is adapter research only. |
 
+## Install
+
+Download `Earlet-0.1.0-macos-arm64.dmg` from
+[Releases](https://github.com/scamai/earlet/releases/latest), open it and drag
+Earlet to Applications. It needs an Apple Silicon Mac with macOS 14 or later.
+The image is signed with Reality Inc.'s Developer ID and notarized by Apple,
+so it opens like any other downloaded app. The Python runtime and the
+[MLX Whisper Large v3 Turbo, 4-bit](https://huggingface.co/mlx-community/whisper-large-v3-turbo-4bit)
+model are inside, so the download is about 850 MB and nothing else needs
+installing. Then continue with [Your first dictation](#your-first-dictation).
+
 ## Quick start
 
 This path is for an **Apple Silicon Mac with macOS 14+, Swift 6.2+, and
-Python 3.11**. It starts a development build, not an installed release.
+Python 3.11**. It starts a development build, not an installed release; to
+use the app without building it, [install the download](#install).
 Download or clone this repository, open a terminal in its root, and close
 any installed copy of Earlet or the earlier Dictation preview first: the development build shares its
 settings and vocabulary.
@@ -220,8 +235,9 @@ python3 tools/package.py --platform macos --app-only --output dist/macos-app
 
 For a complete package, supply a relocatable Python distribution with the
 worker dependencies and your model using the
-[packaging guide](docs/development.md#packaging). Public signing, Hardened
-Runtime, notarization, and clean-machine installation remain separate work.
+[packaging guide](docs/development.md#packaging).
+[Releasing a Mac build](docs/development.md#releasing-a-mac-build) covers
+Developer ID signing, the Hardened Runtime and notarization.
 
 </details>
 

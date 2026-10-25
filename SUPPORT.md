@@ -1,7 +1,8 @@
 # Getting help
 
 Start with the setup checks below, or choose the matching reporting channel.
-Earlet is a source preview with no downloadable release yet. Support is
+Earlet is a 0.x preview: a notarized download for Apple Silicon Macs, and
+source for everything else. Support is
 best-effort, with no support contract or guaranteed response time. Windows
 source has not been exercised on Windows hardware.
 
@@ -9,7 +10,7 @@ source has not been exercised on Windows hardware.
 
 | What you see | What to check first |
 |---|---|
-| You are looking for an installer | There is no downloadable release yet. The [Mac source-preview instructions](README.md#quick-start) require an Apple Silicon Mac, the toolchain, Python dependencies and a local MLX Whisper model. |
+| You are looking for an installer | Download the Mac disk image from [Releases](https://github.com/scamai/earlet/releases/latest) (Apple Silicon, macOS 14 or later), open it and drag Earlet to Applications. There is no Windows or Intel Mac download; [building from source](README.md#quick-start) needs the toolchain, Python dependencies and a local model. |
 | The app opens but cannot recognize speech | An app-only package contains no speech runtime or model. Check the [complete-package requirements](docs/development.md#packaging) and [model format](docs/development.md#model-formats). |
 | Holding the key does nothing on the Mac | Check Microphone, Accessibility and Input Monitoring in System Settings. Quit and reopen the app after granting Input Monitoring. Check the hold key shown in Home. |
 | Text is recognized but does not appear in the other app | Focus an editable text field and check Accessibility access. Use **Copy last text** to paste manually. Password fields and Secure Input are intentionally protected. |

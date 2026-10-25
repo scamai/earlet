@@ -15,10 +15,10 @@ welcome and handled first.
 
 ## Supported versions
 
-There is no release yet. The apps are a 0.x preview built from source, and
-the Windows app has been built and tested on Linux only; it has never run on
-Windows hardware. Security fixes land on the default branch. Once releases
-exist, only the latest 0.x release gets security fixes.
+Only the latest 0.x release gets security fixes. The first, 0.1.0, is a
+notarized download for Apple Silicon Macs. The Windows app is source only:
+it has been built and tested on Linux and has never run on Windows hardware.
+Security fixes land on the default branch first.
 
 ## Reporting a vulnerability
 

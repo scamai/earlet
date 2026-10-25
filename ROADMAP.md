@@ -4,22 +4,18 @@ Where Earlet is going, in three horizons. Nothing here has a date. Ideas
 and questions belong in Discussions; the [changelog](CHANGELOG.md) records
 what has landed.
 
-The immediate target is a free Mac-first source preview. A standalone private
-repository is the preparation point; source publication follows the
-public content, rights and export gates. Windows source remains in the tree,
-but Windows device work and public binary distribution follow later.
+Earlet is a free, Mac-first preview. The source is public, and 0.1.0 is a
+notarized download for Apple Silicon Macs. Windows source remains in the
+tree, but Windows device work and a Windows download follow later.
 
-- [Now: toward a first release](#now-toward-a-first-release)
+- [Now](#now)
 - [Next](#next)
 - [Later](#later)
 - [Open questions](#open-questions)
 - [What will not change](#what-will-not-change)
 
-## Now: toward a first release
+## Now
 
-- **A source tree people can build.** Finish removing unused inherited code
-  and private identifiers, confirm rights and notices for the retained code,
-  and verify the exact public snapshot and its build instructions.
 - **Mac reliability on real hardware.** Verify quiet takes after the short-noise
   insertion fix. Keep intermittent repeated text and
   resource use during long speech under observation, then verify correction
@@ -36,9 +32,9 @@ but Windows device work and public binary distribution follow later.
 
 ## Next
 
-- **A public Mac binary.** Distribution signing, hardening, notarization,
-  bundled license notices and clean-machine installer acceptance follow the
-  source preview.
+- **A better Mac download.** 0.1.0 is signed, notarized and stapled. Next:
+  one collected third-party notice file, a smaller image, installation
+  checked on a clean Mac, and an update channel.
 - **Long dictations without the wait (stage 2).** Recognise finished stretches
   of speech while the key is still held, so releasing waits only for the last
   few seconds; then raise the ceiling to 20 minutes, with a "still listening"

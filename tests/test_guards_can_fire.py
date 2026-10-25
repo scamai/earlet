@@ -1,7 +1,8 @@
 """Deleting a guard must turn the test that claims it red.
 
 Each row removes one guard from a copy of tools/package.py, reruns the test
-that claims the guard against that copy, and expects it to fail. WORKER_ROWS
+that claims the guard against that copy, and expects it to fail. RELEASE_ROWS
+do the same to tools/release_macos.py. WORKER_ROWS
 do the same to the worker's guards (its learned-vocabulary handling,
 LEARNING.md §1, §5, §6; the sign-off junk filter; the live preview's optional
 imports and commit path), through a mutated staged worker the claim launches
@@ -18,6 +19,7 @@ import pytest
 import harness
 import test_package as claims
 import test_product
+import test_release_macos as release_claims
 import test_worker_frames as worker_claims
 
 WINDOWS_MODEL = harness.CT2_MODEL
@@ -230,5 +232,71 @@ def test_deleting_a_worker_guard_fails_its_test(module, anchor, replacement, cla
     arguments = {name: tmp_path if name == "tmp_path" else parameters[name]
                  for name in inspect.signature(claim).parameters}
     # Any way the claim fails is the suite going red.
+    with pytest.raises((Exception, pytest.fail.Exception)):
+        claim(**arguments)
+
+
+# ─── Release guards (tools/release_macos.py) ─────────────────────────────────
+
+def release_row(guard, anchor, replacement, claim, **parameters):
+    return pytest.param(anchor, replacement, claim, parameters, id=guard)
+
+
+SIGNING = '    command = ["codesign", "--force", "--options", "runtime", "--timestamp", "--sign", identity]'
+NESTED_SIGNING = "        runner(codesign(identity, path, WORKER_ENTITLEMENTS if executable else None))"
+SKIPPED = "        if path.is_symlink() or not path.is_file() or path == main:"
+REFUSED = release_claims.test_what_cannot_become_a_notarized_release_is_refused
+
+RELEASE_ROWS = [
+    release_row("executables get the worker set", NESTED_SIGNING, "        runner(codesign(identity, path))",
+                release_claims.test_executables_get_the_worker_entitlements_and_libraries_get_none),
+    release_row("libraries get no entitlements", NESTED_SIGNING,
+                "        runner(codesign(identity, path, WORKER_ENTITLEMENTS))",
+                release_claims.test_executables_get_the_worker_entitlements_and_libraries_get_none),
+    release_row("app entitlements", "    runner(codesign(identity, app, APP_ENTITLEMENTS))",
+                "    runner(codesign(identity, app))",
+                release_claims.test_the_app_is_signed_last_with_its_own_entitlements_and_never_deep),
+    release_row("hardened runtime", SIGNING, SIGNING.replace('"--options", "runtime", ', ""),
+                release_claims.test_every_signature_carries_the_hardened_runtime_and_a_timestamp),
+    release_row("secure timestamp", SIGNING, SIGNING.replace('"--timestamp", ', ""),
+                release_claims.test_every_signature_carries_the_hardened_runtime_and_a_timestamp),
+    release_row("signatures checked", "    check_signed(app, runner)\n", "",
+                release_claims.test_a_file_without_the_hardened_runtime_stops_the_release),
+    release_row("symlinks skipped", SKIPPED, SKIPPED.replace("path.is_symlink() or ", ""),
+                release_claims.test_every_nested_mach_o_is_found_deepest_first_and_the_main_executable_is_left_for_the_bundle),
+    release_row("main executable left to the bundle", SKIPPED, SKIPPED.replace(" or path == main", ""),
+                release_claims.test_every_nested_mach_o_is_found_deepest_first_and_the_main_executable_is_left_for_the_bundle),
+    release_row("deepest first", "key=lambda item: (-len(item[0].parts), str(item[0]))",
+                "key=lambda item: str(item[0])",
+                release_claims.test_every_nested_mach_o_is_found_deepest_first_and_the_main_executable_is_left_for_the_bundle),
+    release_row("Apple must accept", '    if submission["status"] != "Accepted":', "    if False:",
+                release_claims.test_a_rejected_submission_fails_and_keeps_apples_log),
+    release_row("a missing log is not a rejection",
+                '                              str(log)], capture_output=True, check=False)',
+                '                              str(log)], capture_output=True)',
+                release_claims.test_a_log_the_keychain_will_not_fetch_does_not_stop_an_accepted_release),
+    release_row("app stapled before imaging", "        staple(app, runner)\n", "",
+                release_claims.test_the_app_is_notarized_and_stapled_before_it_goes_into_the_image),
+    release_row("image signed", '    runner(["codesign", "--force", "--timestamp", "--sign", identity, str(dmg)])\n', "",
+                release_claims.test_the_image_is_signed_then_notarized_then_stapled_then_assessed),
+    release_row("Developer ID only", '    if not identity.startswith("Developer ID Application:"):',
+                "    if not identity:", REFUSED, case="development",
+                overrides={"identity": "Apple Development: someone (ABCDE12345)"}, message="Developer ID Application"),
+    release_row("complete package only", '    if mode != "complete-preview":', "    if False:", REFUSED,
+                case="app-only", overrides={"mode": "app-only"}, message="Only a complete package"),
+    release_row("fresh output", "    if output.exists():", "    if False:", REFUSED,
+                case="output exists", overrides={}, message="Output already exists"),
+]
+
+
+@pytest.mark.parametrize("anchor, replacement, claim, parameters", RELEASE_ROWS)
+def test_deleting_a_release_guard_fails_its_test(anchor, replacement, claim, parameters, tmp_path, monkeypatch):
+    source = (harness.ROOT / "tools/release_macos.py").read_text(encoding="utf-8")
+    assert source.count(anchor) == 1, "the guard moved: update this row"
+    monkeypatch.setitem(harness.OVERRIDES, "release_macos", source.replace(anchor, replacement))
+    harness.tool("release_macos")  # the mutant itself must load, or any failure below proves nothing
+    arguments = {name: tmp_path if name == "tmp_path" else parameters[name]
+                 for name in inspect.signature(claim).parameters}
+    # The unmutated claim passes with these arguments (test_release_macos.py), so a red here is the guard.
     with pytest.raises((Exception, pytest.fail.Exception)):
         claim(**arguments)

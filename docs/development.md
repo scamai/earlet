@@ -14,6 +14,7 @@ together is in [architecture.md](architecture.md).
 - [Running the tests](#running-the-tests)
 - [Building the Windows entry point](#building-the-windows-entry-point)
 - [Packaging](#packaging)
+- [Releasing a Mac build](#releasing-a-mac-build)
 - [Environment overrides](#environment-overrides)
 - [Model formats](#model-formats)
 
@@ -145,9 +146,9 @@ identity instead, so macOS keeps the Microphone, Accessibility and Input
 Monitoring grants across rebuilds; an ad-hoc rebuild changes the code
 identity and silently loses them. Local
 installs can use your own stable signing identity to retain permission grants.
-Developer ID signing is not required to build or test this source preview.
-Hardened Runtime and notarization are not implemented; they are separate
-requirements for a future public binary. The Windows output is an
+Developer ID signing is not required to build or test from source.
+`tools/package.py` never enables the Hardened Runtime; a downloadable build
+goes through [Releasing a Mac build](#releasing-a-mac-build). The Windows output is an
 unsigned portable folder. The `mac-package` test suite passes no
 `--sign-identity`, so it is ad-hoc only while `DICTATION_SIGN_IDENTITY` is
 unset: the runner passes its environment through to every suite. Keep it
@@ -181,6 +182,60 @@ with no build caches.
    `build-receipt.json` files.
 6. Keep the receipt and note the tested build, signing method and device.
    Use [the acceptance procedure](acceptance.md) to check the installed copy.
+
+## Releasing a Mac build
+
+`tools/release_macos.py` turns a complete macOS package into the disk image
+published on [GitHub Releases](https://github.com/scamai/earlet/releases).
+It needs a Mac with Xcode's command-line tools, a `Developer ID Application`
+identity in the keychain, and a notarytool profile for the same team, stored
+once with `xcrun notarytool store-credentials <profile> --apple-id <id>
+--team-id <team>`:
+
+```bash
+python3 tools/release_macos.py --app dist/macos-complete/Earlet.app \
+  --identity "Developer ID Application: <Name> (<TEAMID>)" \
+  --notary-profile <profile> --output dist/release
+```
+
+The input app is not changed. The tool:
+
+- refuses an app-only package, an ad-hoc or Apple Development identity and an
+  existing output folder;
+- copies the app, then signs every Mach-O file inside it, deepest first,
+  with the Hardened Runtime and a secure timestamp, and the app last. It never
+  uses `--deep`, which would give every nested file the app's entitlements;
+- fails unless every Mach-O file then carries the Hardened Runtime flag and a
+  timestamp, which the notary service requires;
+- notarizes and staples the app, so it still opens offline after it leaves
+  the image; builds `Earlet-<version>-macos-<arch>.dmg` with an Applications
+  link, signs, notarizes and staples it; then runs `spctl` on both and
+  `syspolicy_check distribution` on the app;
+- writes `release-receipt.json`: the identity, how many executables and
+  libraries were signed, Apple's submission ids and answers (with each
+  notary log beside it), the image's size and SHA-256, and the entitlement
+  files' hashes.
+
+`--no-notarize` signs and builds the image without submitting it, to check
+a build first; its receipt says it is not notarized.
+
+**Entitlements.** Each process gets only what it uses:
+
+| File | Signed onto | Key | Why |
+|---|---|---|---|
+| `macos/Earlet.entitlements` | The app's own executable | `device.audio-input` | Under the Hardened Runtime the microphone delivers nothing without it |
+| `macos/EarletWorker.entitlements` | The bundled Python interpreter and the few other executables in its packages | `cs.disable-library-validation` | The interpreter loads extension modules built by others |
+| | | `cs.allow-jit`, `cs.allow-unsigned-executable-memory` | Packages in the recognition stack compile code at run time |
+
+Libraries carry no entitlements; the app itself keeps library validation.
+The plists hold no comments, which the kernel's entitlement parser rejects.
+
+**What the receipt proves.** Apple accepted the app and the image, the
+tickets are stapled, and Gatekeeper on the building Mac accepts both. It is
+not microphone, insertion or clean-machine acceptance: install the image on
+another Mac and follow [the acceptance procedure](acceptance.md) for that.
+Run `tools/acceptance.py auto --app <output>/dmg-root/Earlet.app` before
+publishing to check that the signed worker still loads its model.
 
 ## Environment overrides
 
@@ -228,7 +283,8 @@ the development build.
 | `DICTATION_ASR_PROTOCOL_PIPE` | Worker `asr_server.py`; set by Windows `PythonAsrWorkerProcess.cs` | The named pipe the worker replies on, so native output on stdout cannot corrupt a frame. The Mac sets none and the replies use stdout |
 | `DICTATION_MLX_SPEECH_GATE` | Worker `whisper_mac.py` | `enforce` drops MLX chunks the speech gate flags; the default, `shadow`, only logs and counts them |
 | `DICTATION_MLX_SCRIPT_SEED` | Worker `whisper_mac.py` | Replaces the carrier sentence that leads a generated MLX vocabulary prompt, the Chinese and the English one alike; empty removes it |
-| `DICTATION_SIGN_IDENTITY` | `tools/package.py` | The default for `--sign-identity`; unset means ad-hoc |
+| `DICTATION_SIGN_IDENTITY` | `tools/package.py`, `tools/release_macos.py` | The default for `--sign-identity` (unset means ad-hoc) and for the release's `--identity` |
+| `DICTATION_NOTARY_PROFILE` | `tools/release_macos.py` | The default for `--notary-profile` |
 | `DICTATION_DOTNET` | `tools/run_tests.py` | The `dotnet` executable when it is not on `PATH` |
 | `DICTATION_SWIFT` | `tools/run_tests.py`, `macos/tools/test-learning-on-linux.sh` | The `swift` executable; otherwise `PATH`, then the newest `~/.swift-toolchain/*/usr/bin/swift`. `tools/package.py` always uses `swift` from `PATH` |
 | `DICTATION_LEARNING_GOLDEN` | `LearningGoldenTests.swift`; set by the Linux learning script | The shared golden cases; otherwise found beside the nearest `LEARNING.md` |
