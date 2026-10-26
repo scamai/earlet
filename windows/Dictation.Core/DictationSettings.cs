@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Dictation.Services;
 using Microsoft.Extensions.Logging;
 
 namespace Dictation.Core;
@@ -43,6 +44,12 @@ namespace Dictation.Core;
 /// never (<see cref="DictationHoldPolicy"/>). 30 s unless the user chose
 /// otherwise, including in a file written before the choice existed.
 /// </param>
+/// <param name="MouseButton">
+/// The side button that also starts a dictation, or none. Saved as its id
+/// (<see cref="DictationMouseButtons.Id"/>); an id this build does not know
+/// reads as none, so a hand-edited or downgraded file never installs a mouse
+/// hook the user did not ask for.
+/// </param>
 public sealed record DictationSettings(
     uint HoldVirtualKey = 0,
     bool Enabled = false,
@@ -50,7 +57,8 @@ public sealed record DictationSettings(
     bool TrayNoticeShown = false,
     bool LearnFromCorrections = true,
     bool CompletedFirstDictation = false,
-    DictationSilenceStop SilenceStop = DictationSilenceStop.After30Seconds);
+    DictationSilenceStop SilenceStop = DictationSilenceStop.After30Seconds,
+    DictationMouseButton MouseButton = DictationMouseButton.None);
 
 /// <summary>
 /// <see cref="DictationSettings"/> in <c>%LOCALAPPDATA%\Dictation\settings.json</c>.
@@ -61,8 +69,9 @@ public sealed record DictationSettings(
 /// file is the defaults, and so is an empty one (nothing but whitespace): it
 /// holds no choices to protect, so the next save writes it. A save that fails
 /// keeps the choice for this run and says so in the log; for a choice made in
-/// the window (the hold key, the language, "Learn from my corrections") the
-/// status line also says it will reset when Dictation restarts.
+/// the window (the hold key, the mouse button, the language, "Learn from my
+/// corrections") the status line also says it will reset when Dictation
+/// restarts.
 /// </para>
 /// <para>
 /// <b>A file that could not be read is never overwritten.</b> Locked by
@@ -117,6 +126,9 @@ public sealed class DictationSettingsStore(
     /// <summary>The hands-free silence stop in seconds: 30, 60, or 0 for
     /// never. Any other value reads as 30, the default.</summary>
     private const string SilenceStopName = "hands_free_silence_stop_seconds";
+
+    /// <summary>The mouse button's id: "none", "button4" or "button5".</summary>
+    private const string MouseButtonName = "mouse_button";
 
     private const int ReplaceAttempts = 5;
 
@@ -194,7 +206,8 @@ public sealed class DictationSettingsStore(
                 Read<bool>(file, TrayNoticeShownName),
                 Read(file, LearnFromCorrectionsName, fallback: true),
                 Read<bool>(file, CompletedFirstDictationName),
-                SilenceStopFrom(Read(file, SilenceStopName, fallback: 30)));
+                SilenceStopFrom(Read(file, SilenceStopName, fallback: 30)),
+                DictationMouseButtons.Normalize(Read<string>(file, MouseButtonName)));
         }
         catch (JsonException ex)
         {
@@ -234,6 +247,7 @@ public sealed class DictationSettingsStore(
             file[LearnFromCorrectionsName] = settings.LearnFromCorrections;
             file[CompletedFirstDictationName] = settings.CompletedFirstDictation;
             file[SilenceStopName] = SilenceStopSeconds(settings.SilenceStop);
+            file[MouseButtonName] = DictationMouseButtons.Id(settings.MouseButton);
 
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))

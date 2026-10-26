@@ -991,3 +991,41 @@ def test_native_backend_never_registers_retired_meeting_operations(monkeypatch):
     assert asr_server.op_init({"op": "init"})["backend"] == "mac"
     assert {"summarize", "enhance", "note_templates", "diarized_transcribe", "diarized_start", "voice_enroll"}.isdisjoint(asr_server._OPS)
     assert asr_server.op_init({"backend": "qnn", "model_dir": "unused"})["ok"] is False
+
+
+def test_mlx_temperature_is_forwarded_only_when_given(tmp_path, monkeypatch):
+    # The Dictation preview pins one temperature-0 pass; every other caller
+    # (the final dictation decode included) keeps Whisper's fallback ladder,
+    # which means the key is absent, not None.
+    import sys
+
+    fake = _fake_mlx_module({"text": "hello there", "segments": [],
+                             "language": "en"})
+    monkeypatch.setitem(sys.modules, "mlx_whisper", fake)
+    from transcription_worker.whisper_mac import WhisperMac
+
+    engine = WhisperMac(model_dir=_local_mlx_repo(tmp_path))
+    engine.transcribe(np.full(1600, 0.1, dtype=np.float32), language="en")
+    engine.transcribe(np.full(1600, 0.1, dtype=np.float32), language="en",
+                      temperature=0.0)
+    assert "temperature" not in fake.calls[0]
+    assert fake.calls[1]["temperature"] == 0.0
+
+
+def test_mlx_reports_whether_the_engine_had_decoded_since_it_loaded(tmp_path, monkeypatch):
+    # The first decode after a load is the slow one; the host logs this flag
+    # beside the decode time so a cold reload is visible in the attempt log.
+    import sys
+
+    fake = _fake_mlx_module({"text": "hello there", "segments": [],
+                             "language": "en"})
+    monkeypatch.setitem(sys.modules, "mlx_whisper", fake)
+    from transcription_worker.whisper_mac import WhisperMac
+
+    engine = WhisperMac(model_dir=_local_mlx_repo(tmp_path))
+    silent = engine.transcribe(np.zeros(1600, dtype=np.float32))
+    first = engine.transcribe(np.full(1600, 0.1, dtype=np.float32))
+    second = engine.transcribe(np.full(1600, 0.1, dtype=np.float32))
+    assert "engine_warm" not in silent["stats"]  # nothing was decoded
+    assert first["stats"]["engine_warm"] is False
+    assert second["stats"]["engine_warm"] is True

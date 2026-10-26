@@ -171,3 +171,17 @@ def test_edit1_helper():
     assert pg._edit1("do", "io")
     assert not pg._edit1("force", "fable")
     assert not pg._edit1("snap", "cedarcore")
+
+
+def test_untracked_floor_keeps_only_the_absolute_backstop():
+    # A hold-to-talk microphone (the Dictation preview) starts on speech: a
+    # floor seeded there would class every later window of a quiet voice
+    # as quiet. Untracked, only true silence is quiet.
+    g = gate()
+    g.track_floor = False
+    assert g.note_window_rms(0.006) is False
+    assert g.note_window_rms(0.0045) is False
+    assert g.note_window_rms(0.003) is True
+    tracked = gate()
+    tracked.note_window_rms(0.006)
+    assert tracked.note_window_rms(0.0045) is True

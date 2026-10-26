@@ -189,11 +189,36 @@ def project_errors(root: Path) -> list[str]:
     return errors
 
 
+#: The only packages macos/Package.swift may name: public, third-party and
+#: pinned to one exact release, which Package.resolved must record too. No
+#: product's own code arrives this way, and a `path:` package is refused like
+#: any other path. Sparkle installs the Mac app's updates
+#: (docs/design-macos.md#updates).
+ALLOWED_PACKAGES = {"https://github.com/sparkle-project/Sparkle": "2.9.6"}
+
+
 def package_errors(root: Path) -> list[str]:
     errors = []
     package = (root / "macos/Package.swift").read_text(encoding="utf-8")
-    if ".package(" in package:
-        errors.append("macOS executable depends on an external package")
+    named = {}
+    for match in re.finditer(r"\.package\(([^)]*)\)", package):
+        arguments = " ".join(match.group(1).split())
+        url = re.search(r'\burl:\s*"([^"]+)"', arguments)
+        exact = re.search(r'\bexact:\s*"([^"]+)"', arguments)
+        if not url or not exact or ALLOWED_PACKAGES.get(url.group(1)) != exact.group(1):
+            errors.append(f"macOS executable depends on an external package that is not allowed and "
+                          f"pinned exactly: {arguments}")
+        else:
+            named[url.group(1)] = exact.group(1)
+    if named:
+        resolved = root / "macos/Package.resolved"
+        pins = {}
+        if resolved.is_file():
+            for pin in json.loads(resolved.read_text(encoding="utf-8")).get("pins", []):
+                pins[pin.get("location")] = (pin.get("state") or {}).get("version")
+        for url, version in named.items():
+            if pins.get(url) != version:
+                errors.append(f"macos/Package.resolved does not pin {url} at {version}")
     for literal in re.findall(r'"([^"\n]*)"', package):
         if escapes(root, root / "macos", literal):
             errors.append(f"Unclosed dependency: macos/Package.swift -> {literal}")

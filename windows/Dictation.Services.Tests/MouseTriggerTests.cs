@@ -8,9 +8,9 @@ namespace Dictation.Services.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// macOS has shipped this since the beginning — a "Mouse button" row with a
-/// live recorder, "Optional. Hold to talk, or click to toggle" — and Windows
-/// had nothing. Round 3 established WHY the obvious approach could not work:
+/// A spare side button, chosen in the window's "Mouse button" picker, starts a
+/// dictation beside the hold key. Round 3 established WHY the obvious approach
+/// could not work:
 /// <c>VK_XBUTTON1</c> and <c>VK_XBUTTON2</c> never reach a
 /// <c>WH_KEYBOARD_LL</c> hook, so putting them in the key picker would offer a
 /// binding that could never fire. They arrive on <c>WH_MOUSE_LL</c>, which
@@ -402,13 +402,128 @@ public sealed class MouseTriggerTests
                 continue;
             }
 
-            // The caution names the everyday action that would ALSO fire —
-            // macOS's rule, because "this key has a cost" without naming the
-            // cost is not a warning.
+            // The caution names the everyday action the binding takes away —
+            // the Mac's rule, because "this button has a cost" without naming
+            // the cost is not a warning. It used to say the button was NOT
+            // swallowed and would only start "a very short dictation", which
+            // was wrong twice over: a quick click latches, and the hook now
+            // keeps the button (Swallows, below).
             var caution = DictationMouseButtons.CautionFor(choice.Value);
             Assert.False(string.IsNullOrWhiteSpace(caution));
-            Assert.Contains("does not swallow", caution!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("no longer", caution!, StringComparison.Ordinal);
+            Assert.DoesNotContain("does not swallow", caution!, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public void The_bound_buttons_share_one_gesture_sentence_that_keeps_the_key()
+    {
+        // Binding a button adds a trigger; it takes nothing from the hold key,
+        // and the line under the picker says so.
+        foreach (var choice in DictationMouseButtons.Choices.Where(c => c.Value != DictationMouseButton.None))
+        {
+            Assert.Contains("click it again to stop", choice.Detail, StringComparison.Ordinal);
+            Assert.Contains("hold key works too", choice.Detail, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData(DictationMouseButton.Button4, "mouse button 4")]
+    [InlineData(DictationMouseButton.Button5, "mouse button 5")]
+    [InlineData(DictationMouseButton.None, null)]
+    public void The_spoken_name_matches_the_label_and_mouse_none_has_none(DictationMouseButton value, string? name)
+    {
+        Assert.Equal(name, DictationMouseButtons.SpokenName(value));
+        if (name is not null)
+        {
+            // The picker's "Mouse button 4 (back)" and the status line's
+            // "mouse button 4" must name the same button.
+            var label = DictationMouseButtons.Choices.First(c => c.Value == value).Label;
+            Assert.StartsWith(name, label, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    // ── What the hook keeps ─────────────────────────────────────────────────
+
+    private const uint Button4Data = 0x0001_0000;
+    private const uint Button5Data = 0x0002_0000;
+
+    [Fact]
+    public void The_bound_buttons_press_is_swallowed()
+    {
+        // Passed on, Back would navigate away from the field the words are for
+        // while a quick click latched the microphone open behind it.
+        Assert.True(DictationMouseMessages.Swallows(
+            DictationMouseMessages.WmXButtonDown, Button4Data, DictationMouseButton.Button4, trackedDown: false));
+    }
+
+    [Fact]
+    public void A_release_is_swallowed_only_when_its_press_was_tracked()
+    {
+        Assert.True(DictationMouseMessages.Swallows(
+            DictationMouseMessages.WmXButtonUp, Button5Data, DictationMouseButton.Button5, trackedDown: true));
+
+        // An orphan: the press began before this hook was armed and went to
+        // the application, which must see its release too, or it is left
+        // believing the button is still down.
+        Assert.False(DictationMouseMessages.Swallows(
+            DictationMouseMessages.WmXButtonUp, Button5Data, DictationMouseButton.Button5, trackedDown: false));
+    }
+
+    [Theory]
+    [InlineData(DictationMouseMessages.WmXButtonDown)]
+    [InlineData(DictationMouseMessages.WmXButtonUp)]
+    public void The_other_side_button_passes(int message)
+    {
+        // Bound to button 4, button 5 still goes Forward.
+        Assert.False(DictationMouseMessages.Swallows(message, Button5Data, DictationMouseButton.Button4, trackedDown: true));
+    }
+
+    [Theory]
+    [InlineData(DictationMouseMessages.WmXButtonDown)]
+    [InlineData(DictationMouseMessages.WmXButtonUp)]
+    public void Nothing_is_swallowed_with_no_button_bound(int message)
+    {
+        Assert.False(DictationMouseMessages.Swallows(message, Button4Data, DictationMouseButton.None, trackedDown: true));
+    }
+
+    [Theory]
+    [InlineData(0x0200)] // WM_MOUSEMOVE
+    [InlineData(0x0201)] // WM_LBUTTONDOWN
+    [InlineData(0x0202)] // WM_LBUTTONUP
+    [InlineData(0x0204)] // WM_RBUTTONDOWN
+    [InlineData(0x0207)] // WM_MBUTTONDOWN
+    [InlineData(0x020A)] // WM_MOUSEWHEEL
+    public void Ordinary_mouse_traffic_always_passes(int message)
+    {
+        // Even with the bound button's bits in mouseData and a press tracked:
+        // only the two X-button messages can ever be kept.
+        Assert.False(DictationMouseMessages.Swallows(message, Button4Data, DictationMouseButton.Button4, trackedDown: true));
+    }
+
+    [Fact]
+    public void IsDown_tracks_the_physical_button_through_every_kind_of_press()
+    {
+        // What the release's swallow is decided on, so it must be true through
+        // a hold, a click and the press that stops a latch, and false after
+        // each release and after a teardown.
+        var state = new MouseHoldOrClickState();
+        Assert.False(state.IsDown);
+
+        state.Down(1_000);
+        Assert.True(state.IsDown);
+        state.Up(1_100); // A click: latched.
+        Assert.False(state.IsDown);
+
+        state.Down(5_000); // The stopping press.
+        Assert.True(state.IsDown);
+        Assert.False(state.IsHeld);
+        state.Up(5_050);
+        Assert.False(state.IsDown);
+
+        state.Down(9_000);
+        state.Release();
+        Assert.False(state.IsDown);
     }
 
     [Fact]

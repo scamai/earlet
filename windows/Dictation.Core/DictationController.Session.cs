@@ -15,7 +15,10 @@ public sealed partial class DictationController
     {
         // Chords cancel: Right Ctrl+C is a copy, not a dictation. A
         // double-tap of the same key latches hands-free, as on the Mac.
-        _trigger = _platform.CreateTrigger(_holdKey, cancelOnChord: true, handsFree: true);
+        // A bound side button holds and latches beside the key, in the same
+        // hook (LowLevelHoldKeyRegistration's mouse half).
+        _trigger = _platform.CreateTrigger(
+            _holdKey, cancelOnChord: true, handsFree: true, mouseButton: _settings.MouseButton);
         _gate = new HoldGate(_trigger);
         _hotkey = new PushToTalkController(_gate, _logs.CreateLogger<PushToTalkController>());
         _hotkey.Released += OnHoldReleased;
@@ -97,6 +100,7 @@ public sealed partial class DictationController
         _wasDown = false;
         _pressRefused = false;
         _latchShown = false;
+        _holdByMouse = false;
         // After the session's Cancel above, which answered a live hold.
         Attempts.Abandon();
     }
@@ -415,6 +419,9 @@ public sealed partial class DictationController
             HoldKey: _holdKey,
             CanChooseHoldKey: CanChooseHoldKey,
             HoldKeyNotice: HoldKeyAdvice.For(_holdKey, _holdKeyFromEnvironment),
+            MouseButton: _settings.MouseButton,
+            CanChooseMouseButton: CanChooseMouseButton,
+            MouseButtonNotice: HoldKeyAdvice.ForMouse(_settings.MouseButton, _trigger?.MouseTriggerDegraded == true),
             Instructions: ShortcutLine,
             CanCancel: canCancel,
             Language: SpeechLanguages.Find(_settings.Language),

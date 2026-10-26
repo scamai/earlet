@@ -123,7 +123,7 @@ struct MenuGlyphTests {
     @Test("the menu headline fits one menu line for every state and every hold key")
     func menuHeadlineIsShort() {
         for glyph in DictationMenuGlyph.allCases {
-            for key in DictationHoldKey.allCases {
+            for key in DictationHoldKey.presets {
                 let line = glyph.menuHeadline(holdKeyName: key.name)
                 #expect(!line.isEmpty)
                 #expect(line.count <= DictationMenuGlyph.menuHeadlineLimit, "\(line)")

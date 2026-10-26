@@ -7,22 +7,19 @@ namespace Dictation.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// macOS has shipped a mouse trigger since the beginning:
-/// <c>DictationTabView</c> renders an always-visible "Mouse button" row with a
-/// live recorder, "Optional. Hold to talk, or click to toggle", per-binding
-/// caution copy and a degraded-state note. It is behind no flag. Holding a
-/// spare side button is one of the commonest push-to-talk setups there is, and
-/// on Windows the affordance was simply missing.
+/// Holding a spare side button is one of the commonest push-to-talk setups
+/// there is. The window offers it in a "Mouse button" picker under the hold
+/// key, and it works alongside the key: binding a button takes nothing away
+/// from the keyboard trigger.
 /// </para>
 /// <para>
 /// <b>Why this is an enum of two and not a recorder.</b> A
-/// <c>WH_MOUSE_LL</c> hook can see every button, but binding the LEFT or RIGHT
-/// button to dictation would take the pointer away from the user — the hook
-/// observes rather than swallows, so a left-click would still click, but every
-/// click would also open a microphone. The middle button is a paste on X11
-/// habits and an autoscroll on Windows. What is left is exactly the two
-/// buttons that exist for nothing else, which is the same reason macOS's own
-/// recorder is used for side buttons in practice.
+/// <c>WH_MOUSE_LL</c> hook can see every button, but the bound button is
+/// swallowed (<see cref="DictationMouseMessages.Swallows"/>), and binding the
+/// LEFT or RIGHT button would take the pointer away from the user. The middle
+/// button is a paste on X11 habits and an autoscroll on Windows. What is left
+/// is exactly the two buttons whose usual job — Back and Forward — a user can
+/// give up on purpose.
 /// </para>
 /// </remarks>
 public enum DictationMouseButton
@@ -54,8 +51,8 @@ public static class DictationMouseButtons
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 300 ms, matching macOS's <c>MouseHoldOrClickState.clickWindow</c>. The
-    /// number has to separate two gestures a user makes on purpose: a tap to
+    /// 300 ms, matching the Mac's <c>DictationMouseSideButton.clickWindow</c>.
+    /// The number has to separate two gestures a user makes on purpose: a tap to
     /// latch dictation open, and a press held through a sentence. Anything
     /// under about 200 ms starts refusing deliberate taps from people who do
     /// not tap quickly; anything over about 350 ms starts stealing the
@@ -84,12 +81,18 @@ public static class DictationMouseButtons
     /// <param name="Value">The choice itself.</param>
     /// <param name="Id">What goes in settings.json.</param>
     /// <param name="Label">The row.</param>
-    /// <param name="Detail">What it costs, said plainly.</param>
+    /// <param name="Detail">How it is used, said plainly; what it costs is
+    /// <see cref="CautionFor"/>.</param>
     public sealed record Choice(
         DictationMouseButton Value,
         string Id,
         string Label,
         string Detail);
+
+    /// <summary>The gesture both buttons share, under the picker.</summary>
+    private const string Gesture =
+        "Hold it to talk, or click it once to keep dictating and click it again to stop. "
+        + "The hold key works too.";
 
     /// <summary>The three, in the order the picker shows them: off first.</summary>
     public static readonly ImmutableArray<Choice> Choices =
@@ -98,23 +101,22 @@ public static class DictationMouseButtons
             DictationMouseButton.None,
             "none",
             "No mouse button",
-            "The keyboard shortcut above is the only way to start a dictation. This is the "
-            + "default."),
-        new(
-            DictationMouseButton.Button4,
-            "button4",
-            "Mouse button 4 (back)",
-            "Hold it to talk, or click it once to keep dictation running and click again to stop. "
-            + "The app watches the button, it does not swallow it — so it still goes Back in your "
-            + "browser."),
-        new(
-            DictationMouseButton.Button5,
-            "button5",
-            "Mouse button 5 (forward)",
-            "Hold it to talk, or click it once to keep dictation running and click again to stop. "
-            + "The app watches the button, it does not swallow it — so it still goes Forward in your "
-            + "browser."),
+            "Choose a side button to dictate with the mouse too: hold it to talk, or click it to keep "
+            + "dictating."),
+        new(DictationMouseButton.Button4, "button4", "Mouse button 4 (back)", Gesture),
+        new(DictationMouseButton.Button5, "button5", "Mouse button 5 (forward)", Gesture),
     ];
+
+    /// <summary>
+    /// The button in a sentence ("Hold Right Ctrl or mouse button 4…"), or
+    /// <c>null</c> for <see cref="DictationMouseButton.None"/>.
+    /// </summary>
+    public static string? SpokenName(DictationMouseButton value) => value switch
+    {
+        DictationMouseButton.Button4 => "mouse button 4",
+        DictationMouseButton.Button5 => "mouse button 5",
+        _ => null,
+    };
 
     /// <summary>
     /// The persisted id for a value. Total over the enum, so a member added
@@ -153,27 +155,34 @@ public static class DictationMouseButtons
     /// there is nothing to say.
     /// </summary>
     /// <remarks>
-    /// macOS's <c>caution</c>, ported, and the rule it keeps is the one that
-    /// matters: name the specific everyday action that would ALSO fire, rather
-    /// than warning in the abstract. The hook observes and never swallows, so
-    /// both of these buttons keep doing what they already did — which is
-    /// exactly the fact a user needs before they bind one.
+    /// <para>
+    /// The rule the Mac's caution keeps: name the specific everyday action the
+    /// binding costs, rather than warning in the abstract.
+    /// </para>
+    /// <para>
+    /// <b>The bound button is swallowed, and this says so.</b> It used to be
+    /// watched and passed on, and this sentence promised that going Back would
+    /// only "start a very short dictation". It would not have: every ordinary
+    /// Back click is shorter than <see cref="ClickMilliseconds"/>, so each one
+    /// would have navigated away from the field AND latched the microphone open
+    /// until the next click. A button that dictates and navigates at once is
+    /// worse than one that only dictates, so the hook keeps the bound button's
+    /// press and release to itself.
+    /// </para>
     /// </remarks>
     public static string? CautionFor(DictationMouseButton value) => value switch
     {
         DictationMouseButton.Button4 =>
-            "Button 4 is Back in most browsers and file managers. The app does not swallow it, so "
-            + "going back will also start a very short dictation — which comes back as “that was "
-            + "too short to be a sentence”.",
+            "While it is chosen, button 4 no longer goes Back in browsers and file managers: "
+            + "Earlet uses it to dictate instead.",
         DictationMouseButton.Button5 =>
-            "Button 5 is Forward in most browsers and file managers. The app does not swallow it, so "
-            + "going forward will also start a very short dictation — which comes back as “that "
-            + "was too short to be a sentence”.",
+            "While it is chosen, button 5 no longer goes Forward in browsers and file managers: "
+            + "Earlet uses it to dictate instead.",
         DictationMouseButton.None => null,
         // The arm a NEW member lands in. It says something rather than nothing:
         // a binding offered with no caution reads as a binding with no cost.
-        _ => "The app watches this button, it does not swallow it, so whatever it already does it "
-             + "will go on doing.",
+        _ => "While it is chosen, this button no longer does what it usually does: Earlet uses it "
+             + "to dictate instead.",
     };
 }
 
@@ -233,6 +242,52 @@ public static class DictationMouseMessages
         WmXButtonUp => false,
         _ => null,
     };
+
+    /// <summary>
+    /// Whether the hook keeps this event from every application after it —
+    /// returns non-zero without calling <c>CallNextHookEx</c>.
+    /// </summary>
+    /// <param name="message">The <c>WM_</c> the hook was handed.</param>
+    /// <param name="mouseData"><c>MSLLHOOKSTRUCT.mouseData</c>.</param>
+    /// <param name="bound">The button the user chose, or
+    /// <see cref="DictationMouseButton.None"/>.</param>
+    /// <param name="trackedDown">Whether the gesture saw this button go down
+    /// and not come up (<see cref="MouseHoldOrClickState.IsDown"/>), read
+    /// BEFORE this event is handed to it.</param>
+    /// <remarks>
+    /// <para>
+    /// The bound button's press is always swallowed: while it is chosen it
+    /// dictates, and the Back or Forward it would otherwise send would take the
+    /// user away from the field the words are meant for. The Mac's tap makes the
+    /// same choice (<c>DictationMouseButton.decide</c>).
+    /// </para>
+    /// <para>
+    /// <b>A release is swallowed only when its press was.</b> An up with no
+    /// tracked down belongs to a press that began before this hook was armed —
+    /// a re-arm or a changed binding under a held button — and the application
+    /// that received that press must receive its release, or it is left
+    /// believing the button is still down.
+    /// </para>
+    /// <para>
+    /// Everything else passes: the other side button, every other button, and
+    /// the pointer moves that are nearly all of what a low-level mouse hook
+    /// sees.
+    /// </para>
+    /// </remarks>
+    public static bool Swallows(int message, uint mouseData, DictationMouseButton bound, bool trackedDown)
+    {
+        if (bound == DictationMouseButton.None || EdgeOf(message) is not { } down)
+        {
+            return false;
+        }
+
+        if (ButtonOf(mouseData) != bound)
+        {
+            return false;
+        }
+
+        return down || trackedDown;
+    }
 }
 
 /// <summary>
@@ -240,7 +295,8 @@ public static class DictationMouseMessages
 /// </summary>
 /// <remarks>
 /// <para>
-/// macOS's <c>MouseHoldOrClickState</c>, ported. It is a separate machine from
+/// The Mac's hold-or-click gesture (there the app model decides it from the
+/// tap's raw edges), in a machine of its own here. It is separate from
 /// <see cref="HoldKeyState"/> rather than a mode on it, and the reason is
 /// stated in that type's own remarks: a keyboard trigger latching on a SINGLE
 /// tap would mean a brushed Right Alt started recording, so the keyboard needs
@@ -311,6 +367,14 @@ public sealed class MouseHoldOrClickState
     /// Whether a click has latched a dictation open with the button released.
     /// </summary>
     public bool IsLatched => _latched;
+
+    /// <summary>
+    /// Whether this machine saw the button go down and not come up, whatever
+    /// that press meant — a hold, a click on its way, or the press that
+    /// stopped a latch. The hook swallows a release only when this is true
+    /// (<see cref="DictationMouseMessages.Swallows"/>).
+    /// </summary>
+    public bool IsDown => _physicallyDown;
 
     /// <summary>The button went down.</summary>
     public HoldKeyTransition Down(long nowMs)

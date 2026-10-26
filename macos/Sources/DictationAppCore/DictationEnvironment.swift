@@ -276,6 +276,25 @@ public protocol DictationHoldTrigger: AnyObject {
     func update(_ key: DictationHoldKey)
 }
 
+/// A spare mouse button beside the hold key: its press and release, which
+/// the model reads as a hold, a click that keeps dictation running, or the
+/// press that stops it. The listener swallows the bound button, so its
+/// usual Back or Forward never fires underneath a dictation. Callbacks
+/// arrive on the main actor, in the order the events happened.
+@MainActor
+public protocol DictationMouseTrigger: AnyObject {
+    var onPress: (() -> Void)? { get set }
+    var onRelease: (() -> Void)? { get set }
+    /// The listener could not run because Accessibility or Input Monitoring
+    /// is missing. A refused `start()` reports it here too.
+    var onDegraded: ((DictationPermissionStatus) -> Void)? { get set }
+    /// Installs the global listener; `false` when macOS refused it.
+    func start() -> Bool
+    func stop()
+    /// Listens for a different button from now on.
+    func update(_ button: DictationMouseSideButton)
+}
+
 /// Key-down codes while a hold is in progress: Escape cancels, any other
 /// key means the hold key was part of a shortcut.
 ///
@@ -422,6 +441,13 @@ public struct DictationEnvironment {
     public var resolveResources: @MainActor () -> DictationResources?
     public var makeWorker: @MainActor (DictationResources) -> any DictationWorker
     public var makeTrigger: @MainActor (DictationHoldKey) -> any DictationHoldTrigger
+    /// Whether macOS would register a recorded key combination as a hot
+    /// key, asked when the user records one.
+    public var canReserveShortcut: @MainActor (DictationKeyShortcut) -> Bool = {
+        ShortcutHotKeyCenter.shared.canRegister($0)
+    }
+    /// The mouse button's listener, made only once the user has chosen one.
+    public var makeMouseTrigger: @MainActor (DictationMouseSideButton) -> any DictationMouseTrigger
     public var keyWatch: any DictationKeyWatch
     /// The commit-key (Return/Enter) trap, installed only while a latch
     /// records: it consumes the key, so the stop signal never also types a
@@ -483,6 +509,7 @@ public struct DictationEnvironment {
         resolveResources: @escaping @MainActor () -> DictationResources?,
         makeWorker: @escaping @MainActor (DictationResources) -> any DictationWorker,
         makeTrigger: @escaping @MainActor (DictationHoldKey) -> any DictationHoldTrigger,
+        makeMouseTrigger: @escaping @MainActor (DictationMouseSideButton) -> any DictationMouseTrigger,
         keyWatch: any DictationKeyWatch,
         stopTrap: any DictationLatchStopTrap,
         privacyGate: @escaping @MainActor () -> DictationInsertFailure?,
@@ -514,6 +541,7 @@ public struct DictationEnvironment {
         self.resolveResources = resolveResources
         self.makeWorker = makeWorker
         self.makeTrigger = makeTrigger
+        self.makeMouseTrigger = makeMouseTrigger
         self.keyWatch = keyWatch
         self.stopTrap = stopTrap
         self.privacyGate = privacyGate
@@ -565,7 +593,8 @@ extension DictationEnvironment {
             makeWorker: { resources in
                 DictationEnvironment.makeLiveWorker(resources, stderrSink: { sink.log($0, subsystem: "asr") })
             },
-            makeTrigger: { key in HotkeyHoldTrigger(key: key) },
+            makeTrigger: { key in LiveHoldTrigger(key: key) },
+            makeMouseTrigger: { button in MouseButtonTrigger(button: button) },
             keyWatch: NSEventKeyWatch(),
             stopTrap: CGEventLatchStopTrap(),
             privacyGate: { TextInserter.dictationStartPrivacyGate() },
@@ -882,7 +911,7 @@ final class HotkeyHoldTrigger: DictationHoldTrigger {
     var onLatchEnd: (() -> Void)?
     let hotkey: DictationHotkey
 
-    init(key: DictationHoldKey) {
+    init(key: DictationModifierKey) {
         hotkey = DictationHotkey(config: key.hotkeyConfig)
         hotkey.onModifierFlags = { [weak self] flags in
             Self.deliver { self?.onModifierFlags?(flags) }
@@ -920,7 +949,49 @@ final class HotkeyHoldTrigger: DictationHoldTrigger {
 
     func start() -> Bool { hotkey.start() }
     func stop() { hotkey.stop() }
-    func update(_ key: DictationHoldKey) { hotkey.updateConfig(key.hotkeyConfig) }
+    /// Another modifier key; a recorded combination is `LiveHoldTrigger`'s
+    /// to swap in.
+    func update(_ key: DictationHoldKey) {
+        guard let modifier = key.modifierKey else { return }
+        hotkey.updateConfig(modifier.hotkeyConfig)
+    }
+}
+
+/// `DictationMouseButton` behind `DictationMouseTrigger`.
+@MainActor
+final class MouseButtonTrigger: DictationMouseTrigger {
+    var onPress: (() -> Void)?
+    var onRelease: (() -> Void)?
+    var onDegraded: ((DictationPermissionStatus) -> Void)?
+    let mouse = DictationMouseButton()
+
+    init(button: DictationMouseSideButton) {
+        mouse.updateBinding(button.binding)
+        mouse.onPress = { [weak self] in
+            Self.deliver { self?.onPress?() }
+        }
+        mouse.onRelease = { [weak self] in
+            Self.deliver { self?.onRelease?() }
+        }
+        mouse.onDegraded = { [weak self] status in
+            Self.deliver { self?.onDegraded?(status) }
+        }
+    }
+
+    /// Synchronously on the main thread, where the tap runs, for the reason
+    /// `HotkeyHoldTrigger.deliver` gives: a press and its release must reach
+    /// the model in the order they happened.
+    nonisolated private static func deliver(_ body: @escaping @MainActor () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { body() }
+        } else {
+            Task { @MainActor in body() }
+        }
+    }
+
+    func start() -> Bool { mouse.start() }
+    func stop() { mouse.stop() }
+    func update(_ button: DictationMouseSideButton) { mouse.updateBinding(button.binding) }
 }
 
 /// Global and local `NSEvent` key-down monitors, for the length of a hold.

@@ -15,17 +15,36 @@ struct DictationHoldKeyTests {
 
     /// macOS `flagsChanged` keycodes, from the key itself rather than from the
     /// code under test.
-    static let expectedKeyCodes: [DictationHoldKey: (Int64, CGEventFlags)] = [
+    static let expectedKeyCodes: [DictationModifierKey: (Int64, CGEventFlags)] = [
         .rightCommand: (54, .maskCommand), .rightOption: (61, .maskAlternate),
         .leftOption: (58, .maskAlternate), .rightControl: (62, .maskControl),
         .leftControl: (59, .maskControl), .rightShift: (60, .maskShift),
-        .function: (63, .maskSecondaryFn),
+        .function: (63, .maskSecondaryFn), .leftShift: (56, .maskShift),
     ]
 
     @Test("the default is Right Command, keycode 54, in the live trigger the app builds")
     func defaultIsRightCommand() {
         #expect(DictationHoldKey.standard == .rightCommand)
-        let trigger = HotkeyHoldTrigger(key: .standard)
+        let trigger = LiveHoldTrigger(key: .standard)
+        guard let live = trigger.backend as? HotkeyHoldTrigger else {
+            Issue.record("the default key is not on the modifier tap"); return
+        }
+        let config = live.hotkey.configuration
+        #expect(config.holdToTalkKeyCodes == [54])
+        #expect(config.holdToTalkFlagMask == .maskCommand)
+    }
+
+    @Test("the picker's keys are the seven of earlier versions, Left Command never")
+    func presetModifiers() {
+        let modifiers = DictationHoldKey.presets.compactMap(\.modifierKey)
+        #expect(modifiers == [.rightCommand, .rightOption, .leftOption, .rightControl, .leftControl, .rightShift, .function])
+        #expect(modifiers.count == DictationHoldKey.presets.count)
+        #expect(DictationModifierKey(keyCode: 55) == nil, "Left Command is not a hold key")
+    }
+
+    @Test("a modifier key's tap configuration")
+    func modifierTriggerConfiguration() {
+        let trigger = HotkeyHoldTrigger(key: .rightCommand)
         let config = trigger.hotkey.configuration
         #expect(config.holdToTalkKeyCodes == [54])
         #expect(config.holdToTalkFlagMask == .maskCommand)
@@ -33,11 +52,12 @@ struct DictationHoldKeyTests {
 
     @Test("every choice listens to exactly its own physical key")
     func everyChoiceMapsToOneKey() {
-        for key in DictationHoldKey.allCases {
+        for key in DictationModifierKey.allCases {
             let config = key.hotkeyConfig
             guard let (code, mask) = Self.expectedKeyCodes[key] else {
                 Issue.record("no expectation for \(key)"); continue
             }
+            #expect(DictationModifierKey(keyCode: code) == key, "\(key)")
             #expect(config.holdToTalkKeyCodes == [code], "\(key)")
             #expect(config.holdToTalkFlagMask == mask, "\(key)")
         }
@@ -45,11 +65,12 @@ struct DictationHoldKeyTests {
 
     @Test("every choice double-taps that same physical key")
     func everyChoiceDoubleTapsItsOwnKey() {
-        for key in DictationHoldKey.allCases {
+        for key in DictationModifierKey.allCases {
             let config = key.hotkeyConfig
             guard let (code, mask) = Self.expectedKeyCodes[key] else {
                 Issue.record("no expectation for \(key)"); continue
             }
+            #expect(config.doubleTapWindow == DictationHoldKey.doubleTapWindow, "\(key)")
             #expect(config.doubleTapKeyCodes == [code], "\(key)")
             #expect(config.doubleTapFlagMask == mask, "\(key)")
             #expect(config.doubleTapFlagMask != HotkeyBinding.defaultDoubleTap.eventFlagMask || key.modifier == .control,
@@ -59,7 +80,7 @@ struct DictationHoldKeyTests {
 
     @Test("changing the key moves a live trigger to the new key")
     func updateReconfiguresTheLiveTrigger() {
-        let trigger = HotkeyHoldTrigger(key: .standard)
+        let trigger = HotkeyHoldTrigger(key: .rightCommand)
         trigger.update(.rightOption)
         #expect(trigger.hotkey.configuration.holdToTalkKeyCodes == [61])
         #expect(trigger.hotkey.configuration.doubleTapKeyCodes == [61])

@@ -13,6 +13,12 @@ final class DictationAttemptDiagnostics {
         case microphoneChanged = "microphone_changed"
     }
 
+    /// What started the attempt: the hold key (a modifier), a recorded key
+    /// combination, or the mouse button.
+    enum Trigger: String {
+        case key, combination, mouse
+    }
+
     private let id = UUID()
     private let log: @Sendable (String) -> Void
     private let clock: () -> TimeInterval
@@ -20,12 +26,12 @@ final class DictationAttemptDiagnostics {
     private var released: TimeInterval?
     private var finished = false
 
-    init(log: @escaping @Sendable (String) -> Void,
+    init(log: @escaping @Sendable (String) -> Void, trigger: Trigger? = nil,
          clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.log = log
         self.clock = clock
         started = clock()
-        log("dictation attempt=\(id) event=started")
+        log("dictation attempt=\(id) event=started" + (trigger.map { " trigger=\($0.rawValue)" } ?? ""))
     }
 
     func markReleased() {
@@ -71,7 +77,8 @@ final class DictationAttemptDiagnostics {
         let shapes = Self.shapeFields(timings.recognizedTextShape, prefix: "asr")
             + Self.shapeFields(timings.insertionTextShape, prefix: "candidate")
             + " format_changed=\(timings.formattingChanged.map { String($0) } ?? "n/a")"
-        finish(fields: fields + " asr_ms=\(Self.ms(timings.asrMs)) paste_ms=\(Self.ms(timings.pasteTiming?.totalMs))" + shapes)
+        finish(fields: fields + " asr_ms=\(Self.ms(timings.asrMs))" + Self.decodeFields(timings.decodeStats)
+               + " paste_ms=\(Self.ms(timings.pasteTiming?.totalMs))" + shapes)
     }
 
     func recovery(clipboard: Bool, retained: Bool) {
@@ -89,6 +96,14 @@ final class DictationAttemptDiagnostics {
     private static func ms(_ value: Double?) -> String {
         guard let value, value.isFinite else { return "n/a" }
         return String(format: "%.0f", max(0, value))
+    }
+
+    /// What `asr_ms` was spent on, as the worker counted it.
+    static func decodeFields(_ stats: DictationDecodeStats?) -> String {
+        " asr_wait_ms=\(ms(stats?.waitedMs)) asr_decode_ms=\(ms(stats?.decodeMs))"
+            + " asr_windows=\(stats?.windows.map { String($0) } ?? "n/a")"
+            + " asr_retries=\(stats?.retries.map { String($0) } ?? "n/a")"
+            + " asr_warm=\(stats?.warm.map { String($0) } ?? "n/a")"
     }
 
     private static func shapeFields(_ shape: DictationTextShape?, prefix: String) -> String {

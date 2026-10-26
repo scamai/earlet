@@ -96,6 +96,17 @@ CASES = {'ProjectReference into other product': ('windows/Dictation.App/Dictatio
                               'platforms: [.macOS(.v14)],\n'
                               '    dependencies: [.package(path: "../../other-product/native/macos/app")],',
                               'external package'),
+ 'Swift package that is not allowed': ('macos/Package.swift',
+                                       '.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6")',
+                                       '.package(url: "https://github.com/example/updater", exact: "2.9.6")',
+                                       'external package'),
+ 'allowed Swift package on a version range': ('macos/Package.swift',
+                                              'exact: "2.9.6"', 'from: "2.9.6"', 'external package'),
+ 'allowed Swift package at another release': ('macos/Package.swift',
+                                              'exact: "2.9.6"', 'exact: "2.10.1"', 'external package'),
+ 'Package.resolved at another revision': ('macos/Package.resolved',
+                                          '"version" : "2.9.6"', '"version" : "2.9.5"',
+                                          'does not pin'),
  'worker parents above the app': ('runtime/transcription_worker/spoken_aliases.py',
                                   None,
                                   'sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '

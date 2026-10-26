@@ -45,6 +45,9 @@ public final class DictationSession: @unchecked Sendable {
         public var captureStopMs: Double?
         /// Buffer-ready -> ASR text received, real deployed worker.
         public var asrMs: Double?
+        /// The worker's own account of `asrMs`: engine wait, decode, windows,
+        /// retries and warmth. Counts only.
+        public var decodeStats: DictationDecodeStats?
         /// Counts at the worker-response and post-formatting boundaries, not
         /// transcript content or proof of what the destination field displayed.
         public var recognizedTextShape: DictationTextShape?
@@ -636,8 +639,14 @@ public final class DictationSession: @unchecked Sendable {
         // The detailed variant of the SAME round trip (defaulted for
         // transports without metadata), so the detected language rides the
         // one wire call rather than costing a second decode.
+        //
+        // `compareBaseline` is spelled out on purpose. Without it the call
+        // matches only the protocol extension's defaulted overload, which is
+        // statically dispatched and wraps the plain `transcribe`: the real
+        // transport's detail (the language for History, the decode counts
+        // for the attempt log) was dropped on every dictation.
         let asrOutcome = await asr.transcribeDetailed(
-            samples: result.samples, sampleRate: Int(result.sampleRate))
+            samples: result.samples, sampleRate: Int(result.sampleRate), compareBaseline: false)
         timings.asrMs = millis(tAsrStart, clock())
 
         var text: String
@@ -650,6 +659,7 @@ public final class DictationSession: @unchecked Sendable {
         case .result(let detail):
             text = detail.text
             detectedLanguage = detail.detectedLanguage
+            timings.decodeStats = detail.decodeStats
         }
         timings.recognizedTextShape = DictationTextShape(text)
         let recognizedText = text

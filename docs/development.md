@@ -25,8 +25,12 @@ together is in [architecture.md](architecture.md).
   targeting, so Linux and macOS build them too; only Windows can run the WPF
   app.
 - **Mac code:** Swift 6.2 or later on macOS 14 or later with Apple Silicon
-  (`macos/Package.swift`). The platform-free learning target also builds on a
-  Linux Swift 6.2 toolchain.
+  (`macos/Package.swift`). Its one external package, Sparkle 2.9.6, is pinned
+  to that exact release in `Package.swift` and `Package.resolved`, and
+  SwiftPM downloads it from GitHub on the first build; `tools/verify.py`
+  refuses any other package, a version range or a path. Only the app's
+  executable links it, so `swift test` does not load it. The platform-free
+  learning target also builds on a Linux Swift 6.2 toolchain, without it.
 - **Test tools:** Python 3.11 or later with `tests/requirements.txt` (numpy
   and pytest, pinned; the numpy pin has no wheel for an older Python) for the
   Python gate. The opt-in full worker suite also needs torch, onnxruntime and
@@ -203,8 +207,10 @@ The input app is not changed. The tool:
 - refuses an app-only package, an ad-hoc or Apple Development identity and an
   existing output folder;
 - copies the app, then signs every Mach-O file inside it, deepest first,
-  with the Hardened Runtime and a secure timestamp, and the app last. It never
-  uses `--deep`, which would give every nested file the app's entitlements;
+  with the Hardened Runtime and a secure timestamp; then each nested bundle
+  (Sparkle's `Updater.app`, then `Sparkle.framework`), deepest first; and the
+  app last. It never uses `--deep`, which would give every nested file the
+  app's entitlements;
 - fails unless every Mach-O file then carries the Hardened Runtime flag and a
   timestamp, which the notary service requires;
 - notarizes and staples the app, so it still opens offline after it leaves
@@ -218,6 +224,42 @@ The input app is not changed. The tool:
 
 `--no-notarize` signs and builds the image without submitting it, to check
 a build first; its receipt says it is not notarized.
+
+**The update feed.** `--appcast` also writes, under `<output>/updates`, the
+image, a signed `appcast.xml` that lists only this release, and one
+`.delta` from each image given with `--previous-dmg` (repeatable). A delta
+is what an installed copy of that earlier build downloads instead of the
+whole image ([Updates](design-macos.md#updates)), so pass the images of the
+releases people are likely to be on, for example the previous one. Only
+releases from 0.2.0 on carry the updater; 0.1.0 needs no delta:
+
+```bash
+gh release download v0.2.0 --repo github.com/scamai/earlet --pattern '*.dmg' --dir dist/previous
+python3 tools/release_macos.py --app dist/macos-complete/Earlet.app \
+  --identity "Developer ID Application: <Name> (<TEAMID>)" \
+  --notary-profile <profile> --output dist/release \
+  --appcast --previous-dmg dist/previous/Earlet-0.2.0-macos-arm64.dmg
+```
+
+Before a release, raise `version` in `product.json`; Sparkle orders builds by
+`CFBundleVersion`, which the packager sets to the build id. The feed's
+download addresses name the tag `v<version>`, so the release must carry that
+tag and every file under `updates/` except `old_updates/`; the receipt's
+`appcast.publish` is the `gh release create` command that uploads them.
+Publishing is a separate, deliberate step: once a release is the latest,
+every copy that checks for updates finds it within a day.
+
+**The signing key.** The feed and every archive are signed with an EdDSA key
+kept in the login keychain of the releasing Mac, under the account
+`product.json` names (`updates.keychain_account`); its public half is
+`updates.ed25519_public`, which the packager writes into Info.plist. Create it
+once with Sparkle's `generate_keys --account <account>` (from
+`macos/.build/artifacts/sparkle/Sparkle/bin` after `swift package resolve`)
+and keep a backup with `generate_keys --account <account> -x <file>` in a
+store with named, audited access. Without the key no installed copy accepts
+another update. The tool reads the key through `generate_keys`, which made
+the keychain item, so macOS does not ask, and hands it to `generate_appcast`
+on standard input.
 
 **Entitlements.** Each process gets only what it uses:
 
@@ -276,6 +318,7 @@ the development build.
 | `DICTATION_CAPTURE_WATCHDOG` | Windows `DictationEnvironment.cs`, `DictationController.Takes.cs` | The in-hold watchdog that ends a take whose microphone stopped delivering audio (0.3 s with no buffer, after its graces), keeping what was captured: `0` turns it off; any other value, or none, leaves it on. The field switch for a device whose buffering the gap misreads, as the Mac's `dictation.capture.watchdog` defaults flag is ([long takes](design-windows.md#long-takes-are-never-lost)). Read once a run |
 | `DICTATION_HUD_RENDER_DIR` | Mac `DictationApp.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders every indicator state to PNGs in that directory, then exits, non-zero when a shadow is cut at the image's edge or two busy states differ in size. Honoured by every build, release included. Windows draws each state at 100, 150 and 200% in light, dark and high contrast (the pill in the theme's colours), also fails when the shadow ring or the one busy width fails on the layout, and writes `render-report.txt` beside them; built and tested on Linux, never run ([render modes](design-windows.md#render-modes-on-windows)) |
 | `DICTATION_WINDOW_RENDER_DIR` | Mac `DictationApp.swift`, `DictationWindowRender.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders the window to PNGs (each scenario, width and appearance), then exits. Honoured by every build, release included. The Mac exits 0 whatever it wrote; Windows also draws 100, 150 and 200% and high contrast, every header state and the notification-area icon's pictures, and exits non-zero when a scenario or an image failed. With both variables set, the Mac renders only the indicator and Windows renders both |
+| `DICTATION_UPDATE_FEED_URL` | Mac `DictationUpdateFeed.swift` | The update feed for one launch instead of Info.plist's `SUFeedURL`: HTTPS, or HTTP to 127.0.0.1 or localhost to try an update against a local feed. Any other value turns updates off for that launch ([Updates](design-macos.md#updates)) |
 | `DICTATION_CAPTURE_TRACE` | Mac `DictationCaptureForensics.swift` | `1` logs every audio chunk of each hold |
 | `DICTATION_AUDIO_TRACE` | Mac `AudioTrace.swift` (microphone and system-audio capture) | `1` logs the capture layer's trace lines |
 | `DICTATION_IPC_TRACE` | Mac `DictationAsrTransport.swift`, `PythonEngineClient.swift` | `1` logs stage-by-stage worker transport timings |

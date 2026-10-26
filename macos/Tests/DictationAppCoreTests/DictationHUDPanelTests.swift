@@ -123,7 +123,7 @@ extension DictationHUDPanelTests {
         typealias Metrics = DictationHUDMetrics
         typealias Content = DictationHUDContent
 
-        nonisolated static let holdKeyNames = DictationHoldKey.allCases.map(\.name)
+        nonisolated static let holdKeyNames = DictationHoldKey.presets.map(\.name)
 
         /// Every hint a recording or transcribing state can show for a hold of
         /// `limit` seconds, second by second, held and hands-free.

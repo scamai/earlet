@@ -107,6 +107,7 @@ public partial class MainWindow : Window, IDictationView, IVocabularyView, IVoca
             var trayCommands = new DictationTrayCommands(controller, vocabulary, ShowFromOutside, ReviewVocabulary, Quit);
             tray.Chosen += async (_, item) => await trayCommands.ChooseAsync(item);
             HoldKeyPicker.ItemsSource = controller.HoldKeyChoices;
+            MouseButtonPicker.ItemsSource = controller.MouseButtonChoices;
             LanguagePicker.ItemsSource = controller.LanguageChoices;
             SilenceStopPicker.ItemsSource = controller.SilenceStopChoices;
             poll.Tick += (_, _) =>
@@ -218,6 +219,8 @@ public partial class MainWindow : Window, IDictationView, IVocabularyView, IVoca
         try
         {
             HoldKeyPicker.SelectedItem = state.HoldKey;
+            MouseButtonPicker.SelectedItem =
+                Dictation.Services.DictationMouseButtons.Choices.First(c => c.Value == state.MouseButton);
             LanguagePicker.SelectedItem = state.Language;
             SilenceStopPicker.SelectedItem = DictationSilenceStopChoice.For(state.SilenceStop);
             LaunchAtLoginBox.IsChecked = state.LaunchAtLogin;
@@ -229,11 +232,14 @@ public partial class MainWindow : Window, IDictationView, IVocabularyView, IVoca
         }
 
         HoldKeyPicker.IsEnabled = state.CanChooseHoldKey;
+        MouseButtonPicker.IsEnabled = state.CanChooseMouseButton;
         LanguagePicker.IsEnabled = state.CanChooseLanguage;
         // Shown before the text changes, so the announcement comes from an
         // element a reader can see.
         HoldKeyNotice.Visibility = state.HoldKeyNotice is null ? Visibility.Collapsed : Visibility.Visible;
         SetLiveText(HoldKeyNotice, state.HoldKeyNotice ?? string.Empty);
+        MouseButtonNotice.Visibility = state.MouseButtonNotice is null ? Visibility.Collapsed : Visibility.Visible;
+        SetLiveText(MouseButtonNotice, state.MouseButtonNotice ?? string.Empty);
         Instructions.Text = state.Instructions;
         SetLiveText(Status, state.Status);
         // Asked before the actions and Cancel can hide: a hidden button has no focus.
@@ -412,6 +418,14 @@ public partial class MainWindow : Window, IDictationView, IVocabularyView, IVoca
         if (!rendering && HoldKeyPicker.SelectedItem is Dictation.Speech.HotkeyBinding key)
         {
             controller.ChooseHoldKey(key.VirtualKey);
+        }
+    }
+
+    private void MouseButtonChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!rendering && MouseButtonPicker.SelectedItem is Dictation.Services.DictationMouseButtons.Choice choice)
+        {
+            controller.ChooseMouseButton(choice.Value);
         }
     }
 

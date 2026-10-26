@@ -196,6 +196,9 @@ final class FakeWorker: DictationWorker, @unchecked Sendable {
         var previewCancelHangs = false
         var parkedPreviewCancels: [CheckedContinuation<Void, Never>] = []
         var events: [String] = []
+        /// What the worker reports about its decode, attached to every
+        /// detailed transcription (`nil`: a worker that reports nothing).
+        var decodeStats: DictationDecodeStats?
     }
     let state = Locked(State())
     let name: String
@@ -240,6 +243,16 @@ final class FakeWorker: DictationWorker, @unchecked Sendable {
         case .delayed(let text, let seconds):
             try? await Task.sleep(for: .seconds(seconds))
             return .text(text)
+        }
+    }
+
+    func transcribeDetailed(samples: [Float], sampleRate: Int,
+                            compareBaseline: Bool) async -> DictationAsrDetailedOutcome {
+        switch await transcribe(samples: samples, sampleRate: sampleRate) {
+        case .text(let text):
+            return .result(DictationAsrDetail(text: text, avgLogprob: nil, decodeStats: state.get.decodeStats))
+        case .failed(let failure):
+            return .failed(failure)
         }
     }
 
@@ -409,6 +422,32 @@ final class FakeTrigger: DictationHoldTrigger {
         onLatchEnd?()
         release()
     }
+}
+
+/// The mouse button's listener: `press()`/`release()` are the bound button's
+/// edges as the live tap reports them, after its swallow.
+@MainActor
+final class FakeMouseTrigger: DictationMouseTrigger {
+    var onPress: (() -> Void)?
+    var onRelease: (() -> Void)?
+    var onDegraded: ((DictationPermissionStatus) -> Void)?
+    var startResult = true
+    private(set) var running = false
+    private(set) var starts = 0
+    private(set) var stops = 0
+    /// The button the listener was built with, then every `update(_:)`.
+    private(set) var buttons: [DictationMouseSideButton] = []
+
+    func start() -> Bool {
+        starts += 1
+        running = startResult
+        return startResult
+    }
+    func stop() { running = false; stops += 1 }
+    func update(_ button: DictationMouseSideButton) { buttons.append(button) }
+
+    func press() { onPress?() }
+    func release() { onRelease?() }
 }
 
 /// The production trigger's fan-out — `HotkeyHoldTrigger` over a real
@@ -664,8 +703,11 @@ struct Harness {
     /// The real detector, used instead of `trigger` when `usesDetector`.
     let detector = DetectorTrigger()
     var usesDetector = false
+    let mouse = FakeMouseTrigger()
     let keyWatch = FakeKeyWatch()
     let stopTrap = FakeStopTrap()
+    /// What macOS answers when a recorded combination is probed.
+    var reservesShortcuts = true
     let inserts = InsertRecorder()
     var resources: DictationResources? = DictationResources(python: "/p", runtime: "/r", model: "/m")
     /// The three grants. Behind a lock so a test can flip one after the
@@ -793,6 +835,7 @@ struct Harness {
 
     func environment() -> DictationEnvironment {
         let workers = workers, trigger = trigger, detector = detector, usesDetector = usesDetector
+        let mouse = mouse
         let resources = resources, grants = grants
         let calls = permissionCalls, settles = clipboardSettles
         let privacy = privacy, privacyChecks = privacyChecks
@@ -800,7 +843,8 @@ struct Harness {
         let target = targetApplication, opens = logFolderOpens, openWorks = logFolderOpenWorks
         let relaunchCount = relaunches
         let lines = logLines
-        return DictationEnvironment(
+        let reserves = reservesShortcuts
+        var environment = DictationEnvironment(
             settings: settings,
             capture: capture,
             permissions: DictationPermissions(
@@ -820,6 +864,10 @@ struct Harness {
                 if usesDetector { detector.update(key); return detector }
                 trigger.update(key)
                 return trigger
+            },
+            makeMouseTrigger: { button -> any DictationMouseTrigger in
+                mouse.update(button)
+                return mouse
             },
             keyWatch: keyWatch,
             stopTrap: stopTrap,
@@ -847,6 +895,8 @@ struct Harness {
                 directory: spoolFiles.url, keptFor: keptFor, runFileWork: { work in work() }),
             history: historyStore,
             ownBundleID: ownBundleID)
+        environment.canReserveShortcut = { _ in reserves }
+        return environment
     }
 
     func model() -> DictationModel { DictationModel(environment: environment()) }

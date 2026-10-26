@@ -5,6 +5,12 @@ let package = Package(
     name: "Dictation",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "Dictation", targets: ["DictationApp"])],
+    dependencies: [
+        // In-place updates from the signed feed on GitHub Releases
+        // (docs/design-macos.md#updates). Only the executable links it, so
+        // `swift test` and the Linux learning build never load the framework.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6"),
+    ],
     targets: [
         .target(name: "DictationIPC"),
         .target(name: "DictationAudioCapture"),
@@ -22,7 +28,8 @@ let package = Package(
                 dependencies: ["DictationHistory", "DictationKeyCheck", "DictationLearning", "DictationKit", "DictationIPC",
                                "DictationAudioCapture"]),
         .executableTarget(name: "DictationApp",
-                          dependencies: ["DictationAppCore", "DictationHistory", "DictationLearning", "DictationKit"]),
+                          dependencies: ["DictationAppCore", "DictationHistory", "DictationLearning", "DictationKit",
+                                         .product(name: "Sparkle", package: "Sparkle")]),
         .testTarget(name: "DictationKitTests", dependencies: ["DictationKit", "DictationIPC"]),
         .testTarget(name: "DictationIPCTests", dependencies: ["DictationIPC"]),
         .testTarget(name: "DictationAudioCaptureTests", dependencies: ["DictationAudioCapture"]),

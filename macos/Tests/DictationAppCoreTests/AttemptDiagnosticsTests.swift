@@ -25,8 +25,30 @@ struct AttemptDiagnosticsTests {
         let ending = lines.get.last ?? ""
         #expect(ending.contains("event=finished result=inserted"))
         #expect(ending.contains("elapsed_ms=2250 release_ms=250"))
-        #expect(ending.contains("asr_ms=125 paste_ms=n/a"))
+        #expect(ending.contains("asr_ms=125 asr_wait_ms=n/a asr_decode_ms=n/a"))
+        #expect(ending.contains("asr_windows=n/a asr_retries=n/a asr_warm=n/a paste_ms=n/a"))
         #expect(!lines.get.joined().contains("private"))
+    }
+
+    @Test("the worker's account of a slow decode reaches the receipt as counts")
+    func decodeAccount() async {
+        let harness = Harness()
+        let model = harness.model()
+        await model.toggle()
+        harness.workers.made[0].state.mutate {
+            $0.replies = [.text("private spoken words")]
+            $0.decodeStats = DictationDecodeStats(waitedMs: 1884.4, decodeMs: 3102, windows: 2,
+                                                  retries: 1, warm: true)
+        }
+        harness.trigger.press()
+        #expect(await eventually { model.recording })
+        harness.trigger.release()
+        #expect(await eventually { harness.logLines.get.contains { $0.contains("event=finished") } })
+        #expect(await eventually { !model.busy && !model.recording })
+        let receipt = harness.logLines.get.first { $0.contains("event=finished") } ?? ""
+        #expect(receipt.contains("asr_wait_ms=1884 asr_decode_ms=3102 asr_windows=2 asr_retries=1 asr_warm=true"), "\(receipt)")
+        #expect(!harness.logLines.get.joined().contains("private"))
+        await model.prepareForQuit()
     }
 
     @Test("failure payloads and unmeasured durations are not logged as content or zero")
@@ -36,7 +58,8 @@ struct AttemptDiagnosticsTests {
         receipt.finish(.failed(stage: .asr, failure: .asr(.engineError("private worker payload")), timings: .init()))
         let ending = lines.get.last ?? ""
         #expect(ending.contains("stage=asr reason=recognition_failed"))
-        #expect(ending.contains("asr_ms=n/a paste_ms=n/a"))
+        #expect(ending.contains("asr_ms=n/a asr_wait_ms=n/a"))
+        #expect(ending.contains("asr_warm=n/a paste_ms=n/a"))
         #expect(ending.contains("asr_utf16=n/a asr_repeat=n/a asr_compact_repeat=n/a"))
         #expect(ending.contains("candidate_utf16=n/a candidate_repeat=n/a candidate_compact_repeat=n/a"))
         #expect(ending.contains("format_changed=n/a"))

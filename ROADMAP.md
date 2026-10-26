@@ -34,7 +34,8 @@ tree, but Windows device work and a Windows download follow later.
 
 - **A better Mac download.** 0.1.0 is signed, notarized and stapled. Next:
   one collected third-party notice file, a smaller image, installation
-  checked on a clean Mac, and an update channel.
+  checked on a clean Mac, and the first release with the Mac's update
+  channel, after which a Mac copy updates itself.
 - **Long dictations without the wait (stage 2).** Recognise finished stretches
   of speech while the key is still held, so releasing waits only for the last
   few seconds; then raise the ceiling to 20 minutes, with a "still listening"
@@ -46,7 +47,9 @@ tree, but Windows device work and a Windows download follow later.
 - **Bluetooth headsets** checked on real devices.
 - **Accessibility:** VoiceOver and Narrator walk-throughs, and measured
   contrast, for every window and indicator state.
-- **Updates** through a signed update channel.
+- **Updates** through a signed update channel: built on the Mac (signed feed
+  on GitHub Releases, patches between releases), not yet published; Windows
+  has none.
 
 ## Later
 

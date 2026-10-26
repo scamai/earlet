@@ -1288,6 +1288,9 @@ class WhisperMac:
         self._fw_model = None
         self._torch_model = None
         self._tokenizer = None
+        # Decodes this engine has run since it loaded, preview ones included:
+        # the first after a load is the slow one (stats["engine_warm"]).
+        self._decodes = 0
 
         # Kept for surface parity + the future L2 wiring; the current
         # transcribe path never reads it (density ratio needs stepwise
@@ -1396,7 +1399,8 @@ class WhisperMac:
                    initial_prompt: str | None = None,
                    case_only_phrases=None,
                    vocabulary_search: bool = False,
-                   phrase_deltas=None) -> dict:
+                   phrase_deltas=None,
+                   temperature: float | None = None) -> dict:
         # x86 lane fix (2026-08-29): the live caption path
         # (a live caption caller) passes initial_prompt on every
         # decode; the stub already accepts it (see its comment, agent H
@@ -1455,7 +1459,15 @@ class WhisperMac:
         `case_only`). asr_server sends the words the host learned from a
         single correction, so this pass and the server's apply the same rule
         (LEARNING.md §4.2: a spaced form is rewritten only by an alias seen
-        on two dictations)."""
+        on two dictations).
+
+        temperature (default None = Whisper's own fallback ladder): a single
+        sampling temperature for every window instead of the ladder. Only the
+        Dictation live preview passes 0.0: its text is display-only, and on
+        quiet or low-confidence audio the ladder re-decodes the window up to
+        five more times while the final transcription of the same hold
+        waits for the engine. Final decodes keep the ladder; see
+        MLX_SCRIPT_SEED for why their prompt depends on it."""
         t0 = time.monotonic()
         audio = np.asarray(audio, dtype=np.float32)
         words: list[dict] = []
@@ -1529,6 +1541,8 @@ class WhisperMac:
                     "personalization": "L0",
                 },
             }
+        engine_warm = self._decodes > 0
+        self._decodes += 1
 
         audio_windows = int(np.ceil(len(audio) / (SAMPLE_RATE * 30)))
 
@@ -1652,6 +1666,8 @@ class WhisperMac:
                     # unchanged with this off.
                     condition_on_previous_text=False,
                     word_timestamps=return_words)
+                if temperature is not None:
+                    decode_options["temperature"] = temperature
                 if search_enabled:
                     try:
                         part = mlx_beam.transcribe(
@@ -2186,6 +2202,7 @@ class WhisperMac:
             words = []
 
         stats = {
+            "engine_warm": engine_warm,
             "chunks": audio_windows,
             "tokens": len(text.split()),  # word-count proxy; QNN reports real tokens
             "engine": self._engine_name,

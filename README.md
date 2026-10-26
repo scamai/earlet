@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <sub>macOS 14+ · Apple Silicon · 0.1.0 preview<br>
+  <sub>macOS 14+ · Apple Silicon · 0.2.0 preview<br>
   Signed and notarized by Apple.</sub>
 </p>
 
@@ -88,7 +88,7 @@ recording. Retention and deletion stay under your control.
 
 ## Install
 
-Download `Earlet-0.1.0-macos-arm64.dmg` from
+Download `Earlet-0.2.0-macos-arm64.dmg` from
 [Releases](https://github.com/scamai/earlet/releases/latest), open it and drag
 Earlet to Applications. It needs an Apple Silicon Mac with macOS 14 or later.
 The image is signed with Reality Inc.'s Developer ID and notarized by Apple,
@@ -159,6 +159,8 @@ checks, follow [Build and test](CONTRIBUTING.md#build-and-test).
 3. Try the same steps in a text field in another app. If the words do not
    appear, use **Copy last text** and paste them yourself.
 4. In Settings, choose your hold key and language, and review History retention.
+   **Record a Key…** in the hold-key menu sets any key or combination you
+   like, and a mouse side button can start a dictation too.
    Double-tap the hold key when you want to keep speaking hands-free.
 
 If setup gets stuck, start with [Common setup problems](SUPPORT.md#common-setup-problems).
@@ -175,6 +177,7 @@ them before sharing. **Copy last text** holds the latest usable result in memory
 - **Mac History.** Delivered words and kept recordings are encrypted with AES-256-GCM and a key in the login keychain. By default, words are kept forever and recordings for 30 days. Change retention or turn History off in Settings; Delete All History destroys its key.
 - **Recovery audio.** The Mac writes an **unencrypted** temporary audio file while recording. A successful delivery, usable text/clipboard fallback, or cancellation removes it; at most one failed or interrupted take remains for up to seven days.
 - **Vocabulary.** `learning.json` keeps vocabulary and correction evidence in **plain text**. Disable learning or inspect and remove learned words in the app.
+- **Mac updates.** Once a day the Mac app asks GitHub for a newer version, downloads it and installs it when Earlet quits; your settings, words and permissions carry over. Turn this off under Settings → Update Earlet automatically. See [Updates](docs/design-macos.md#updates).
 
 Mac History lives under
 `~/Library/Application Support/Dictation/dictation/history`; recovery audio

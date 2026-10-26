@@ -59,13 +59,14 @@ public enum HoldKeyTransition
 
     /// <summary>
     /// The caller must consume this event: it never reaches the focused
-    /// application. Raised only in
+    /// application. From this machine it is raised only in
     /// <see cref="HoldKeyTriggerMode.HoldOrDoubleTapHandsFree"/>, only for
     /// Space and Enter, and only for the down that ended a latch, its
-    /// autorepeats and its matching up. The one exception to "the hook
-    /// observes and never swallows": a stop key that went through would type
-    /// a space or a newline, or send a half-written chat message, before the
-    /// dictated words land.
+    /// autorepeats and its matching up. The one exception to "the keyboard
+    /// hook observes and never swallows": a stop key that went through would
+    /// type a space or a newline, or send a half-written chat message, before
+    /// the dictated words land. The mouse hook adds it for the bound side
+    /// button (<see cref="DictationMouseMessages.Swallows"/>).
     /// </summary>
     Swallow = 16,
 
@@ -96,9 +97,9 @@ public enum HoldKeyTriggerMode
     /// </summary>
     /// <remarks>
     /// <b>Double-tap and not single-tap</b>, which is the difference between
-    /// this and macOS's <c>MouseHoldOrClickState</c>. That one toggles on a
-    /// single click because a spare mouse button is pressed for no other
-    /// reason. The keyboard triggers this app offers are bare modifiers —
+    /// this and the mouse button's <see cref="MouseHoldOrClickState"/>, as on
+    /// the Mac. That one toggles on a single click because a spare mouse
+    /// button is pressed for no other reason. The keyboard triggers this app offers are bare modifiers —
     /// Right Alt, Right Ctrl, Right Shift — which people press by accident and
     /// on purpose all day long. A single tap latching the microphone open would
     /// mean a brushed Alt started recording, which is the one outcome a
@@ -135,9 +136,10 @@ public enum HoldKeyTriggerMode
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Pure, and platform-neutral, on purpose.</b> This is the same shape macOS
-/// gave <c>MouseHoldOrClickState</c> and for the same stated reason: the
-/// trigger layer is where every dictation begins, a regression in it does not
+/// <b>Pure, and platform-neutral, on purpose.</b> This is the same shape as
+/// the mouse button's <see cref="MouseHoldOrClickState"/>, for the same
+/// stated reason: the trigger layer is where every dictation begins, a
+/// regression in it does not
 /// degrade dictation but removes it, and none of that logic can be exercised
 /// while it lives inside a <c>WH_KEYBOARD_LL</c> callback. Before this type
 /// existed, <c>LowLevelHoldKeyRegistration</c> — the held flag, the

@@ -9,7 +9,10 @@ namespace Dictation.Core;
 /// while you speak").</param>
 /// <param name="Policy">How long a hold may listen: the limit the clock and
 /// the countdown count to, and the countdown's length.</param>
-public sealed record DictationHudHold(string KeyName, DictationHoldPolicy Policy);
+/// <param name="ByMouse">The hold is on the mouse button, which
+/// <paramref name="KeyName"/> then names: its latch stops on the button
+/// alone ("Click mouse button 4 to stop").</param>
+public sealed record DictationHudHold(string KeyName, DictationHoldPolicy Policy, bool ByMouse = false);
 
 // Part of DictationHudFeed (see DictationHudFeed.cs): the busy pills — the
 // listening pill, held or hands-free, with its hint, the hands-free clock and
@@ -53,7 +56,7 @@ public sealed partial class DictationHudFeed
         }
 
         var hold = _hold();
-        var text = DictationCopy.HudListening(hold.KeyName, latched, elapsed, hold.Policy, silence);
+        var text = DictationCopy.HudListening(hold.KeyName, latched, elapsed, hold.Policy, silence, hold.ByMouse);
         if (string.Equals(Shown.Text, text, StringComparison.Ordinal))
         {
             return;

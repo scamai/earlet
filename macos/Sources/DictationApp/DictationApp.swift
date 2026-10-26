@@ -14,7 +14,7 @@ struct DictationApp: App {
         // `Window` for the same duplicates. It stays the first scene, so
         // SwiftUI opens it at launch; the delegate decides whether it stays.
         Window("Earlet", id: DictationMainWindow.id) {
-            DictationWindow(model: delegate.model)
+            DictationWindow(model: delegate.model, updater: delegate.updater)
         }
         // Wide enough for the rail beside a pane at the 520 points the
         // single column used to open at, and tall enough for Home's header,
@@ -32,6 +32,12 @@ struct DictationApp: App {
             CommandGroup(replacing: .appSettings) {
                 DictationSettingsCommand()
             }
+            // Where a Mac app keeps it: the app menu, under About.
+            CommandGroup(after: .appInfo) {
+                if let updater = delegate.updater, updater.isAvailable {
+                    DictationCheckForUpdatesCommand(updater: updater)
+                }
+            }
         }
         MenuBarExtra {
             DictationMenu(model: delegate.model, hud: delegate.hud)
@@ -46,6 +52,9 @@ struct DictationApp: App {
 @MainActor
 final class DictationAppDelegate: NSObject, NSApplicationDelegate {
     let model: DictationModel
+    /// In-place updates; `nil` in the offscreen render runs, which must never
+    /// reach the network.
+    let updater: DictationUpdater?
     /// The floating indicator; created lazily so it exists only in a real
     /// GUI session.
     lazy var hud = DictationHUDController(model: model)
@@ -70,6 +79,7 @@ final class DictationAppDelegate: NSObject, NSApplicationDelegate {
             DictationLogSink.shared.log("launch \(installation.versionLabel) path=\(installation.path)")
         }
         model = DictationModel(environment: .live())
+        updater = Self.isRenderRun ? nil : DictationUpdater()
         super.init()
     }
 
@@ -292,6 +302,19 @@ private struct DictationMenuIcon: View {
 
 /// App menu → Settings… (⌘,). Its own view so it can read `openWindow`;
 /// a `.commands` builder cannot hold the property wrapper itself.
+private struct DictationCheckForUpdatesCommand: View {
+    @ObservedObject var updater: DictationUpdater
+
+    var body: some View {
+        if updater.readyToInstall {
+            Button("Restart to Update") { updater.restartToUpdate() }
+        } else {
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(!updater.canCheck)
+        }
+    }
+}
+
 private struct DictationSettingsCommand: View {
     @Environment(\.openWindow) private var openWindow
 

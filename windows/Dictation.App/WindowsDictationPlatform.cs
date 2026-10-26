@@ -92,11 +92,13 @@ internal sealed class WindowsDictationPlatform(ILoggerFactory logs) : IDictation
         }
     }
 
-    public IDictationTrigger CreateTrigger(HotkeyBinding binding, bool cancelOnChord, bool handsFree) =>
+    public IDictationTrigger CreateTrigger(
+        HotkeyBinding binding, bool cancelOnChord, bool handsFree, DictationMouseButton mouseButton) =>
         new Trigger(new LowLevelHoldKeyRegistration(
             binding,
             logs.CreateLogger<LowLevelHoldKeyRegistration>(),
             triggerMode: handsFree ? HoldKeyTriggerMode.HoldOrDoubleTapHandsFree : HoldKeyTriggerMode.HoldOnly,
+            mouseButton: mouseButton,
             cancelOnChord: cancelOnChord));
 
     public IAudioCaptureDevice CreateMicrophone() =>
@@ -166,6 +168,12 @@ internal sealed class WindowsDictationPlatform(ILoggerFactory logs) : IDictation
         public void EndLatch() => inner.EndLatch();
 
         public LatchEnd ConsumeLatchEnd() => inner.ConsumeLatchEnd();
+
+        public bool MouseHolds => inner.MouseHolds;
+
+        public bool MouseLatched => inner.MouseLatched;
+
+        public bool MouseTriggerDegraded => inner.MouseTriggerDegraded;
 
         public TriggerCancel ConsumeCancelRequest() =>
             !inner.ConsumeCancelRequest(out var byChord, out var asked) ? TriggerCancel.None

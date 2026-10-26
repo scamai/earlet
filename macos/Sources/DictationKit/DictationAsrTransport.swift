@@ -100,13 +100,56 @@ public struct DictationAsrDetail: Sendable, Equatable {
     /// demo, which is worse than showing nothing.
     public let baselineRan: Bool
 
+    /// How the worker spent the decode, for the attempt log. `nil` on a
+    /// transport that reports nothing.
+    public let decodeStats: DictationDecodeStats?
+
     public init(text: String, avgLogprob: Double?, detectedLanguage: String? = nil,
-                baselineText: String? = nil, baselineRan: Bool = false) {
+                baselineText: String? = nil, baselineRan: Bool = false,
+                decodeStats: DictationDecodeStats? = nil) {
         self.text = text
         self.avgLogprob = avgLogprob
         self.detectedLanguage = detectedLanguage
         self.baselineText = baselineText
         self.baselineRan = baselineRan
+        self.decodeStats = decodeStats
+    }
+}
+
+/// Counts the worker reports about one final decode, so a slow
+/// release-to-text can be explained from the log without any of the words:
+/// the wait for the engine (a live-preview decode already running holds it),
+/// the decode itself, the 30 s windows it ran, Whisper's temperature retries
+/// on low-confidence audio, and whether the engine had decoded anything since
+/// it loaded (the first decode after a load is the slow one).
+public struct DictationDecodeStats: Sendable, Equatable {
+    public var waitedMs: Double?
+    public var decodeMs: Double?
+    public var windows: Int?
+    public var retries: Int?
+    public var warm: Bool?
+
+    public init(waitedMs: Double? = nil, decodeMs: Double? = nil, windows: Int? = nil,
+                retries: Int? = nil, warm: Bool? = nil) {
+        self.waitedMs = waitedMs
+        self.decodeMs = decodeMs
+        self.windows = windows
+        self.retries = retries
+        self.warm = warm
+    }
+
+    /// From the worker's `stats`: `waited_ms`, `decode_s`, `engine_warm`, and
+    /// the vocabulary search's `beam_windows` and `sampling_fallbacks` (the
+    /// plain greedy decode counts neither). `nil` when none is present.
+    public init?(stats: JSONValue?) {
+        guard let stats else { return nil }
+        let search = stats["vocabulary_search"]
+        self.init(waitedMs: stats["waited_ms"]?.doubleValue,
+                  decodeMs: stats["decode_s"]?.doubleValue.map { $0 * 1_000 },
+                  windows: search?["beam_windows"]?.doubleValue.map { Int($0) },
+                  retries: search?["sampling_fallbacks"]?.doubleValue.map { Int($0) },
+                  warm: stats["engine_warm"]?.boolValue)
+        if self == DictationDecodeStats() { return nil }
     }
 }
 
@@ -796,7 +839,8 @@ public final class PythonAsrTransport: DictationAsrTransport, DictationPreviewTr
                 avgLogprob: resp["stats"]?["mean_logprob"]?.doubleValue,
                 detectedLanguage: resp["stats"]?["language"]?.stringValue,
                 baselineText: resp["baseline_text"]?.stringValue,
-                baselineRan: resp["baseline_ran"]?.boolValue ?? false))
+                baselineRan: resp["baseline_ran"]?.boolValue ?? false,
+                decodeStats: DictationDecodeStats(stats: resp["stats"])))
         } catch {
             // A dead pipe means every subsequent call will fail the same
             // way until a fresh `start()` — mark uninitialized so the

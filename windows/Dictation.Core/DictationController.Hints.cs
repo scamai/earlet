@@ -12,9 +12,13 @@ namespace Dictation.Core;
 public sealed partial class DictationController
 {
     /// <summary>The hold key's name and the hold policy, as the indicator
-    /// names and counts them. Read at each pill, so a key chosen at rest is
-    /// the one the next hold's hints name.</summary>
-    private DictationHudHold HudHold => new(_holdKey.KeyName, Policy);
+    /// names and counts them — or the mouse button's name, when the last hold
+    /// that listened was on the button. Read at each pill, so a key chosen at
+    /// rest is the one the next hold's hints name.</summary>
+    private DictationHudHold HudHold =>
+        _holdByMouse && DictationMouseButtons.SpokenName(_settings.MouseButton) is { } button
+            ? new(button, Policy, ByMouse: true)
+            : new(_holdKey.KeyName, Policy);
 
     /// <summary>
     /// The listening pill's clock, while the session listens: the held hint,

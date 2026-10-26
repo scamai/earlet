@@ -500,17 +500,24 @@ extension ButtonStyle where Self == DictationIconButtonStyle {
 /// A choice from a short list, drawn as the window's secondary button with
 /// the current value and a chevron; the list itself is the native menu, so
 /// the keyboard and VoiceOver work as they do for any pop-up.
-struct DictationChoice<Value: Hashable, Options: View>: View {
+struct DictationChoice<Value: Hashable, Options: View, Actions: View>: View {
     let title: String
     let current: String
     @Binding var selection: Value
     @ViewBuilder var options: Options
+    /// Menu items under the choices, after a separator: what to do when
+    /// none of the choices is the one wanted.
+    @ViewBuilder var actions: Actions
 
     var body: some View {
         Menu {
             Picker(title, selection: $selection) { options }
                 .pickerStyle(.inline)
                 .labelsHidden()
+            if Actions.self != EmptyView.self {
+                Divider()
+                actions
+            }
         } label: {
             HStack(spacing: 6) {
                 Text(current)
@@ -525,6 +532,12 @@ struct DictationChoice<Value: Hashable, Options: View>: View {
         .fixedSize()
         .accessibilityLabel(title)
         .accessibilityValue(current)
+    }
+}
+
+extension DictationChoice where Actions == EmptyView {
+    init(title: String, current: String, selection: Binding<Value>, @ViewBuilder options: () -> Options) {
+        self.init(title: title, current: current, selection: selection, options: options, actions: { EmptyView() })
     }
 }
 

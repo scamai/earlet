@@ -63,6 +63,11 @@ the app with the text in your destination. The Mac log's `asr_repeat` and
 `clipboard_unchanged` describes restoration of the previous clipboard, not
 verification of the pasted words. You do not need to share the full text.
 
+For a slow dictation, the same line's `asr_wait_ms`, `asr_decode_ms`,
+`asr_windows`, `asr_retries` and `asr_warm` say whether the transcription
+waited for the live preview, re-decoded hard-to-hear audio, or ran on a speech
+engine that had just loaded.
+
 Do not attach your vocabulary file (`learning.json`): it holds the words you
 taught the app or corrected. Never attach a recording of someone else's
 voice.

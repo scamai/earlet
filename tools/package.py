@@ -8,6 +8,7 @@ incomplete developer artifact. All outputs go outside versioned source.
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -240,6 +241,54 @@ def stage_resources(resources: Path, target: str, python: Path | None, model: Pa
 
 # ─── Release hygiene ─────────────────────────────────────────────────────────
 
+# ─── In-place updates (macOS) ────────────────────────────────────────────────
+
+#: What Sparkle needs from Info.plist (docs/design-macos.md#updates). The feed
+#: and the EdDSA public key come from product.json; the rest is policy: check
+#: once a day, download and install a found update when Earlet next quits,
+#: and check the archive's signature before unpacking it.
+UPDATE_POLICY = {"SUEnableAutomaticChecks": True, "SUAutomaticallyUpdate": True,
+                 "SUScheduledCheckInterval": 86400, "SUVerifyUpdateBeforeExtraction": True}
+
+
+def update_keys(product: dict) -> dict:
+    """The Info.plist keys that turn updates on, or none when the product names no feed."""
+    updates = product.get("updates")
+    if not updates:
+        return {}
+    feed, key = updates.get("feed", ""), updates.get("ed25519_public", "")
+    if not feed.startswith("https://") or len(base64.b64decode(key, validate=True)) != 32:
+        raise ValueError("product.json updates need an https feed and a 32-byte EdDSA public key")
+    return {"SUFeedURL": feed, "SUPublicEDKey": key, **UPDATE_POLICY}
+
+
+#: Sparkle's MIT license and the notices of the code it bundles, from the
+#: archive SwiftPM downloaded; the framework itself carries no copy.
+SPARKLE_LICENSE = ROOT / "macos/.build/artifacts/sparkle/Sparkle/LICENSE"
+
+
+def embed_sparkle(binaries: Path, contents: Path) -> None:
+    """Copy the Sparkle framework SwiftPM linked into Contents/Frameworks.
+
+    Its XPC services exist for sandboxed apps, which Earlet is not
+    (sparkle-project.org/documentation/sandboxing), so they are left out
+    rather than signed. The executable finds the framework beside itself in
+    .build; in the bundle it looks in Frameworks.
+    """
+    framework = binaries / "Sparkle.framework"
+    if not framework.is_dir():
+        raise ValueError(f"swift build produced no Sparkle.framework in {binaries}")
+    if not SPARKLE_LICENSE.is_file():
+        raise ValueError(f"Sparkle's license is missing at {SPARKLE_LICENSE}; resolve the Swift package")
+    target = contents / "Frameworks/Sparkle.framework"
+    shutil.copytree(framework, target, symlinks=True)
+    shutil.rmtree(target / "Versions/B/XPCServices", ignore_errors=True)
+    (contents / "Resources/Licenses").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(SPARKLE_LICENSE, contents / "Resources/Licenses/Sparkle.txt")
+    subprocess.run(["install_name_tool", "-add_rpath", "@executable_path/../Frameworks",
+                    str(contents / "MacOS/Dictation")], check=True)
+
+
 def strip_symbols(bundle: Path) -> list[str]:
     """Delete debug symbol files; they carry source paths and SourceLink maps."""
     removed = []
@@ -333,17 +382,21 @@ def build(args: argparse.Namespace) -> Path:
         # The unstripped binary lists every object file under the checkout's
         # .build/ in its debug map (measured: audit_bundle fails without this).
         subprocess.run(["strip", "-S", "-x", str(contents / "MacOS/Dictation")], check=True)
+        embed_sparkle(Path(binary_path), contents)
         with (contents / "Info.plist").open("wb") as stream:
             plistlib.dump({"CFBundleIdentifier": product["bundle_id"], "CFBundleName": product["name"],
                           "CFBundleDisplayName": product["name"], "CFBundleExecutable": "Dictation",
-                          "CFBundlePackageType": "APPL", "CFBundleVersion": product["version"],
+                          # Sparkle orders builds by CFBundleVersion, so it is the
+                          # build id, which only grows; the version is for people.
+                          "CFBundlePackageType": "APPL", "CFBundleVersion": build_id,
                           "CFBundleShortVersionString": product["version"],
                           "DictationBuild": build_id,
                           "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True,
                           # A second copy would add a second key tap and a second model.
                           "LSMultipleInstancesProhibited": True,
                           "CFBundleIconFile": "AppIcon",
-                          "NSMicrophoneUsageDescription": f"{name} records while you hold the shortcut to type your speech locally."}, stream)
+                          "NSMicrophoneUsageDescription": f"{name} records while you hold the shortcut to type your speech locally.",
+                          **update_keys(product)}, stream)
         resources = contents / "Resources"
         resources.mkdir(exist_ok=True)
         shutil.copy2(ROOT / "macos/Resources/AppIcon.icns", resources / "AppIcon.icns")

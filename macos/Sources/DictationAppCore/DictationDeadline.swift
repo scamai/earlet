@@ -258,6 +258,9 @@ extension DictationModel {
         var cancelReason: CancelReason?
         /// When the hold began, for the double-tap window check at release.
         var startedAt: TimeInterval = 0
+        /// The mouse button started this hold, not the hold key: only the
+        /// button's release ends it, and the shortcut rule never applies.
+        var byMouse = false
         /// A quick release waiting out the double-tap window: a second press
         /// within it turns this hold into a latch instead of a transcription.
         var tapParked = false

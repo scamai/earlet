@@ -26,8 +26,9 @@ Windows uses one native content column, 520 × 600 DIP at first and at least
 Mac's order ([Window layout](design-macos.md#window-layout)), though the rows
 of the shortcut part do not: the Mac has the hold-key picker, its caution, the
 how-to line, then Language as a section of its own, where Windows has the
-how-to line, the pickers each beside its label (hold key, language, and the
-hands-free silence stop the Mac has not got), then the caution. In order: the
+how-to line, the pickers each beside its label (hold key, mouse button,
+language, and the hands-free silence stop the Mac has not got), then the
+caution. In order: the
 status header (below);
 the Saved recording section, while a take is kept
 ([Long takes are never lost](#long-takes-are-never-lost));
@@ -38,7 +39,8 @@ Windows is not blocking the microphone; a line that explains the shortcut
 listening.", the Mac's words, with "Earlet can't hear Right Ctrl while an
 administrator window is in front." after it while one is;
 [When the hold key cannot be heard](#when-the-hold-key-cannot-be-heard)); the
-hold-key and language pickers
+hold-key picker, the mouse button picker under it with its line (below), and
+the language picker
 (language: Automatic first, then the Mac's ten, each also named in its own
 language; a change applies at the next hold without restarting the speech
 engine, as on the Mac. Unlike the Mac, whose picker stays live and fixes the
@@ -56,6 +58,34 @@ Earlet when I sign in" with its note (below); Troubleshooting, closed
 (below); and the footer, last. Buttons keep the OS focus, pressed and disabled
 states. The order and the header were built on 2026-10-09 (PDT) and are tested on
 Linux only; no one has seen this window on Windows.
+
+**The mouse button** ("Mouse butto_n:", the one access key no other control
+in the window uses) starts a dictation beside the hold key: No mouse button,
+the default; Mouse button 4 (back); Mouse button 5 (forward). Hold the button
+to talk, or click it (a press up to 300 ms) to keep dictating until the next
+press, which stops it on the press; Escape still cancels. The line under the
+picker says how it is used and what it costs. The hook keeps the bound
+button: `LowLevelHoldKeyRegistration` installs a `WH_MOUSE_LL` hook beside the
+keyboard one only while a button is bound, and returns without
+`CallNextHookEx` for that button's press and for the release of a press it
+saw (`DictationMouseMessages.Swallows`), so the button no longer goes Back or
+Forward while it is chosen; a release whose press it never saw (a press held
+across a re-arm) passes on. Passing the press on, as the first version did,
+would have made every ordinary Back click both navigate away from the field
+and latch the microphone open. The window and the indicator name the button
+whenever it holds the dictation ("Enabled. Hold Right Ctrl or mouse button 4
+in a text field.", "Listening… Release mouse button 4 to insert.", "Dictating.
+Click mouse button 4 again to stop.", "Click mouse button 4 to stop" on the
+indicator): a click's latch ends only on the button, since Space, Enter and
+the hold key end the keyboard's own latch, and the line does not name them.
+The choice is saved as `mouse_button` ("none", "button4", "button5"; anything
+else reads as none) and re-arms the hooks at once while dictation is on, as a
+new hold key does; the picker is disabled while a dictation runs. When
+Windows refuses the mouse hook, dictation still enables on the key and the
+line under the picker ends "Windows did not let Earlet listen to the mouse,
+so the mouse button does nothing until dictation is turned off and on
+again." Tested on the fakes and on the hook's decision functions only; the
+swallow and a physical side button have not been tried on Windows.
 
 **The status header** is the Mac's
 ([Status header and menu bar glyph](design-macos.md#status-header-and-menu-bar-glyph)):
@@ -114,8 +144,8 @@ nothing is recording. The microphone's sentence and the hook watch's share
 one line, the microphone first, under the headline of whichever outranks
 (tested on Linux, `WindowHeaderIntegrationTests`).
 
-A choice made in the window that could not be saved (the hold key, the
-language, the hands-free silence stop, "Learn from my corrections") still
+A choice made in the window that could not be saved (the hold key, the mouse
+button, the language, the hands-free silence stop, "Learn from my corrections") still
 applies for this run, and the
 status line says it will reset when Earlet restarts. A `settings.json` that
 cannot be read or does not parse is never overwritten: the run uses the

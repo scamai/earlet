@@ -47,6 +47,13 @@ namespace Dictation.Infrastructure;
 /// </para>
 ///
 /// <para>
+/// The mouse hook, installed only when a side button is bound, is the
+/// opposite: it swallows that button's press and the release of a press it
+/// saw, because Back or Forward underneath a dictation would take the user
+/// away from the field (see <c>MouseHookProc</c>).
+/// </para>
+///
+/// <para>
 /// <b>Threading.</b> <c>SetWindowsHookEx(WH_KEYBOARD_LL)</c> delivers on the
 /// thread that installed it, and only while that thread pumps messages — so
 /// this must be constructed and registered from the WPF dispatcher thread, the
@@ -79,9 +86,10 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
     /// <see cref="HoldKeyState"/> now, so they can be driven from a test.
     /// What is left here is marshalling: read a virtual key out of an
     /// <c>lParam</c>, hand it and the message over, and act on the answer.
-    /// That is the same split macOS made for <c>MouseHoldOrClickState</c>, for
-    /// the same reason — this is where every dictation begins, and a
-    /// regression here removes the feature rather than degrading it.
+    /// That is the same split as <see cref="MouseHoldOrClickState"/> for the
+    /// mouse button, for the same reason — this is where every dictation
+    /// begins, and a regression here removes the feature rather than
+    /// degrading it.
     /// </remarks>
     private readonly HoldKeyState _state;
 
@@ -475,11 +483,13 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
     /// <summary>
     /// Whether the hook consumes the event <paramref name="transition"/> was
     /// decided for — returns non-zero without calling <c>CallNextHookEx</c>.
-    /// True only for <see cref="HoldKeyTransition.Swallow"/>, which only the
-    /// hands-free stop keys produce, and only while a latch records.
+    /// True only for <see cref="HoldKeyTransition.Swallow"/>, which the
+    /// hands-free stop keys produce while a latch records, and the bound
+    /// mouse button's press and tracked release (<see cref="ObserveMouse"/>).
     /// </summary>
-    /// <remarks>Public and static so the rule <c>HookProc</c> acts on can be
-    /// asserted without a hook, as <see cref="ObserveKeyboard"/> is.</remarks>
+    /// <remarks>Public and static so the rule <c>HookProc</c> and
+    /// <c>MouseHookProc</c> act on can be asserted without a hook, as
+    /// <see cref="ObserveKeyboard"/> is.</remarks>
     public static bool Consumes(HoldKeyTransition transition) =>
         (transition & HoldKeyTransition.Swallow) != 0;
 
@@ -490,6 +500,22 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
     /// mode.
     /// </summary>
     public bool IsLatched => _state.IsLatched || (_mouse?.IsLatched ?? false);
+
+    /// <summary>
+    /// Whether the mouse button is what holds the dictation open right now:
+    /// pressed, or latched by a click. False with no button bound.
+    /// </summary>
+    /// <remarks>The window and the indicator name the control the user is
+    /// actually holding with this; <see cref="IsKeyDown"/> answers for both
+    /// at once.</remarks>
+    public bool MouseHolds => _mouse?.IsHeld ?? false;
+
+    /// <summary>
+    /// Whether a click on the mouse button latched the dictation. Its stop is
+    /// another press of the button: Space, Enter and the hold key end only
+    /// the keyboard's own latch.
+    /// </summary>
+    public bool MouseLatched => _mouse?.IsLatched ?? false;
 
     /// <summary>
     /// Whether the most recently completed KEY hold was chorded — another key
@@ -665,7 +691,7 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
                 // records. Consumed, so the focused app never sees it; and not
                 // reported to the keyboard-origin feed below, because it was
                 // not an edit to anything.
-                return ConsumedKey;
+                return ConsumedEvent;
             }
 
             // loop-v2 keyboard-origin feed: two cheap user32 calls and one
@@ -685,9 +711,9 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
         return CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
     }
 
-    /// <summary>What a low-level keyboard hook returns to consume an event:
-    /// any non-zero value, without calling <c>CallNextHookEx</c>.</summary>
-    private static readonly IntPtr ConsumedKey = new(1);
+    /// <summary>What a low-level hook, keyboard or mouse, returns to consume
+    /// an event: any non-zero value, without calling <c>CallNextHookEx</c>.</summary>
+    private static readonly IntPtr ConsumedEvent = new(1);
 
     // ─── Event time ─────────────────────────────────────────────────────
 
@@ -820,10 +846,14 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
     /// everything that is not an X-button transition, which is all of it.
     /// </para>
     /// <para>
-    /// It observes and never swallows, as the keyboard hook treats its
-    /// trigger. Button 4 still goes Back; the caution copy beside the picker
-    /// says so, because a user who bound it and then lost Back would have a
-    /// broken mouse rather than a shortcut.
+    /// <b>Unlike the keyboard trigger, the bound button is swallowed.</b> A
+    /// bare modifier has to keep its meaning (Alt+Tab, Ctrl+C), but a side
+    /// button's meaning is Back or Forward, and a quick click on it latches a
+    /// dictation: passed on, every Back would navigate away from the field and
+    /// leave the microphone open behind it. Its press, and the release of a
+    /// press this hook saw, return non-zero without <c>CallNextHookEx</c>
+    /// (<see cref="DictationMouseMessages.Swallows"/>); the caution beside the
+    /// picker says what the button stops doing.
     /// </para>
     /// </remarks>
     private IntPtr MouseHookProc(int code, IntPtr wParam, IntPtr lParam)
@@ -835,9 +865,13 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
             // the message is examined only because Marshal.ReadInt32 is cheaper
             // than a second branch; ObserveMouse discards it for every message
             // that is not an X-button transition, which is all of them.
-            ObserveMouse(
+            var transition = ObserveMouse(
                 (int)wParam, unchecked((uint)Marshal.ReadInt32(lParam, 8)),
                 Environment.TickCount64);
+            if (Consumes(transition))
+            {
+                return ConsumedEvent;
+            }
         }
 
         return CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
@@ -852,9 +886,12 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
     /// </param>
     /// <param name="nowMs">A monotonic millisecond clock.</param>
     /// <returns>
-    /// What the gesture decided, if anything — <see cref="HoldKeyTransition"/>
-    /// for symmetry with the keyboard path, though nothing acts on it here: the
-    /// poll tick reads <see cref="IsKeyDown"/> the same way it does for keys.
+    /// What the gesture decided, if anything, with
+    /// <see cref="HoldKeyTransition.Swallow"/> added when the hook must keep
+    /// the event (<see cref="DictationMouseMessages.Swallows"/>) — the one part
+    /// <c>MouseHookProc</c> acts on, through <see cref="Consumes"/>, as the
+    /// keyboard hook does. The poll tick reads <see cref="IsKeyDown"/> for the
+    /// rest, the same way it does for keys.
     /// </returns>
     /// <remarks>
     /// <b>Public so the wiring can be asserted.</b> <c>MouseHookProc</c> is
@@ -885,7 +922,11 @@ public sealed partial class LowLevelHoldKeyRegistration : IHotkeyRegistration, I
             return HoldKeyTransition.None;
         }
 
-        return edge.Value ? _mouse.Down(nowMs) : _mouse.Up(nowMs);
+        // Decided before the gesture sees the edge: a release is kept only when
+        // the gesture had tracked its press, which the edge is about to clear.
+        var swallow = DictationMouseMessages.Swallows(message, mouseData, MouseButton, _mouse.IsDown);
+        var transition = edge.Value ? _mouse.Down(nowMs) : _mouse.Up(nowMs);
+        return swallow ? transition | HoldKeyTransition.Swallow : transition;
     }
 
     private delegate IntPtr LowLevelKeyboardProc(int code, IntPtr wParam, IntPtr lParam);

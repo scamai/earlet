@@ -145,6 +145,12 @@ public sealed partial class DictationController : IDisposable
     /// <summary>The hold key in effect.</summary>
     public HotkeyBinding HoldKey => _holdKey;
 
+    /// <summary>The mouse buttons the picker offers, in order: none first.</summary>
+    public IReadOnlyList<DictationMouseButtons.Choice> MouseButtonChoices => DictationMouseButtons.Choices;
+
+    /// <summary>The side button that also starts a dictation, or none.</summary>
+    public DictationMouseButton MouseButton => _settings.MouseButton;
+
     /// <summary>The languages the picker offers, in order.</summary>
     public IReadOnlyList<SpeechLanguage> LanguageChoices => SpeechLanguages.Choices;
 
@@ -173,10 +179,11 @@ public sealed partial class DictationController : IDisposable
         // What the last run left: a take a crash or a quit left, offered now.
         OfferSavedTakeAtLaunch();
         _log.LogInformation(
-            "Hold key {Key}{Source}; language {Language}; "
+            "Hold key {Key}{Source}; mouse button {MouseButton}; language {Language}; "
             + "enabled last time: {Enabled}; started at sign-in: {AtLogin}; learning from corrections: {Learning}",
             _holdKey.Display,
             _holdKeyFromEnvironment ? $" (from {DictationEnvironment.HoldKey})" : string.Empty,
+            DictationMouseButtons.Id(_settings.MouseButton),
             _settings.Language ?? "automatic",
             _settings.Enabled,
             atLogin,
@@ -232,17 +239,64 @@ public sealed partial class DictationController : IDisposable
 
             // Under a blocked microphone the new key cannot be used either:
             // the blocked sentence stays, with its buttons.
-            status ??= ReadyUnlessBlocked(DictationCopy.Armed(_holdKey));
+            status ??= ReadyUnlessBlocked(ArmedLine);
         }
 
         Render(status);
     }
+
+    /// <summary>
+    /// Let <paramref name="button"/> start a dictation too from now on —
+    /// hold to talk, click to latch — or none, and remember it. Re-arms the
+    /// hooks at once when dictation is on, exactly as a new hold key does: the
+    /// mouse hook is installed with the keyboard one, and only when a button
+    /// is bound.
+    /// </summary>
+    /// <remarks>
+    /// Ignored while enabling and while a dictation is running, for the hold
+    /// key's reason: a change under a held button would tear the hook down
+    /// mid-sentence. A value the picker does not offer is ignored too.
+    /// </remarks>
+    public void ChooseMouseButton(DictationMouseButton button)
+    {
+        if (!CanChooseMouseButton
+            || button == _settings.MouseButton
+            || !DictationMouseButtons.Choices.Any(c => c.Value == button))
+        {
+            return;
+        }
+
+        _settings = _settings with { MouseButton = button };
+        var saved = _settingsStore.Save(_settings);
+        _log.LogInformation(
+            "Mouse button changed to {Button} (saved: {Saved})", DictationMouseButtons.Id(button), saved);
+
+        DictationStatus? status = saved ? null : new DictationStatus(DictationCopy.MouseButtonNotSaved);
+        if (_session is not null)
+        {
+            StopTrigger();
+            if (!Arm())
+            {
+                Fail(DictationCopy.ShortcutRefused);
+                return;
+            }
+
+            status ??= ReadyUnlessBlocked(ArmedLine);
+        }
+
+        Render(status);
+    }
+
+    /// <summary>The armed sentence, naming the bound mouse button with the key.</summary>
+    private string ArmedLine => DictationCopy.Armed(_holdKey, _settings.MouseButton);
 
     private bool AtRest =>
         !_disposed && !_enabling && !_closePending
         && (_session is null || _session.State is DictationState.Idle or DictationState.Armed);
 
     private bool CanChooseHoldKey => AtRest && !_holdKeyFromEnvironment;
+
+    private bool CanChooseMouseButton => AtRest;
 
     private bool CanChooseLanguage => AtRest && !_restarting;
 
@@ -440,7 +494,7 @@ public sealed partial class DictationController : IDisposable
             // replaces whatever an earlier run of dictation learned.
             _microphoneBlocked = false;
             var blocked = DictationCopy.ForMicrophone(_platform.MicrophoneAccess.Probe());
-            Render(blocked ?? new DictationStatus(DictationCopy.Armed(_holdKey)));
+            Render(blocked ?? new DictationStatus(ArmedLine));
             if (_revealOnFailure && blocked is not null)
             {
                 // On, but hidden — enabled from the notification area, started

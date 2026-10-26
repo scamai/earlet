@@ -39,8 +39,9 @@ def fat(*slices):
     return bytes(image)
 
 
-def complete_app(root, mode="complete-preview"):
-    """An Earlet.app laid out as tools/package.py lays out a complete package."""
+def complete_app(root, mode="complete-preview", sparkle=False):
+    """An Earlet.app laid out as tools/package.py lays out a complete package;
+    with ``sparkle``, also the updater framework the packager embeds."""
     app = root / "input/Earlet.app"
     (app / "Contents/MacOS").mkdir(parents=True)
     with (app / "Contents/Info.plist").open("wb") as stream:
@@ -58,20 +59,36 @@ def complete_app(root, mode="complete-preview"):
     (package / "Thing.class").write_bytes(b"\xca\xfe\xba\xbe\x00\x00\x00\x41" + bytes(64))
     (resources / "python/lib/libpython3.11.dylib").write_bytes(thin(MH_DYLIB))
     (resources / "package-mode.json").write_text(json.dumps({"mode": mode}))
+    if sparkle:
+        version = app / "Contents/Frameworks/Sparkle.framework/Versions/B"
+        (version / "Updater.app/Contents/MacOS").mkdir(parents=True)
+        (version / "Sparkle").write_bytes(thin(MH_DYLIB))
+        (version / "Autoupdate").write_bytes(thin(MH_EXECUTE))
+        (version / "Updater.app/Contents/MacOS/Updater").write_bytes(thin(MH_EXECUTE))
+        (version.parent / "Current").symlink_to("B")
+        (version.parent.parent / "Sparkle").symlink_to("Versions/Current/Sparkle")
     return app
 
 
 class FakeMac:
     """Records every command; acts out the few whose files later steps read."""
 
-    def __init__(self, status="Accepted", hardened=True):
+    def __init__(self, status="Accepted", hardened=True, unsigned_feed=False):
         self.commands, self.status, self.hardened = [], status, hardened
+        self.unsigned_feed, self.no_key, self.appcast_input = unsigned_feed, False, None
 
     def __call__(self, command, **kwargs):
         self.commands.append(command)
         stdout = stderr = ""
-        if command[0] == "cp":
+        if command[0] == "cp" and Path(command[-2]).is_dir():
             shutil.copytree(command[-2], command[-1], symlinks=True)
+        elif command[0] == "cp":
+            shutil.copy2(command[-2], command[-1])
+        elif Path(command[0]).name == "generate_appcast":
+            self.generate_appcast(command)
+            self.appcast_input = kwargs.get("input")
+        elif Path(command[0]).name == "generate_keys":
+            Path(command[-1]).write_text("" if self.no_key else "c2VjcmV0LXNlZWQ=\n")
         elif command[0] in ("ditto", "hdiutil"):
             Path(command[-1]).write_bytes(command[0].encode())
         elif command[:3] == ["xcrun", "notarytool", "submit"]:
@@ -81,6 +98,19 @@ class FakeMac:
         elif command[:2] == ["codesign", "--display"]:
             stderr = "flags=0x10000(runtime)\nTimestamp=25 Oct 2026" if self.hardened else "flags=0x0(none)"
         return self.finish(command, 0, stdout, stderr, kwargs)
+
+    def generate_appcast(self, command):
+        """Writes what Sparkle's tool writes: a delta from each older image and a feed naming them."""
+        updates = Path(command[-1])
+        prefix = command[command.index("--download-url-prefix") + 1]
+        images = sorted(updates.glob("*.dmg"))
+        newest, older = images[-1], images[:-1]
+        deltas = [updates / f"Earlet2-{old.stem}.delta" for old in older]
+        for delta in deltas:
+            delta.write_bytes(b"delta")
+        signature = "" if self.unsigned_feed else ' sparkle:edSignature="c2lnbmF0dXJl"'
+        items = "".join(f'<enclosure url="{prefix}{path.name}"{signature}/>' for path in [newest, *deltas])
+        Path(command[command.index("-o") + 1]).write_text(f"<rss><channel><item>{items}</item></channel></rss>")
 
     @staticmethod
     def finish(command, returncode, stdout, stderr, kwargs):
@@ -108,15 +138,15 @@ class FakeMac:
 
 def arguments(tmp_path, app, **overrides):
     values = {"app": app, "output": tmp_path / "release", "identity": IDENTITY,
-              "notary_profile": "example-profile", "no_notarize": False}
+              "notary_profile": "example-profile", "no_notarize": False, "appcast": False, "previous_dmg": []}
     values.update(overrides)
     return SimpleNamespace(**values)
 
 
-def released(tmp_path, mac=None, **overrides):
+def released(tmp_path, mac=None, sparkle=False, module=None, **overrides):
     mac = mac or FakeMac()
-    app = complete_app(tmp_path)
-    dmg = tool("release_macos").release(arguments(tmp_path, app, **overrides), mac)
+    app = complete_app(tmp_path, sparkle=sparkle)
+    dmg = (module or tool("release_macos")).release(arguments(tmp_path, app, **overrides), mac)
     return mac, app, dmg
 
 
@@ -286,3 +316,80 @@ def test_only_the_app_may_record_and_only_the_interpreter_relaxes_code_signing()
                       "com.apple.security.cs.disable-library-validation": True}
     for text in ((ROOT / "macos/Earlet.entitlements").read_text(), (ROOT / "macos/EarletWorker.entitlements").read_text()):
         assert "<!--" not in text  # the kernel's entitlement parser rejects comments
+
+
+# ─── The updater framework ───────────────────────────────────────────────────
+
+def test_sparkle_is_sealed_inside_out_before_the_app_with_no_worker_entitlements(tmp_path):
+    mac, _app, _dmg = released(tmp_path, sparkle=True)
+    signed = [(path.split("dmg-root/Earlet.app/")[-1], entitlements) for path, entitlements in mac.signed()]
+    sparkle = [(path, entitlements) for path, entitlements in signed if "Sparkle.framework" in path]
+    assert sparkle == [
+        ("Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater", None),
+        ("Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate", None),
+        ("Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle", None),
+        ("Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app", None),
+        ("Contents/Frameworks/Sparkle.framework", None),
+    ]  # never again through Versions/Current
+    order = [path for path, _entitlements in signed]
+    assert order.index("Contents/Frameworks/Sparkle.framework") < order.index(order[-1])
+    assert order[-1].endswith("Earlet.app")
+    receipt = json.loads((tmp_path / "release/release-receipt.json").read_text())
+    assert receipt["nested_bundles"] == ["Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app",
+                                         "Contents/Frameworks/Sparkle.framework"]
+
+
+@pytest.fixture
+def appcast_tool(tmp_path):
+    """The release tool, its Sparkle tools replaced by a stand-in the fake Mac acts out."""
+    bin_dir = tmp_path / "sparkle-bin"
+    bin_dir.mkdir()
+    (bin_dir / "generate_appcast").write_text("#!/bin/sh\n")
+    module = tool("release_macos")
+    module.SPARKLE_BIN = bin_dir
+    return module
+
+
+def test_the_feed_names_only_this_release_and_its_deltas(tmp_path, appcast_tool):
+    old = tmp_path / "Earlet-0.0.9-macos-arm64.dmg"
+    old.write_bytes(b"previous image")
+    mac, _app, dmg = released(tmp_path, sparkle=True, module=appcast_tool, appcast=True, previous_dmg=[old])
+    command = next(c for c in mac.commands if Path(c[0]).name == "generate_appcast")
+    assert command[0] == str(appcast_tool.SPARKLE_BIN / "generate_appcast")
+    option = lambda name: command[command.index(name) + 1]
+    keys = next(c for c in mac.commands if Path(c[0]).name == "generate_keys")
+    assert keys[1:3] == ["--account", json.loads((ROOT / "product.json").read_text())["updates"]["keychain_account"]]
+    # The key reaches generate_appcast on standard input, never as an argument
+    # and never left in a file.
+    assert option("--ed-key-file") == "-" and mac.appcast_input == "c2VjcmV0LXNlZWQ="
+    assert not Path(keys[-1]).parent.exists()
+    assert "c2VjcmV0LXNlZWQ=" not in " ".join(" ".join(c) for c in mac.commands)
+    assert option("--download-url-prefix") == "https://github.com/scamai/earlet/releases/download/v0.1.0/"
+    assert option("--maximum-versions") == "1"
+    receipt = json.loads((tmp_path / "release/release-receipt.json").read_text())["appcast"]
+    names = [asset["name"] for asset in receipt["assets"]]
+    assert names == sorted(["appcast.xml", dmg.name, f"Earlet2-{old.stem}.delta"])
+    assert old.name not in names and receipt["deltas_from"] == [old.name]
+    assert receipt["publish"][:4] == ["gh", "release", "create", "v0.1.0"]
+    assert "--repo" in receipt["publish"] and "github.com/scamai/earlet" in receipt["publish"]
+
+
+def test_an_unsigned_feed_stops_the_release(tmp_path, appcast_tool):
+    with pytest.raises(RuntimeError, match="unsigned"):
+        released(tmp_path, FakeMac(unsigned_feed=True), sparkle=True, module=appcast_tool, appcast=True)
+
+
+def test_a_feed_without_sparkles_tools_or_with_a_bad_previous_image_is_refused(tmp_path, appcast_tool):
+    with pytest.raises(ValueError, match="not a previous release image"):
+        released(tmp_path, sparkle=True, module=appcast_tool, appcast=True, previous_dmg=[tmp_path / "missing.dmg"])
+    appcast_tool.SPARKLE_BIN = tmp_path / "nowhere"
+    with pytest.raises(ValueError, match="resolve the Swift package"):
+        released(tmp_path / "again", sparkle=True, module=appcast_tool, appcast=True)
+
+
+def test_a_keychain_without_the_signing_key_stops_the_release(tmp_path, appcast_tool):
+    mac = FakeMac()
+    mac.no_key = True
+    with pytest.raises(RuntimeError, match="no update signing key"):
+        released(tmp_path, mac, sparkle=True, module=appcast_tool, appcast=True)
+

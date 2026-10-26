@@ -15,8 +15,9 @@ welcome and handled first.
 
 ## Supported versions
 
-Only the latest 0.x release gets security fixes. The first, 0.1.0, is a
-notarized download for Apple Silicon Macs. The Windows app is source only:
+Only the latest 0.x release gets security fixes. The latest, 0.2.0, is a
+notarized download for Apple Silicon Macs that updates itself from then on;
+a copy of 0.1.0 has to be replaced by hand once. The Windows app is source only:
 it has been built and tested on Linux and has never run on Windows hardware.
 Security fixes land on the default branch first.
 
@@ -61,7 +62,15 @@ speech worker (`runtime/`) and the packager (`tools/package.py`). These parts
 carry the most risk:
 
 - **Key listeners.** On macOS a listen-only event tap watches modifier keys
-  for the hold key (this needs Input Monitoring). While a dictation runs, a
+  for the hold key (this needs Input Monitoring). A key combination the user
+  records as the hold key is registered with macOS as a hot key instead, and
+  the app is told about that combination only. While Settings records a hold
+  key or a mouse button, a monitor local to Earlet's window reads the next key
+  code, modifier change or extra mouse button pressed there, and nothing typed
+  or clicked in other apps. When the user
+  chooses a mouse side button, an active event tap receives the extra mouse
+  buttons' presses (never left or right click) and consumes the chosen
+  button's. While a dictation runs, a
   key-down monitor reads key codes, never characters, to tell a shortcut,
   Escape or a stop key apart. Only while a hands-free latch records does an
   active event tap consume the stop keys (Space, Return, keypad Enter). On
@@ -167,10 +176,18 @@ carry the most risk:
   The `DICTATION_PYTHON`, `DICTATION_RUNTIME` and `DICTATION_MODEL_DIR`
   environment variables can point the worker at another interpreter, runtime
   or model: on macOS only in a debug build (a release app keeps them inside
-  its bundle), on Windows in every build. Network traffic has not been
-  measured, so this project makes no claim yet about whether the apps
-  connect to the network. An outbound connection you did not expect is
-  worth reporting.
+  its bundle), on Windows in every build.
+- The macOS app checks for updates once a day: one HTTPS request to
+  github.com for the release feed, which shows GitHub the address it comes
+  from and Earlet's version; Settings → Update Earlet automatically turns it
+  off. It installs an update only when the archive's EdDSA signature matches
+  the public key built into the app and the new app is signed by the same
+  Developer ID team, and it installs it in place, so the app's permissions
+  and keychain item carry over
+  ([Updates](docs/design-macos.md#updates)). One measured check opened that
+  single connection and no other in the twelve seconds around it; that is
+  one observation, and the Windows app's traffic has not been measured. An
+  outbound connection you did not expect is worth reporting.
 - On Windows the keyboard hook does not receive keys typed into a window
   running as administrator (Windows' user interface privilege isolation), so
   the app can neither hear the hold key nor type there. That is a limit of

@@ -74,6 +74,13 @@ DECODE_COOLDOWN_S = 0.8
 #: Minimum new audio since the last decode before another is worth it.
 MIN_NEW_AUDIO_S = 0.5
 
+#: The paced Dictation preview's smallest decode window. On the Mac the
+#: preview's first decode came at 0.6 s of audio: too short to hold a word,
+#: it returned noise or nothing, and on quiet speech it ran Whisper's whole
+#: temperature ladder (about 3-4 s here) while the final transcription of a
+#: short hold waited behind it for the engine.
+PREVIEW_MIN_WINDOW_S = 1.5
+
 #: Peak below this = digital silence (muted mic); skip the NPU entirely.
 #: Deliberately PEAK, not RMS, and deliberately tiny: FLEURS has real speech
 #: at RMS 0.0004 that an RMS gate silently swallowed (2026-08-18 device run —
@@ -1056,10 +1063,35 @@ class _ChannelStream:
         self._ctx_tail = ""
 
     def configure_preview_pacing(self, enabled: bool) -> None:
-        """Enable the bounded MLX preview scheduler for this channel."""
+        """Enable the bounded MLX preview scheduler for this channel.
+
+        The same switch stops the caption gate tracking a noise floor: a
+        hold-to-talk microphone is already speech in its first window, so a
+        floor seeded there classed every later window of a quiet voice as
+        quiet and the caption never appeared (PartialDisplayGate.track_floor).
+        """
         with self.lock:
             self._preview_pacing = bool(enabled)
             self._preview_next_start = 0.0
+            self.partial_gate.track_floor = not self._preview_pacing
+
+    def _preview_decode_kwargs(self) -> dict:
+        """One temperature-0 pass for the paced Dictation preview.
+
+        Its captions are display-only, and a decode already on the engine
+        cannot be stopped, so the final transcription of the hold waits for
+        all of it. The ladder's extra passes are what made that wait long;
+        every other channel keeps the engine default."""
+        if not self._preview_pacing:
+            return {}
+        try:
+            import inspect
+            if "temperature" in inspect.signature(
+                    self.engine.transcribe).parameters:
+                return {"temperature": 0.0}
+        except (TypeError, ValueError):
+            pass
+        return {}
 
     def _preview_ready_locked(self) -> bool:
         return (not self._preview_pacing
@@ -1330,6 +1362,8 @@ class _ChannelStream:
         dur = self._hist_len / SAMPLE_RATE - self.seg_base
         if dur - self.decoded_upto < MIN_NEW_AUDIO_S:
             return False
+        if self._preview_pacing and dur < PREVIEW_MIN_WINDOW_S:
+            return False
         if time.monotonic() - self.last_decode_end < DECODE_COOLDOWN_S:
             return False
         # Peak-check the undecoded tail on a VIEW. The old form copied the
@@ -1516,17 +1550,20 @@ class _ChannelStream:
                     try:
                         r = self._transcribe_without_personalization(
                             clip, language=language, beam_size=self.beam_size,
-                            bias_phrases=self.bias_phrases)
+                            bias_phrases=self.bias_phrases,
+                            **self._preview_decode_kwargs())
                     except Exception:
                         _dbg("LIVE-BEAM failed -> greedy fallback\n"
                              + traceback.format_exc())
                         r = self._transcribe_without_personalization(
                             clip, language=language,
-                            initial_prompt=self._prompt_for_decode())
+                            initial_prompt=self._prompt_for_decode(),
+                            **self._preview_decode_kwargs())
                 else:
                     r = self._transcribe_without_personalization(
                         clip, language=language,
-                        initial_prompt=self._prompt_for_decode())
+                        initial_prompt=self._prompt_for_decode(),
+                        **self._preview_decode_kwargs())
         except Exception:
             _dbg("DECODE ERROR\n" + traceback.format_exc())
             raise

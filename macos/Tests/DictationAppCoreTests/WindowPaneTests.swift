@@ -41,8 +41,8 @@ struct WindowPaneTests {
             .rightCommand: "Right ⌘", .rightOption: "Right ⌥", .leftOption: "Left ⌥",
             .rightControl: "Right ⌃", .leftControl: "Left ⌃", .rightShift: "Right ⇧", .function: "fn",
         ]
-        #expect(DictationHoldKey.allCases.count == expected.count)
-        for key in DictationHoldKey.allCases {
+        #expect(DictationHoldKey.presets.count == expected.count)
+        for key in DictationHoldKey.presets {
             #expect(key.keycapLabel == expected[key], "\(key)")
         }
     }

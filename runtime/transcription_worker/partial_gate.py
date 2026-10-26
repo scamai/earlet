@@ -102,12 +102,20 @@ class PartialDisplayGate:
         self.tokens = sorted({
             t for p in phrases for t in _SPLIT.split(str(p).lower()) if len(t) >= 2})
         self._noise_floor: float | None = None
+        #: False on a hold-to-talk microphone (the Dictation preview): its
+        #: first window is already the user's voice, so only the absolute
+        #: silence backstop applies. Tracking a floor seeded on speech held
+        #: every caption of a quiet speaker (window RMS about 0.005 against a
+        #: 2.5 x 0.006 threshold).
+        self.track_floor = True
 
     # -- energy -----------------------------------------------------------
     def note_window_rms(self, rms: float) -> bool:
         """Feed one decode window's newest-audio RMS; returns True when the
         window is QUIET (no speech-RMS above the established floor)."""
         rms = max(float(rms), 0.0)
+        if not self.track_floor:
+            return rms < ABS_SILENCE_RMS
         if self._noise_floor is None:
             self._noise_floor = min(rms, NOISE_FLOOR_CAP)
         elif rms < self._noise_floor:

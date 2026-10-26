@@ -503,8 +503,11 @@ seconds (the edit has *settled*: 3 s on Windows, 4 s on macOS), then keep
 watching within the original 90-second deadline. Each revision uses the same
 insertion ID: editing one letter later replaces the first contribution;
 reverting the draft retracts it. Unchanged polls add no evidence. No Send
-action is required. Sending or clearing the field before settlement may lose
-the unfinished edit. A fix still being typed when the next dictation is
+action is required. On Windows, sending or clearing the field before
+settlement may lose the unfinished edit. On macOS, when the whole field empties
+(a chat composer clears itself when it sends), the last span read before it is
+published as one more revision if it had been still for at least 1 s; an
+edit still being typed when the field emptied is lost. A fix still being typed when the next dictation is
 released is not committed (a press that ends as a shortcut, a refusal or a
 cancel leaves the watch running).
 
@@ -521,20 +524,31 @@ Switching learning off, pausing or quitting while a paste is being prepared or
 inserted invalidates that attempt: it is never watched, even if learning is
 switched on again before it ends.
 
-**Witty running Codex:** current and legacy public release identities select
-the same narrow adapter. Its AXValue is the whole terminal screen and it does
-not emit text-change notifications. A dedicated adapter isolates the final
-`› ` composer above a recognized Codex footer, strips the empty placeholder
-and canonicalizes whitespace before the same unique-insertion proof. Both the
-busy queue-hint footer and the idle draft's context-only footer (a 0–100
-percent indicator with an optional warning count) are recognized. It polls only
-that focused, admitted field every 600 ms, within the existing 90 s window.
-Changing output above the composer is never an edit to the input. Submission,
-unknown layouts, collapsed pastes/images, clipped drafts, and word-boundary
-changes across display rows stop observation; no whole-screen fallback is
-permitted. A correction at a wrap boundary may therefore be missed. Other
+**Witty running Codex or Claude Code:** current and legacy public release
+identities select the same narrow adapter. Its AXValue is the whole terminal
+screen and it does not emit text-change notifications. A dedicated adapter
+isolates one composer and canonicalizes whitespace before the same
+unique-insertion proof: Codex's final `› ` composer above a recognized Codex
+footer (both the busy queue-hint footer and the idle draft's context-only
+footer, a 0–100 percent indicator with an optional warning count), or Claude
+Code's `❯` composer between two rules as wide as the terminal with at most
+eight indented status rows below. The empty placeholders (Codex's prompt,
+Claude Code's `Try "…"` and `Press up to …` hints) read as empty. Claude Code
+wraps its own rows four columns short of the terminal: a break after a full
+row that touches a Chinese, Japanese or Korean character or fullwidth
+punctuation joins without a space (those runs wrap anywhere), and any other
+break is the space the wrap consumed. In tmux, panes are read separately
+between borders that hold their column on every row, and the value joins
+every pane's composer, so the proof also identifies the pane; stacked panes
+without a vertical border fail closed. The adapter polls only that focused,
+admitted field every 600 ms, within the existing 90 s window. Changing output
+above a composer is never an edit to the input. Submission, unknown layouts,
+collapsed pastes/images, clipped drafts, and changes to an ambiguous row
+boundary (any Codex boundary; a Claude Code boundary after a full row that
+touches a Latin character) stop observation; no whole-screen fallback is
+permitted. A correction at such a boundary may therefore be missed. Other
 terminal programs and hosts have no adapter. These are local parsing rules,
-not a dependency on Witty or Codex code or data.
+not a dependency on Witty, Codex, Claude Code or tmux code or data.
 
 Other terminals usually expose no editable text span, so corrections made there
 are not seen. Real-device coverage depends on the focused application's

@@ -25,6 +25,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,6 +101,25 @@ def nested_code(app: Path) -> list[tuple[Path, bool]]:
     return sorted(found, key=lambda item: (-len(item[0].parts), str(item[0])))
 
 
+def nested_bundles(app: Path) -> list[Path]:
+    """Bundles inside ``app`` (Sparkle.framework and its Updater.app), deepest first.
+
+    Their executables are signed with the other Mach-O files; each bundle is
+    then signed as a whole, so its resources are sealed before its parent's.
+    A path reached through a symlink (a framework's Versions/Current) is the
+    same bundle again and is skipped.
+    """
+    found = []
+    for path in app.rglob("*"):
+        if path.suffix not in (".framework", ".app", ".xpc", ".bundle") or not path.is_dir():
+            continue
+        relative = path.relative_to(app)
+        if any((app / Path(*relative.parts[:depth])).is_symlink() for depth in range(1, len(relative.parts) + 1)):
+            continue
+        found.append(path)
+    return sorted(found, key=lambda item: (-len(item.parts), str(item)))
+
+
 def main_executable(app: Path) -> Path:
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     return app / "Contents/MacOS" / info["CFBundleExecutable"]
@@ -145,14 +165,21 @@ def codesign(identity: str, path: Path, entitlements: Path | None = None) -> lis
 def sign_app(app: Path, identity: str, runner: Runner = run) -> dict:
     """Sign nested code inside-out, then the app; return counts for the receipt."""
     nested = nested_code(app)
+    resources = app / "Contents/Resources"
     for path, executable in nested:
         # Entitlements belong to processes: the interpreter and the few helper
-        # executables get the worker set, libraries get none.
-        runner(codesign(identity, path, WORKER_ENTITLEMENTS if executable else None))
+        # executables beside it get the worker set; Sparkle's updater helpers
+        # and every library get none.
+        worker = executable and resources in path.parents
+        runner(codesign(identity, path, WORKER_ENTITLEMENTS if worker else None))
+    bundles = nested_bundles(app)
+    for bundle in bundles:
+        runner(codesign(identity, bundle))
     runner(codesign(identity, app, APP_ENTITLEMENTS))
     runner(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)])
     return {"nested_executables": sum(1 for _p, executable in nested if executable),
-            "nested_libraries": sum(1 for _p, executable in nested if not executable)}
+            "nested_libraries": sum(1 for _p, executable in nested if not executable),
+            "nested_bundles": [str(bundle.relative_to(app)) for bundle in bundles]}
 
 
 def check_signed(app: Path, runner: Runner = run) -> None:
@@ -231,6 +258,68 @@ def gatekeeper(app: Path, dmg: Path, runner: Runner = run) -> dict:
     return results
 
 
+# ─── Update feed ─────────────────────────────────────────────────────────────
+
+#: Sparkle's tools, from the version Package.resolved pins.
+SPARKLE_BIN = ROOT / "macos/.build/artifacts/sparkle/Sparkle/bin"
+#: Where every release's files live; the feed's own URL is .../latest/download/appcast.xml.
+RELEASE_DOWNLOADS = "https://github.com/scamai/earlet/releases/download"
+
+
+def make_appcast(dmg: Path, output: Path, version: str, previous: list[Path], account: str,
+                 runner: Runner = run) -> dict:
+    """Write the signed appcast, and a delta from each previous release image, beside ``dmg``.
+
+    The feed keeps only this release: every file it names is an asset of this
+    release's tag, which is what lets GitHub's /releases/latest/download/
+    address serve it. generate_appcast signs with the EdDSA key it finds in
+    the login keychain under ``account``.
+    """
+    tool = SPARKLE_BIN / "generate_appcast"
+    if not tool.is_file():
+        raise ValueError(f"{tool} is missing; resolve the Swift package (swift package resolve) first")
+    key = signing_key(account, runner)
+    updates = output / "updates"
+    updates.mkdir()
+    runner(["cp", "-c", "-p", str(dmg), str(updates / dmg.name)])
+    for old in previous:
+        if not old.is_file() or old.suffix != ".dmg":
+            raise ValueError(f"{old} is not a previous release image")
+        runner(["cp", "-c", "-p", str(old), str(updates / old.name)])
+    runner([str(tool), "--ed-key-file", "-", "--download-url-prefix", f"{RELEASE_DOWNLOADS}/v{version}/",
+            "--maximum-versions", "1", "--maximum-deltas", str(max(1, len(previous))),
+            "-o", str(updates / "appcast.xml"), str(updates)], capture_output=True, input=key)
+    names = [old.name for old in previous]
+    assets = sorted(path for path in updates.iterdir()
+                    if path.is_file() and path.name not in names and path.suffix in (".xml", ".dmg", ".delta"))
+    feed = (updates / "appcast.xml").read_text()
+    missing = [path.name for path in assets if path.suffix != ".xml" and path.name not in feed]
+    if "sparkle:edSignature" not in feed or missing:
+        raise RuntimeError(f"the appcast is unsigned or does not name {missing}")
+    return {"assets": [{"name": path.name, "bytes": path.stat().st_size, "sha256": digest(path)} for path in assets],
+            "deltas_from": names, "account": account,
+            "publish": ["gh", "release", "create", f"v{version}", "--repo", "github.com/scamai/earlet",
+                        *[str(path) for path in assets]]}
+
+
+def signing_key(account: str, runner: Runner = run) -> str:
+    """The EdDSA private key, read from the login keychain by the tool that made it.
+
+    generate_appcast reading the keychain itself can make macOS ask for
+    access (Sparkle's own help says so); generate_keys made the item and reads
+    it silently. It only
+    exports to a new file, so the key passes through one in a directory only
+    this user can open, which is removed before the key is used.
+    """
+    with tempfile.TemporaryDirectory() as private:
+        path = Path(private) / "key"
+        runner([str(SPARKLE_BIN / "generate_keys"), "--account", account, "-x", str(path)], capture_output=True)
+        key = path.read_text().strip()
+    if not key:
+        raise RuntimeError(f"the keychain holds no update signing key for account {account!r}")
+    return key
+
+
 def digest(path: Path) -> str:
     sha = hashlib.sha256()
     with path.open("rb") as stream:
@@ -270,6 +359,9 @@ def release(args: argparse.Namespace, runner: Runner = run) -> Path:
         receipt["gatekeeper"] = gatekeeper(app, dmg, runner)
         receipt["notarized"] = True
     receipt["dmg"] = {"name": dmg.name, "bytes": dmg.stat().st_size, "sha256": digest(dmg)}
+    if args.appcast:
+        account = json.loads((ROOT / "product.json").read_text())["updates"]["keychain_account"]
+        receipt["appcast"] = make_appcast(dmg, args.output, version, args.previous_dmg, account, runner)
     receipt["validation"] = ("signed, notarized and stapled" if receipt["notarized"] else "signed, not notarized") + \
         "; no clean-machine, microphone or insertion acceptance"
     (args.output / "release-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
@@ -284,6 +376,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--notary-profile", default=os.environ.get("DICTATION_NOTARY_PROFILE"))
     parser.add_argument("--no-notarize", action="store_true",
                         help="sign and image only, to check a build before submitting it")
+    parser.add_argument("--appcast", action="store_true",
+                        help="also write the signed update feed and deltas under OUTPUT/updates")
+    parser.add_argument("--previous-dmg", type=Path, action="append", default=[],
+                        help="an earlier release image to make a delta from (repeatable)")
     args = parser.parse_args(argv)
     try:
         dmg = release(args)

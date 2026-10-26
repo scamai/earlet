@@ -20,11 +20,13 @@ struct DictationWindow: View {
     /// Open only when the render mode asks, to draw what is inside.
     private let troubleshootingExpanded: Bool
     private let permissionRecoveryExpanded: Bool
+    private let updater: DictationUpdater?
 
-    init(model: DictationModel, navigation: DictationWindowNavigation = .shared,
+    init(model: DictationModel, navigation: DictationWindowNavigation = .shared, updater: DictationUpdater? = nil,
          troubleshootingExpanded: Bool = false, permissionRecoveryExpanded: Bool = false) {
         self.model = model
         self.navigation = navigation
+        self.updater = updater
         self.troubleshootingExpanded = troubleshootingExpanded
         self.permissionRecoveryExpanded = permissionRecoveryExpanded
     }
@@ -43,7 +45,7 @@ struct DictationWindow: View {
                 case .vocabulary:
                     DictationVocabularyPane(model: model, vocabulary: model.vocabulary)
                 case .settings:
-                    DictationSettingsPane(model: model, history: model.history,
+                    DictationSettingsPane(model: model, history: model.history, updater: updater,
                                           troubleshootingExpanded: troubleshootingExpanded)
                 }
             }

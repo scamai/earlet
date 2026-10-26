@@ -4,6 +4,7 @@ import Foundation
 public final class DictationSettings: @unchecked Sendable {
     public static let domain = "ai.scam.dictation"
     static let holdKeyKey = "dictation.holdKey"
+    static let mouseButtonKey = "dictation.mouseButton"
     static let enabledKey = "dictation.enabled"
     static let languageKey = "dictation.language"
     static let learningEnabledKey = "dictation.learning.enabled"
@@ -46,6 +47,22 @@ public final class DictationSettings: @unchecked Sendable {
                 ?? .standard
         }
         set { defaults.set(newValue.rawValue, forKey: Self.holdKeyKey) }
+    }
+
+    /// The mouse button that also starts a dictation, or `nil` for none. An
+    /// unset or unreadable value is none: a hand-edited or downgraded
+    /// setting must never take over a button the user did not choose.
+    public var mouseButton: DictationMouseSideButton? {
+        get {
+            defaults.string(forKey: Self.mouseButtonKey).flatMap(DictationMouseSideButton.init(rawValue:))
+        }
+        set {
+            if let newValue {
+                defaults.set(newValue.rawValue, forKey: Self.mouseButtonKey)
+            } else {
+                defaults.removeObject(forKey: Self.mouseButtonKey)
+            }
+        }
     }
 
     /// Whether the user left dictation on. Cleared only by Pause, not by

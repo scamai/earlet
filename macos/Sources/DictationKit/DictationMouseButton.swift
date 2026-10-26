@@ -21,8 +21,8 @@ import ApplicationServices
 public final class DictationMouseButton: @unchecked Sendable {
 
     /// What the tap callback should do with one event, factored out as a pure
-    /// function so the self-check can pin it without a live tap (which needs
-    /// TCC grants and therefore can't run in CI).
+    /// function so tests can pin it without a live tap (which needs TCC
+    /// grants and therefore can't run in CI).
     public enum MouseTapDecision: Sendable, Equatable {
         case passThrough
         case swallowAndHandle(down: Bool)
@@ -32,11 +32,20 @@ public final class DictationMouseButton: @unchecked Sendable {
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var binding: MouseButtonBinding?
-    private var gesture: MouseHoldOrClickState
+    /// The bound button is physically down, by a press this tap saw and
+    /// swallowed. Only that press's release is swallowed in turn.
+    private var pressed = false
     private var started = false
 
-    public var onStart: (() -> Void)?
-    public var onStop: (() -> Void)?
+    /// The bound button went down. What a press means — the start of a
+    /// hold, the click that keeps dictation running, or the press that
+    /// stops it — is the consumer's to decide: it owns the dictation's
+    /// state, and a second copy of that state here would drift from it
+    /// whenever a dictation ends some other way (a stop key, Escape, the
+    /// time limit).
+    public var onPress: (() -> Void)?
+    /// The bound button came up after a press this tap reported.
+    public var onRelease: (() -> Void)?
     /// Fired exactly once per `start()`/`updateBinding` call that could not
     /// create a live tap — same "report it, never crash, never spin" contract
     /// as `DictationHotkey.onDegraded`.
@@ -44,13 +53,11 @@ public final class DictationMouseButton: @unchecked Sendable {
     /// Fired for EVERY otherMouse event the OS delivers, BEFORE the binding
     /// comparison — same liveness-vs-trigger separation as
     /// `DictationHotkey.onTapActivity`, for the same reason: a surface
-    /// watching only `onStart`/`onStop` cannot tell "no events are arriving"
-    /// from "the user is clicking a button that isn't bound".
+    /// watching only `onPress`/`onRelease` cannot tell "no events are
+    /// arriving" from "the user is clicking a button that isn't bound".
     public var onTapActivity: (() -> Void)?
 
-    public init(clickWindow: TimeInterval = 0.3) {
-        self.gesture = MouseHoldOrClickState(clickWindow: clickWindow)
-    }
+    public init() {}
 
     /// The button THIS tap is actually comparing against — lets a UI surface
     /// render the live binding rather than a value it merely asked to set.
@@ -59,22 +66,17 @@ public final class DictationMouseButton: @unchecked Sendable {
         return binding
     }
 
-    /// TEST-ONLY SEAM: drives the gesture machine exactly as
-    /// `handleTapEvent` would, without a live `CGEventTap` — which needs
-    /// TCC grants and therefore cannot run in CI. This is the only way to
-    /// pin `updateBinding`'s mid-press/latched stop-synthesis (and the
-    /// gesture machine's transition table end to end) against the real
-    /// `onStart`/`onStop` callbacks; it is not part of the tap's own event
+    /// TEST-ONLY SEAM: one edge of the bound button exactly as
+    /// `handleTapEvent` would take it, without a live `CGEventTap` — which
+    /// needs TCC grants and therefore cannot run in CI. This is the only way
+    /// to pin `updateBinding`'s mid-press release against the real
+    /// `onPress`/`onRelease` callbacks; it is not part of the tap's own event
     /// flow, which always goes through `handleTapEvent`.
-    public func simulateGestureForTesting(down: Bool, timestamp: TimeInterval) {
+    public func simulateEdgeForTesting(down: Bool) {
         lock.lock()
-        let event = gesture.handle(down: down, timestamp: timestamp)
+        let fire = takeEdgeLocked(down: down)
         lock.unlock()
-        switch event {
-        case .start: onStart?()
-        case .stop: onStop?()
-        case nil: break
-        }
+        if fire { down ? onPress?() : onRelease?() }
     }
 
     /// The swallow/pass-through decision, pure and static so it can be pinned
@@ -82,31 +84,30 @@ public final class DictationMouseButton: @unchecked Sendable {
     /// arrive through the same callback) are always pass-through here — the
     /// disable-handling branch deals with those before `decide` is ever
     /// called on them; this still answers safely if it is.
-    public static func decide(type: CGEventType, buttonNumber: Int64, bound: Int?) -> MouseTapDecision {
-        guard type == .otherMouseDown || type == .otherMouseUp else { return .passThrough }
-        guard let bound, Int64(bound) == buttonNumber else { return .passThrough }
-        return .swallowAndHandle(down: type == .otherMouseDown)
-    }
-
-    /// `decide` alone cannot tell "this bound button's up event belongs to
-    /// a press the gesture machine never saw the matching down for" —
-    /// that requires the machine's own mutable state, which a pure
-    /// (type, buttonNumber, bound) triple does not carry. Factored out as
-    /// its OWN pure function (rather than inlined in the callback) for the
-    /// same reason `decide` is: it can be pinned without a live tap. A
-    /// down is always swallowed once bound; only the up half is gated —
-    /// an orphaned up (no tracked down) either predates the current
-    /// binding, or followed a reset that already synthesized its own stop
-    /// in `updateBinding` — either way it is not this gesture's release to
-    /// consume, and the frontmost app must see it.
-    public static func decideWithGesture(
+    ///
+    /// A down of the bound button is always swallowed; only the up half is
+    /// gated on `isDown`. An orphaned up (no tracked down) either predates
+    /// the current binding, or followed an `updateBinding` that already
+    /// reported its own release — either way it is not this tap's release
+    /// to consume, and the frontmost app must see it.
+    public static func decide(
         type: CGEventType, buttonNumber: Int64, bound: Int?, isDown: Bool
     ) -> MouseTapDecision {
-        let decision = decide(type: type, buttonNumber: buttonNumber, bound: bound)
-        if case .swallowAndHandle(false) = decision, !isDown {
-            return .passThrough
-        }
-        return decision
+        guard type == .otherMouseDown || type == .otherMouseUp else { return .passThrough }
+        guard let bound, Int64(bound) == buttonNumber else { return .passThrough }
+        let down = type == .otherMouseDown
+        if !down, !isDown { return .passThrough }
+        return .swallowAndHandle(down: down)
+    }
+
+    /// Records one swallowed edge; `true` when it is news. A repeat (a down
+    /// while down) is swallowed but reported only once, so a consumer never
+    /// sees two presses without a release between them. Must be called with
+    /// `lock` held.
+    private func takeEdgeLocked(down: Bool) -> Bool {
+        guard down != pressed else { return false }
+        pressed = down
+        return true
     }
 
     /// With a nil binding this is a successful no-op: no tap, no permission
@@ -134,32 +135,29 @@ public final class DictationMouseButton: @unchecked Sendable {
     /// `nil` on a live tap tears it down; a binding with no live tap (but a
     /// `start()`ed instance) creates one; binding→binding just swaps the
     /// compared number under the lock — same mid-hold-reset rationale as
-    /// `DictationHotkey.updateConfig`: leaving the gesture machine running
-    /// against the OLD number would let a press mid-flight emit a stop for a
-    /// session the new binding never started.
+    /// `DictationHotkey.updateConfig`: a press mid-flight on the OLD number
+    /// must not leave its consumer waiting for a release the new binding
+    /// will never report.
     public func updateBinding(_ newBinding: MouseButtonBinding?) {
         lock.lock()
         var degraded: DictationPermissionStatus?
-        // Captured under the lock, from the OLD gesture machine, BEFORE it
-        // is replaced below — this is the only moment that machine's
-        // mid-press/latched state is still readable. A rebind or clear
-        // that lands while the bound button is physically down or latched
-        // must not just silently reset the machine: the running
-        // push-to-talk/latched session it started would never get a stop,
-        // leaving dictation stuck listening. See `MouseHoldOrClickState
-        // .isEngaged`'s doc comment.
-        let wasEngaged = gesture.isEngaged
+        // Read under the lock, BEFORE the reset below — this is the only
+        // moment the old press is still visible. A rebind or clear that
+        // lands while the bound button is physically down must not silently
+        // forget it: the hold that press started would never get a release,
+        // leaving dictation stuck listening.
+        let wasPressed = pressed
         defer {
             lock.unlock()
             // Outside the lock, same discipline as every other callback in
             // this class — never call out to arbitrary user code while
             // holding `lock`, or a callback that re-enters (e.g. reads
             // `boundBinding`) deadlocks on itself.
-            if wasEngaged { onStop?() }
+            if wasPressed { onRelease?() }
             if let degraded { onDegraded?(degraded) }
         }
         binding = newBinding
-        gesture = MouseHoldOrClickState(clickWindow: gesture.clickWindow)
+        pressed = false
         guard started else { return }
         switch (newBinding, tap) {
         case (nil, .some):
@@ -217,7 +215,7 @@ public final class DictationMouseButton: @unchecked Sendable {
         EventTapTeardown.invalidate(tap: tap, runLoopSource: runLoopSource)
         tap = nil
         runLoopSource = nil
-        gesture = MouseHoldOrClickState(clickWindow: gesture.clickWindow)
+        pressed = false
     }
 
     private func handleTapEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -237,7 +235,6 @@ public final class DictationMouseButton: @unchecked Sendable {
         onTapActivity?()
 
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
-        let timestamp = ProcessInfo.processInfo.systemUptime
 
         lock.lock()
         // Read the bound number UNDER the lock — `binding` is mutable from
@@ -245,26 +242,19 @@ public final class DictationMouseButton: @unchecked Sendable {
         // thread, the same genuine race `DictationHotkey.handleTapEvent`
         // guards against.
         let boundNumber = binding?.buttonNumber
-        // Gesture-aware: an up for the bound button with no tracked down
-        // (see `decideWithGesture`) passes through instead of being
-        // swallowed as a stray release.
-        let decision = Self.decideWithGesture(
-            type: type, buttonNumber: buttonNumber, bound: boundNumber, isDown: gesture.isDown)
-        var mouseEvent: DictationMouseEvent?
+        let decision = Self.decide(
+            type: type, buttonNumber: buttonNumber, bound: boundNumber, isDown: pressed)
+        var fire = false
         if case .swallowAndHandle(let down) = decision {
-            mouseEvent = gesture.handle(down: down, timestamp: timestamp)
+            fire = takeEdgeLocked(down: down)
         }
         lock.unlock()
 
         switch decision {
         case .passThrough:
             return Unmanaged.passUnretained(event)
-        case .swallowAndHandle:
-            switch mouseEvent {
-            case .start: onStart?()
-            case .stop: onStop?()
-            case nil: break
-            }
+        case .swallowAndHandle(let down):
+            if fire { down ? onPress?() : onRelease?() }
             return nil // the swallow — both down and up, unconditionally
         }
     }

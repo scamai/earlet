@@ -259,13 +259,17 @@ public sealed class LowLevelHoldKeyRegistrationTests
     {
         using var registration = BuildWithMouse(DictationMouseButton.Button4);
 
-        Assert.Equal(HoldKeyTransition.HoldStarted,
+        // Swallowed both ways: the press because the button is bound, the
+        // release because its press was tracked.
+        Assert.Equal(HoldKeyTransition.HoldStarted | HoldKeyTransition.Swallow,
                      registration.ObserveMouse(Down, Button4Data, 1_000));
         Assert.True(registration.IsKeyDown());
+        Assert.True(registration.MouseHolds);
 
-        Assert.Equal(HoldKeyTransition.HoldEnded,
+        Assert.Equal(HoldKeyTransition.HoldEnded | HoldKeyTransition.Swallow,
                      registration.ObserveMouse(Up, Button4Data, 5_000));
         Assert.False(registration.IsKeyDown());
+        Assert.False(registration.MouseHolds);
     }
 
     [Fact]
@@ -311,6 +315,8 @@ public sealed class LowLevelHoldKeyRegistrationTests
 
         Assert.True(registration.IsLatched);
         Assert.True(registration.IsKeyDown());
+        Assert.True(registration.MouseLatched);
+        Assert.True(registration.MouseHolds);
     }
 
     [Fact]
@@ -327,7 +333,7 @@ public sealed class LowLevelHoldKeyRegistrationTests
         registration.ObserveMouse(Up, Button4Data, 1_100);
         Assert.True(registration.IsLatched);
 
-        Assert.Equal(HoldKeyTransition.HoldEnded,
+        Assert.Equal(HoldKeyTransition.HoldEnded | HoldKeyTransition.Swallow,
                      registration.ObserveMouse(Down, Button4Data, 5_000));
 
         // Still physically down, and IsKeyDown is already false.
@@ -335,8 +341,9 @@ public sealed class LowLevelHoldKeyRegistrationTests
         Assert.False(registration.IsLatched);
 
         // The release that follows closes nothing and cannot re-latch, even
-        // though by the clock it is well inside the 300 ms click window.
-        Assert.Equal(HoldKeyTransition.None,
+        // though by the clock it is well inside the 300 ms click window. It
+        // is still swallowed: its press was.
+        Assert.Equal(HoldKeyTransition.Swallow,
                      registration.ObserveMouse(Up, Button4Data, 5_010));
         Assert.False(registration.IsKeyDown());
         Assert.False(registration.IsLatched);
@@ -357,6 +364,94 @@ public sealed class LowLevelHoldKeyRegistrationTests
 
         Assert.False(registration.IsKeyDown());
         Assert.False(registration.IsLatched);
+    }
+
+    [Fact]
+    public void A_release_whose_press_this_hook_never_saw_passes_through()
+    {
+        // The press began before the hook was armed — a re-arm, or a new
+        // binding chosen with the button held — and reached the application,
+        // which must get the release too or be left with a button stuck down.
+        using var registration = BuildWithMouse(DictationMouseButton.Button4);
+
+        var transition = registration.ObserveMouse(Up, Button4Data, 1_000);
+
+        Assert.False(LowLevelHoldKeyRegistration.Consumes(transition));
+        Assert.Equal(HoldKeyTransition.None, transition);
+    }
+
+    [Fact]
+    public void A_duplicate_press_is_swallowed_and_opens_nothing_new()
+    {
+        using var registration = BuildWithMouse(DictationMouseButton.Button5);
+        registration.ObserveMouse(Down, Button5Data, 1_000);
+
+        Assert.Equal(HoldKeyTransition.Swallow, registration.ObserveMouse(Down, Button5Data, 1_050));
+        Assert.True(registration.IsKeyDown());
+    }
+
+    [Fact]
+    public void Nothing_the_unbound_registration_sees_is_swallowed()
+    {
+        using var registration = Build(DictationHotkeys.VkRightAlt);
+
+        Assert.False(LowLevelHoldKeyRegistration.Consumes(registration.ObserveMouse(Down, Button4Data, 1_000)));
+        Assert.False(LowLevelHoldKeyRegistration.Consumes(registration.ObserveMouse(Up, Button4Data, 1_100)));
+        Assert.False(registration.MouseHolds);
+        Assert.False(registration.MouseLatched);
+    }
+
+    [Fact]
+    public void A_key_hold_beside_a_bound_button_is_the_keys()
+    {
+        // The window names the mouse button only for a dictation the button
+        // holds: a key hold beside a bound button is still the key's.
+        using var registration = BuildWithMouse(DictationMouseButton.Button4);
+
+        registration.ObserveKeyboard((int)DictationHotkeys.VkRightAlt, HoldKeyState.WmKeyDown, 1_000);
+
+        Assert.True(registration.IsKeyDown());
+        Assert.False(registration.MouseHolds);
+        Assert.False(registration.MouseLatched);
+    }
+
+    /// <summary>
+    /// Pins on the source, not evidence the hook behaves: <c>MouseHookProc</c>
+    /// returns the consumed value for exactly the events
+    /// <see cref="LowLevelHoldKeyRegistration.Consumes"/> names in
+    /// <see cref="LowLevelHoldKeyRegistration.ObserveMouse"/>'s answer, and
+    /// passes everything else to <c>CallNextHookEx</c>.
+    /// </summary>
+    [Fact]
+    public void MouseHookProc_consumes_what_ObserveMouse_marks_and_passes_everything_else_on()
+    {
+        var code = File.ReadAllText(Path.Combine(WindowsRoot(), "Dictation.Infrastructure", "LowLevelHoldKeyRegistration.cs"))
+            .ReplaceLineEndings("\n");
+        var start = code.IndexOf("    private IntPtr MouseHookProc(int code, IntPtr wParam, IntPtr lParam)", StringComparison.Ordinal);
+        Assert.True(start >= 0, "no MouseHookProc");
+        var hook = code[start..code.IndexOf("\n    }\n", start, StringComparison.Ordinal)];
+
+        var observe = hook.IndexOf("var transition = ObserveMouse(", StringComparison.Ordinal);
+        var consume = hook.IndexOf("if (Consumes(transition))", StringComparison.Ordinal);
+        var consumed = hook.IndexOf("return ConsumedEvent;", StringComparison.Ordinal);
+        var next = hook.IndexOf("return CallNextHookEx(", StringComparison.Ordinal);
+
+        Assert.True(observe >= 0 && consume > observe, "the decision is ObserveMouse's");
+        Assert.True(consumed > consume && next > consumed, "a kept event never reaches the next hook");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(hook, "return ConsumedEvent;"));
+    }
+
+    private static string WindowsRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Dictation.Infrastructure", "LowLevelHoldKeyRegistration.cs")))
+            {
+                return dir.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("no windows/ source tree above " + AppContext.BaseDirectory);
     }
 
     [Fact]

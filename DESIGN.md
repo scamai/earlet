@@ -183,11 +183,19 @@ suite used by the app (key `dictation.holdKey`), on Windows in
 
 - macOS offers seven single modifier keys: Right Command (the default), Right
   Option, Left Option, Right Control, Left Control, Right Shift and fn (Globe).
-  Right Command is on Apple keyboards. Only modifiers are offered
-  because the hold-key listener subscribes to modifier changes alone. Other key
-  presses are watched, as key codes and never as characters, only from a press
-  until its dictation ends, to tell a shortcut, Escape or a latch's stop key
-  apart.
+  Right Command is on Apple keyboards. The picker's last item, "Record a
+  Key…", takes the next key pressed over the window instead: a modifier key
+  pressed and released on its own (any but Left Command, which is part of
+  nearly every shortcut), or a key combination (a key held with Command,
+  Option or Control, or F1 to F20 alone; a typing key alone or with Shift
+  alone is refused). Escape cancels the recording. A modifier key is heard by
+  a listener that subscribes to modifier changes alone. A recorded
+  combination is registered with macOS as a hot key, so the app is told about
+  that combination and nothing else, and other apps stop receiving it while
+  Earlet is on; one macOS will not register (the system or another app holds
+  it) is refused when recorded. Other key presses are watched, as key codes and
+  never as characters, only from a press until its dictation ends, to tell a
+  shortcut, Escape or a latch's stop key apart.
 - Windows offers sixteen keys (`DictationHotkeys.HoldChoices`): Right Ctrl
   first and the default, then Right Alt,
   Left Alt, Right Shift, Left Shift, Right Win, Left Ctrl, Caps Lock, Scroll
@@ -204,7 +212,10 @@ suite used by the app (key `dictation.holdKey`), on Windows in
 
 If another key goes down while the hold key is held, that recording is
 cancelled and nothing is inserted, so Right Command+C or Right Ctrl+C never
-dictates; the status line says a shortcut was used. The Mac indicator shows no
+dictates; the status line says a shortcut was used. The rule is for modifier
+keys, which shortcuts are built on: during the hold of a recorded combination,
+as of a mouse button, typing keeps recording and only Escape or Cancel
+discards it. The Mac indicator shows no
 ending for it (the user meant the shortcut); the Windows indicator says
 "Cancelled — that was a shortcut".
 
@@ -275,6 +286,55 @@ stores the cancel and discards the recording once its capture warm-up ends;
 Windows withdraws the press at once, the microphone never opens, and the
 window and the indicator say "Cancelled" (built and tested on Linux, never run
 on Windows).
+
+A mouse side button can start a dictation too, beside the hold key and never
+instead of it. A second picker under the hold key offers no button (the
+default), Mouse button 4 (Back) or Mouse button 5 (Forward); left, right and
+middle are not offered, because they have everyday jobs a spare side button
+does not. On macOS the picker also ends with "Record a Mouse Button…", which
+takes the next side or extra button clicked over the window, any from 4 up to
+32, for mice with more than two; a middle click is refused with that reason,
+and left and right clicks are left alone so the window stays usable. The
+choice is saved as `none`, `button4` or `button5` on both platforms (on macOS
+under `dictation.mouseButton`, absent for none, and `button6` and up for a
+recorded one), and a value either app does not recognise reads as none, so a
+hand-edited setting never takes over a button. Hold the button to talk and
+release to insert. A click (released within 0.3 s of its press) keeps
+dictation listening hands-free like a double-tap of the hold key, and the next
+press of the button stops it on the press. On macOS a double-click does the
+same as a click: a press within 0.35 s of the click's release is the
+double-click's second half and is absorbed, so it never stops what the first
+click started; one later press stops. A first try at a hands-free mouse
+dictation is often a double-click, as the hold key teaches, and before this
+each one started and stopped at once. One click is enough because a spare side button
+is pressed for nothing else; the hold key needs two because a modifier is
+brushed while typing. The microphone opens on the press either way, so
+telling a click from a hold never clips a first word. While a button is
+chosen it is consumed: its Back or Forward does not also fire, so a click
+cannot navigate away from the field being dictated into. The shortcut rule
+is the hold key's alone: typing while the button is held keeps recording, and
+only Escape or Cancel discards it.
+
+On macOS an active event tap on the side buttons (`DictationMouseButton`)
+does this, installed only while dictation is on and a button is chosen; if
+macOS refuses it, Settings says so and the hold key still works. The tap
+reports presses and releases, and the app model tells a click from a hold,
+so a latch has one record however it began and ended: a mouse latch takes the
+same stop keys, Escape, Cancel and recording limit as a key latch, a press of
+the hold key stops it too, and after Return ends one the next press of the
+button starts a new dictation. Each trigger's release ends only the dictation
+it started.
+
+On Windows a `WH_MOUSE_LL` hook does it, installed beside the keyboard hook
+only while a button is chosen (`mouse_button` in `settings.json`). It
+swallows the button's press and the release of a press it saw; a release
+whose press it never saw passes through. The gesture is its own machine
+(`MouseHoldOrClickState`), so a mouse latch ends on the next press of the
+button, not on Space, Enter or the hold key, which end only the keyboard's
+latch; Escape, Cancel, the recording limit and a silence stop end it as they
+end any dictation. If Windows refuses the mouse hook, dictation still turns
+on with the hold key and the line under the picker says the button does
+nothing this run. Built and tested on Linux, never run on Windows.
 
 ### Cancel, refused presses and the recording limit
 

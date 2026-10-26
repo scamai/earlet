@@ -201,15 +201,15 @@ public sealed class LowLevelHoldKeyHandsFreeTests
 
         var phantom = hook.IndexOf("SuppressMenuModeArming();", StringComparison.Ordinal);
         var consume = hook.IndexOf("if (Consumes(transition))", StringComparison.Ordinal);
-        var consumed = hook.IndexOf("return ConsumedKey;", StringComparison.Ordinal);
+        var consumed = hook.IndexOf("return ConsumedEvent;", StringComparison.Ordinal);
         var feed = hook.IndexOf("ForwardKeyboardInput(", StringComparison.Ordinal);
         var next = hook.IndexOf("return CallNextHookEx(", StringComparison.Ordinal);
 
         Assert.True(phantom >= 0 && consume > phantom, "the stop key is consumed after the phantom is injected");
         Assert.True(consumed > consume && feed > consumed, "a consumed key is not reported as the user's typing");
         Assert.True(next > feed, "everything else reaches the next hook");
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(hook, "return ConsumedKey;"));
-        Assert.Contains("ConsumedKey = new(1)", code, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(hook, "return ConsumedEvent;"));
+        Assert.Contains("ConsumedEvent = new(1)", code, StringComparison.Ordinal);
     }
 
     private static string WindowsRoot()

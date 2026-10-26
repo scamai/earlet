@@ -17,6 +17,11 @@ public static partial class DictationCopy
     /// <summary>The hands-free stop hint: the Mac's, with Windows' Enter.</summary>
     public static string HudLatchedStop(string keyName) => $"Press {keyName}, Space or Enter to stop";
 
+    /// <summary>The stop hint of a hold latched by a click on the mouse
+    /// button, which only another press of the button ends
+    /// (<see cref="LatchedByMouse"/>).</summary>
+    public static string HudMouseLatchedStop(string buttonName) => $"Click {buttonName} to stop";
+
     /// <summary>
     /// The listening pill, the Mac's <c>DictationHUDContent.hint(for:
     /// .recording(latched:), elapsed:, limit:)</c> under "Listening". Held:
@@ -32,13 +37,17 @@ public static partial class DictationCopy
     /// line when its stop comes before the limit's: "No speech for 20 s —
     /// stopping in 10 s. Keep talking to continue" (<see cref="HudSilenceWarning"/>).
     /// </remarks>
-    /// <param name="keyName">The hold key's name.</param>
+    /// <param name="keyName">The hold key's name, or the mouse button's when
+    /// <paramref name="byMouse"/>.</param>
     /// <param name="latched">The hold is latched hands-free.</param>
     /// <param name="elapsed">Time since the microphone came up.</param>
     /// <param name="policy">The limit and the countdown before it.</param>
     /// <param name="silence">The silence stop's warning, when one is due.</param>
+    /// <param name="byMouse">The mouse button holds the dictation: a latch
+    /// then stops on the button alone (<see cref="HudMouseLatchedStop"/>).</param>
     public static string HudListening(
-        string keyName, bool latched, TimeSpan elapsed, DictationHoldPolicy policy, DictationSilenceWarning? silence = null)
+        string keyName, bool latched, TimeSpan elapsed, DictationHoldPolicy policy,
+        DictationSilenceWarning? silence = null, bool byMouse = false)
     {
         ArgumentNullException.ThrowIfNull(policy);
         var remaining = policy.Ceiling - elapsed;
@@ -47,7 +56,7 @@ public static partial class DictationCopy
             return HudSilenceWarning(warning);
         }
 
-        var stop = latched ? HudLatchedStop(keyName) : HeldStop;
+        var stop = !latched ? HeldStop : byMouse ? HudMouseLatchedStop(keyName) : HudLatchedStop(keyName);
         if (remaining <= policy.Countdown)
         {
             return Listening("Stops in " + HudClock(Math.Ceiling(remaining.TotalSeconds)), stop);

@@ -125,6 +125,15 @@ public static partial class DictationCopy
     public const string HoldKeyNotSaved =
         "The new key works now, but it could not be saved and will reset when Earlet restarts.";
 
+    public const string MouseButtonNotSaved =
+        "The new mouse button works now, but it could not be saved and will reset when Earlet restarts.";
+
+    /// <summary>Under the mouse button picker when Windows refused the mouse
+    /// hook: the button does nothing, and the hold key still works.</summary>
+    public const string MouseButtonRefused =
+        "Windows did not let Earlet listen to the mouse, so the mouse button does nothing until dictation is "
+        + "turned off and on again. The hold key still works.";
+
     public const string LanguageNotSaved =
         "The new language works now, but it could not be saved and will reset when Earlet restarts.";
 
@@ -616,7 +625,13 @@ public static partial class DictationCopy
         _ => throw new ArgumentOutOfRangeException(nameof(result), result, "no sentence for this refusal"),
     };
 
-    public static string Armed(HotkeyBinding key) => $"Enabled. Hold {key.KeyName} in a text field.";
+    /// <summary>On and waiting: "Enabled. Hold Right Ctrl in a text field.",
+    /// naming the mouse button too when one is bound ("… Hold Right Ctrl or
+    /// mouse button 4 in a text field.").</summary>
+    public static string Armed(HotkeyBinding key, DictationMouseButton mouse = DictationMouseButton.None) =>
+        DictationMouseButtons.SpokenName(mouse) is { } button
+            ? $"Enabled. Hold {key.KeyName} or {button} in a text field."
+            : $"Enabled. Hold {key.KeyName} in a text field.";
 
     public static string Instructions(HotkeyBinding key) =>
         $"Speak wherever you type. Hold {key.KeyName}, speak, then release to insert. Double-tap it to keep listening.";
@@ -625,6 +640,13 @@ public static partial class DictationCopy
     /// line, with Windows' Enter.</summary>
     public static string Latched(HotkeyBinding key) =>
         $"Dictating. Press {key.KeyName}, Space or Enter to stop.";
+
+    /// <summary>A hold latched by a click on the mouse button. Only another
+    /// press of the button ends it: Space, Enter and the hold key stop the
+    /// keyboard's own latch, and naming them here would promise a stop that
+    /// does not happen.</summary>
+    public static string LatchedByMouse(DictationMouseButton mouse) =>
+        $"Dictating. Click {DictationMouseButtons.SpokenName(mouse) ?? "the mouse button"} again to stop.";
 
     public static string WorkerRestarted(HotkeyBinding key) =>
         $"Speech recognition restarted. Hold {key.KeyName} to dictate.";
@@ -661,12 +683,21 @@ public static partial class DictationCopy
         $"Click below. Hold {key.KeyName}, say a sentence, then release. Your words should appear here.";
 
     /// <summary>What the window says while a session is in this state.</summary>
-    public static string ForState(DictationState state, HotkeyBinding key) => state switch
+    /// <param name="state">The session's state.</param>
+    /// <param name="key">The hold key.</param>
+    /// <param name="mouse">The bound mouse button, or none.</param>
+    /// <param name="mouseHolds">The mouse button, not the key, is what is held.</param>
+    public static string ForState(
+        DictationState state,
+        HotkeyBinding key,
+        DictationMouseButton mouse = DictationMouseButton.None,
+        bool mouseHolds = false) => state switch
     {
-        DictationState.Listening => $"Listening… Release {key.KeyName} to insert.",
+        DictationState.Listening =>
+            $"Listening… Release {(mouseHolds ? DictationMouseButtons.SpokenName(mouse) : null) ?? key.KeyName} to insert.",
         DictationState.Transcribing => Transcribing,
         DictationState.Inserting => Inserting,
-        _ => Armed(key),
+        _ => Armed(key, mouse),
     };
 
     /// <summary>What the window says about a blocked microphone, or null

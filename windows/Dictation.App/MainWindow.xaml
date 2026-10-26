@@ -118,7 +118,8 @@
     </StackPanel>
    </Expander>
    <!-- Shortcut and language, the Mac's two sections: the how-to line, the
-        pickers and the hold-key notice; and how much silence ends a
+        pickers and the hold-key notice; the side mouse button that dictates
+        beside the key, with what it costs; and how much silence ends a
         hands-free dictation (DictationHoldPolicy), which the Mac has not got
         yet. -->
    <TextBlock x:Name="Instructions" Margin="0,24,0,0" FontSize="16" TextWrapping="Wrap" />
@@ -131,19 +132,29 @@
      <RowDefinition Height="Auto" />
      <RowDefinition Height="Auto" />
      <RowDefinition Height="Auto" />
+     <RowDefinition Height="Auto" />
+     <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
     <Label Grid.Row="0" Grid.Column="0" Padding="0,0,8,0" VerticalAlignment="Center" Content="Hold _key:"
       Target="{Binding ElementName=HoldKeyPicker}" />
     <ComboBox x:Name="HoldKeyPicker" Grid.Row="0" Grid.Column="1" MinWidth="180" HorizontalAlignment="Left"
       DisplayMemberPath="KeyName" AutomationProperties.Name="Hold key" SelectionChanged="HoldKeyChanged" />
     <Label Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Padding="0,0,8,0" VerticalAlignment="Center"
+      Content="Mouse butto_n:" Target="{Binding ElementName=MouseButtonPicker}" />
+    <ComboBox x:Name="MouseButtonPicker" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
+      HorizontalAlignment="Left" DisplayMemberPath="Label" AutomationProperties.Name="Mouse button"
+      SelectionChanged="MouseButtonChanged" />
+    <TextBlock x:Name="MouseButtonNotice" Grid.Row="2" Grid.Column="1" Margin="0,4,0,0" TextWrapping="Wrap"
+      Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+      AutomationProperties.LiveSetting="Polite" />
+    <Label Grid.Row="3" Grid.Column="0" Margin="0,8,0,0" Padding="0,0,8,0" VerticalAlignment="Center"
       Content="_Language:" Target="{Binding ElementName=LanguagePicker}" />
-    <ComboBox x:Name="LanguagePicker" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
+    <ComboBox x:Name="LanguagePicker" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
       HorizontalAlignment="Left" DisplayMemberPath="Name" AutomationProperties.Name="Language"
       SelectionChanged="LanguageChanged" />
-    <Label Grid.Row="2" Grid.Column="0" Margin="0,8,0,0" Padding="0,0,8,0" VerticalAlignment="Center"
+    <Label Grid.Row="4" Grid.Column="0" Margin="0,8,0,0" Padding="0,0,8,0" VerticalAlignment="Center"
       Content="S_ilence stops hands-free:" Target="{Binding ElementName=SilenceStopPicker}" />
-    <ComboBox x:Name="SilenceStopPicker" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
+    <ComboBox x:Name="SilenceStopPicker" Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" MinWidth="180"
       HorizontalAlignment="Left" DisplayMemberPath="Name" AutomationProperties.Name="Silence stops hands-free"
       SelectionChanged="SilenceStopChanged" />
    </Grid>

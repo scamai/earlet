@@ -129,6 +129,40 @@ struct LearningTests {
         #expect(await eventually { model.vocabulary.rows.first?.detail == "Tentative" })
     }
 
+    @Test("a Claude Code composer correction in Witty teaches the meant word and keeps the terminal out")
+    func claudeCodeCorrectionPersists() async throws {
+        let (harness, model) = await enabled {
+            $0.targetApplication.mutate { $0 = DictationWittyInput.bundleID }
+            $0.lexicon = WordListLexicon(words: ["code"])
+        }
+        await dictate("我们用扣的写代码", harness, model)
+        let pasted = try #require(harness.inserts.texts.get.last)
+        let rule = String(repeating: "─", count: 40)
+        func screen(_ draft: String, output: String) -> String {
+            [output, "", rule, "❯\u{00A0}" + draft, rule, "  project git:(main)", "  ⏵⏵ bypass permissions on"]
+                .joined(separator: "\n")
+        }
+        let before = try #require(DictationWittyInput.parse(screen("Try \"fix lint errors\"", output: "PRIVATE OUTPUT")))
+        let initial = try #require(DictationWittyInput.parse(screen(pasted, output: "CHANGED OUTPUT")))
+        let anchor = try #require(DictationSpanAnchor.establish(
+            beforePaste: .init(value: before.value, selectionLocation: nil, selectionLength: nil),
+            fieldValue: initial.value, pasted: DictationWittyInput.pasted(pasted)))
+        let fixed = pasted.replacingOccurrences(of: "扣的", with: "Claude Code")
+        #expect(fixed != pasted)
+        let edited = try #require(DictationWittyInput.parse(screen(fixed, output: "UNRELATED OUTPUT")))
+        let fieldValue = try #require(edited.value(matching: initial))
+        let span = try #require(anchor.span(in: fieldValue))
+        await fix(span, harness)
+        #expect(harness.learningFile?.words.map(\.text) == ["Claude Code"])
+        #expect(harness.learningFile?.words.first?.origin == .correction)
+        // A transliteration becomes a rewrite only on a second dictation.
+        #expect(harness.learningFile?.aliases.isEmpty == true)
+        #expect(harness.learningFile?.pending.count == 1)
+        #expect(!harness.learningFileText.contains("OUTPUT"))
+        #expect(!harness.learningFileText.contains("bypass"))
+        await model.prepareForQuit()
+    }
+
     @Test("ordinary-word technical corrections reach the file and survive relaunch without a rewrite")
     func repoCorrectionPersists() async throws {
         let (harness, model) = await enabled {

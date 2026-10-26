@@ -18,6 +18,11 @@ public sealed partial class DictationController
     /// the listening hold is latched.</summary>
     private bool _latchShown;
 
+    /// <summary>Whether the last hold that listened was held or latched on
+    /// the mouse button rather than the key, for the indicator's hints and
+    /// endings (<see cref="HudHold"/>).</summary>
+    private bool _holdByMouse;
+
     /// <summary>
     /// End the hook's latch, or a short press's parked hold, because this
     /// hold ended some other way: the recording limit, a silence stop, Cancel
@@ -70,12 +75,26 @@ public sealed partial class DictationController
             latched = false;
         }
 
+        if (listening)
+        {
+            // Kept past the release, so the ending names what was held.
+            _holdByMouse = _trigger.MouseHolds;
+        }
+
         var shown = latched && listening;
         if (shown && !_latchShown)
         {
-            _log.LogInformation(
-                "Dictation latched hands-free; {Key}, Space or Enter stops it", _holdKey.KeyName);
-            Render(DictationCopy.Latched(_holdKey));
+            if (_trigger.MouseLatched)
+            {
+                _log.LogInformation("Dictation latched hands-free by a click; another press of the button stops it");
+            }
+            else
+            {
+                _log.LogInformation(
+                    "Dictation latched hands-free; {Key}, Space or Enter stops it", _holdKey.KeyName);
+            }
+
+            Render(LatchedLine);
         }
 
         _latchShown = shown;
@@ -109,6 +128,12 @@ public sealed partial class DictationController
     /// hold is latched, otherwise <see cref="DictationCopy.ForState"/>.</summary>
     private string StatusFor(DictationState state) =>
         state == DictationState.Listening && _trigger?.IsLatched == true
-            ? DictationCopy.Latched(_holdKey)
-            : DictationCopy.ForState(state, _holdKey);
+            ? LatchedLine
+            : DictationCopy.ForState(state, _holdKey, _settings.MouseButton, _trigger?.MouseHolds == true);
+
+    /// <summary>The latched sentence: a click on the mouse button stops only
+    /// on the button, a double-tap's latch on the key, Space or Enter.</summary>
+    private string LatchedLine => _trigger?.MouseLatched == true
+        ? DictationCopy.LatchedByMouse(_settings.MouseButton)
+        : DictationCopy.Latched(_holdKey);
 }

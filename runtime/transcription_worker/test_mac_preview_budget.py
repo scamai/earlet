@@ -120,3 +120,92 @@ def test_wire_start_enables_budget_for_the_actual_mlx_dictation_session(monkeypa
     finally:
         assert osw.cancel({"stream_id": reply["stream_id"]})["ok"]
 
+
+
+class RecordingEngine(Engine):
+    """Records the keyword arguments of every live decode."""
+
+    def __init__(self, name="mlx"):
+        super().__init__(name)
+        self.calls = []
+
+    def transcribe(self, audio, language=None, initial_prompt=None,
+                   personalize=True, temperature=None, **kwargs):
+        self.calls.append({"temperature": temperature, "personalize": personalize})
+        return {"text": "a caption", "stats": {"language": "en"}}
+
+
+def test_paced_preview_decodes_once_at_temperature_zero():
+    engine = RecordingEngine()
+    ch = channel(engine)
+    ch.configure_preview_pacing(True)
+    ch._transcribe2(np.full(32000, .1, dtype=np.float32))
+    assert engine.calls == [{"temperature": 0.0, "personalize": False}]
+
+
+def test_unpaced_channel_keeps_the_engine_temperature_ladder():
+    engine = RecordingEngine()
+    ch = channel(engine)
+    ch._transcribe2(np.full(32000, .1, dtype=np.float32))
+    assert engine.calls == [{"temperature": None, "personalize": False}]
+
+
+def test_engine_without_a_temperature_parameter_gets_the_legacy_call():
+    class Legacy(Engine):
+        def __init__(self):
+            super().__init__("mlx")
+            self.kwargs = []
+
+        def transcribe(self, audio, language=None, initial_prompt=None):
+            self.kwargs.append(sorted(k for k, v in (("language", language),
+                                                     ("initial_prompt", initial_prompt))))
+            return {"text": "x", "stats": {}}
+
+    engine = Legacy()
+    ch = channel(engine)
+    ch.configure_preview_pacing(True)
+    ch._transcribe2(np.full(32000, .1, dtype=np.float32))
+    assert len(engine.kwargs) == 1
+
+
+def _decode_jobs_after(ch, seconds):
+    spawned = []
+    ch._spawn = lambda job: spawned.append(job) if job is not None else None
+    chunk = np.full(1600, .1, dtype=np.float32)  # 100 ms of audible input
+    for _ in range(int(seconds * 10)):
+        ch.push(chunk)
+    return [job for job in spawned if job[0] == "decode"]
+
+
+def test_paced_preview_waits_for_a_window_worth_decoding(monkeypatch):
+    monkeypatch.setattr(osw.time, "monotonic", lambda: 1000.0)
+    ch = channel()
+    ch.configure_preview_pacing(True)
+    assert _decode_jobs_after(ch, 1.4) == []
+    ch2 = channel()
+    ch2.configure_preview_pacing(True)
+    jobs = _decode_jobs_after(ch2, 1.6)
+    assert len(jobs) == 1 and len(jobs[0][1]) >= osw.PREVIEW_MIN_WINDOW_S * osw.SAMPLE_RATE
+
+
+def test_unpaced_channel_still_decodes_its_first_half_second(monkeypatch):
+    monkeypatch.setattr(osw.time, "monotonic", lambda: 1000.0)
+    jobs = _decode_jobs_after(channel(), 0.7)
+    assert len(jobs) == 1
+
+
+def test_paced_preview_shows_a_quiet_voice_and_notes_keep_the_floor():
+    paced = channel()
+    paced.configure_preview_pacing(True)
+    assert paced.partial_gate.track_floor is False
+    # A quiet voice from the first window on (RMS measured on the owner's
+    # Mac holds: 0.004-0.008) is speech for the hold-to-talk preview...
+    assert paced.partial_gate.note_window_rms(0.006) is False
+    assert paced.partial_gate.note_window_rms(0.005) is False
+    # ...while a channel that tracks its floor still treats it as the floor.
+    notes = channel()
+    assert notes.partial_gate.track_floor is True
+    notes.partial_gate.note_window_rms(0.006)
+    assert notes.partial_gate.note_window_rms(0.005) is True
+    paced.configure_preview_pacing(False)
+    assert paced.partial_gate.track_floor is True

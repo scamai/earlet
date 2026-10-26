@@ -92,6 +92,26 @@ public interface IDictationTrigger : IHotkeyRegistration, IHookWatchTarget, IDis
     /// <see cref="LatchEnd.None"/>.
     /// </summary>
     LatchEnd ConsumeLatchEnd();
+
+    /// <summary>
+    /// Whether the bound mouse button is what holds the dictation open now —
+    /// pressed, or latched by a click — so the window and the indicator name
+    /// it instead of the hold key. False with no button bound.
+    /// </summary>
+    bool MouseHolds { get; }
+
+    /// <summary>
+    /// Whether a click on the mouse button latched the dictation: another
+    /// press of the button stops it, and Space, Enter and the hold key do not.
+    /// </summary>
+    bool MouseLatched { get; }
+
+    /// <summary>
+    /// A mouse button is bound and Windows refused the hook that would hear
+    /// it. The hold key is unaffected; the window says the button does
+    /// nothing this run.
+    /// </summary>
+    bool MouseTriggerDegraded { get; }
 }
 
 /// <summary>A speech worker process, and the moment its startup ends.</summary>
@@ -146,7 +166,11 @@ public interface IDictationPlatform
     /// the hold open, with the Mac's rules
     /// (<c>HoldKeyTriggerMode.HoldOrDoubleTapHandsFree</c>). The controller
     /// always asks for it, for the same reason.</param>
-    IDictationTrigger CreateTrigger(HotkeyBinding binding, bool cancelOnChord, bool handsFree);
+    /// <param name="mouseButton">The side button that also starts a
+    /// dictation, or <see cref="DictationMouseButton.None"/>: hold to talk,
+    /// click to latch (<c>MouseHoldOrClickState</c>).</param>
+    IDictationTrigger CreateTrigger(
+        HotkeyBinding binding, bool cancelOnChord, bool handsFree, DictationMouseButton mouseButton);
 
     IAudioCaptureDevice CreateMicrophone();
 
@@ -295,6 +319,13 @@ public sealed record DictationTrayState(
 /// dictation, or null when no take is kept.</param>
 /// <param name="SilenceStop">The hands-free silence stop, selected in the
 /// "Silence stops hands-free" picker; it can be changed at any time.</param>
+/// <param name="MouseButton">The side button that also starts a dictation,
+/// selected in the "Mouse button" picker under the hold key.</param>
+/// <param name="CanChooseMouseButton">That picker is live: at rest, as the
+/// hold key's is.</param>
+/// <param name="MouseButtonNotice">The line under it: how the button is used,
+/// what it stops doing, and whether Windows refused it this run
+/// (<see cref="HoldKeyAdvice.ForMouse"/>).</param>
 public sealed record DictationViewState(
     string Status,
     bool OffersMicrophoneSettings,
@@ -315,7 +346,10 @@ public sealed record DictationViewState(
     DictationWindowHeader Header,
     string? LaunchAtLoginNote,
     DictationSavedTakeView? SavedTake = null,
-    DictationSilenceStop SilenceStop = DictationSilenceStop.After30Seconds)
+    DictationSilenceStop SilenceStop = DictationSilenceStop.After30Seconds,
+    DictationMouseButton MouseButton = DictationMouseButton.None,
+    bool CanChooseMouseButton = false,
+    string? MouseButtonNotice = null)
 {
     /// <summary>Enable is live: the window's one Enable/Pause button offers
     /// Enable and is live (<see cref="DictationWindowHeader.CanToggle"/>), as

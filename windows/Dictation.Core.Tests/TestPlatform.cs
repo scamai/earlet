@@ -113,6 +113,20 @@ internal sealed partial class FakeTrigger(HotkeyBinding binding, bool cancelOnCh
 
     public LatchEnd ConsumeLatchEnd() => Gesture?.ConsumeLatchEnd() ?? LatchEnd.None;
 
+    /// <summary>The mouse button the controller asked the hook to hear.</summary>
+    public DictationMouseButton MouseButton { get; init; }
+
+    /// <summary>The mouse button holds the dictation, as a test sets it; a
+    /// mouse hold also sets <see cref="Down"/>, as the hook's
+    /// <c>IsKeyDown</c> answers for both.</summary>
+    public bool MouseHolds { get; set; }
+
+    /// <summary>A click latched it, as a test sets it with <see cref="Latched"/>.</summary>
+    public bool MouseLatched { get; set; }
+
+    /// <summary>Windows refused the mouse hook, as a test sets it.</summary>
+    public bool MouseTriggerDegraded { get; set; }
+
     private Action<long, int>? _keyboardInputObserved;
 
     /// <summary>The hook's key-down feed, as the controller left it. Read by
@@ -702,9 +716,18 @@ internal sealed class FakePlatform : IDictationPlatform
         return FileShows ?? throw new System.ComponentModel.Win32Exception(2, @"C:\Users\someone\Dictation.exe");
     }
 
-    public IDictationTrigger CreateTrigger(HotkeyBinding binding, bool cancelOnChord, bool handsFree)
+    /// <summary>Whether the next triggers report a refused mouse hook.</summary>
+    public bool MouseHookRefused { get; set; }
+
+    public IDictationTrigger CreateTrigger(
+        HotkeyBinding binding, bool cancelOnChord, bool handsFree, DictationMouseButton mouseButton)
     {
-        var trigger = new FakeTrigger(binding, cancelOnChord, handsFree) { RegisterSucceeds = TriggerRegisters };
+        var trigger = new FakeTrigger(binding, cancelOnChord, handsFree)
+        {
+            RegisterSucceeds = TriggerRegisters,
+            MouseButton = mouseButton,
+            MouseTriggerDegraded = MouseHookRefused && mouseButton != DictationMouseButton.None,
+        };
         if (Gestures)
         {
             trigger.UseGesture();

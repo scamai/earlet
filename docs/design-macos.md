@@ -24,6 +24,7 @@ apps share and the review status are in [DESIGN.md](../DESIGN.md); Windows is in
   - [The menu bar menu](#the-menu-bar-menu)
   - [Launch, login and quit](#launch-login-and-quit)
   - [Diagnostics and the log](#diagnostics-and-the-log)
+  - [Updates](#updates)
 - [The floating indicator on macOS](#the-floating-indicator-on-macos)
 
 ## macOS: window, menu bar and app shell
@@ -98,8 +99,21 @@ leading side, its control on the trailing side, or under the words in a
 narrow window):
 
 1. Dictating: Hold to talk (the hold-key choice, disabled during a
-   dictation, with a how-to line that names the double-tap), the caution,
-   Test key, Language (Automatic and ten languages; a change applies at the
+   dictation, with a how-to line that names the double-tap; a recorded key
+   is listed after the seven presets while it is chosen, and the menu ends
+   with "Record a Key…", which turns the control into "Press a key…" with
+   Cancel and a line of instructions, then says why a press was refused or
+   which key it chose), the caution,
+   Test key, Mouse button (None, Mouse button 4 (Back) or Mouse button 5
+   (Forward), a recorded button after them while it is chosen, and "Record a
+   Mouse Button…" at the end of the menu, which turns the control into
+   "Click a mouse button…" with Cancel; disabled during a dictation, with the
+   line "Optional. Hold a side button to talk, or click or double-click it to
+   keep listening and click again to stop." and, once one is chosen, the
+   caution that it no longer goes Back or Forward in browsers or Finder (for
+   a recorded button, that it no longer does what the mouse's software or
+   other apps give it), or instead a note that macOS refused its listener and
+   the hold key still works), Language (Automatic and ten languages; a change applies at the
    next hold, without restarting the speech engine, and a dictation under
    way keeps its language), and Stop hands-free after silence, with the note
    that a recording runs for up to ten minutes and keeps its captured words
@@ -109,7 +123,9 @@ narrow window):
    ("5 dictations · 96 KB of recordings") beside the group's title, where and
    how it is stored, and Delete All History… ([History](#history)).
 3. General: "Open Earlet at login", with a note when macOS refused the
-   change or the user must allow it under Login Items.
+   change or the user must allow it under Login Items; then, in a packaged
+   copy, "Update Earlet automatically" and the version with Check for
+   Updates… or Restart to Update ([Updates](#updates)).
 4. Troubleshooting, a closed disclosure: this copy's version, build and path
    with Show This Copy in Finder, then Check permissions again, Restart
    Earlet and Open Log Folder.
@@ -594,6 +610,51 @@ the folder cannot be opened, the status line names the path. The log records:
 The attempt logger accepts no transcript, field content or error payload as
 free text.
 
+### Updates
+
+A packaged app updates itself with Sparkle 2 (`DictationUpdater`), from the
+signed feed at `https://github.com/scamai/earlet/releases/latest/download/appcast.xml`
+(`SUFeedURL`, from `product.json`). Once a day it asks for the feed; a newer
+build is downloaded in the background and installed when Earlet next quits,
+without a prompt (`SUEnableAutomaticChecks`, `SUAutomaticallyUpdate`,
+`SUScheduledCheckInterval` 86400). Settings → General → **Update Earlet
+automatically** turns checking, downloading and installing off together; the
+row below it shows the version with **Check for Updates…**, and **Restart to
+Update** while a downloaded build waits. The app menu has the same command
+under About Earlet.
+
+**What is accepted.** Only an archive whose EdDSA signature matches
+`SUPublicEDKey` in the running app, checked before it is unpacked
+(`SUVerifyUpdateBeforeExtraction`), and whose app is signed by the same
+Developer ID team. The update replaces the app at the same path under the same
+bundle identifier and team, which is what the Microphone, Accessibility and
+Input Monitoring grants and the History key are tied to, so none of them is
+asked for again. Sparkle's XPC services, which serve sandboxed apps, are not
+shipped ([development: releasing](development.md#releasing-a-mac-build)).
+
+**Patches.** The feed lists the newest release only, with a delta from each
+earlier build the release names. A copy on one of those builds downloads the
+delta and Sparkle rebuilds the new app from it, checking the result; any
+other copy, or a delta that does not apply, downloads the whole image.
+
+**Which copies follow it.** Every package from `tools/package.py`, local ones
+included; a `swift run` build has no feed and never checks.
+`DICTATION_UPDATE_FEED_URL` points one launch at another feed, HTTPS or the
+loopback only (`DictationUpdateFeed`). A copy older than the first build with
+the updater (0.1.0) must be replaced by hand once.
+
+**Network.** A check is one HTTPS request for the feed to github.com, which
+sees the address it comes from and Sparkle's user agent, naming the app and
+its version; no system profile is sent. A found update then comes from
+GitHub's download host. In one measured check (2026-10-25, the Mac app) the
+app opened a single connection, to github.com, and no other in the twelve
+seconds around it.
+
+**Log lines.** `updates:` with a build or an error code only: `found build
+…`, `up to date`, `downloaded build …`, `build … installs when Earlet quits`,
+`download failed (code …)`, `check ended (code …)` and `automatic checks
+on|off`. Never a URL or an error's text.
+
 ## The floating indicator on macOS
 
 macOS shows a small capsule at the bottom of the screen while a dictation runs
@@ -625,7 +686,14 @@ recognition, while keeping only the most recent three seconds of pending
 preview audio. It opens during that hold once the engine is ready. Only one
 preview job runs at a time; after it finishes, the next waits at least 2 s and
 at least three times that job's wall duration. Pending microphone boundaries
-coalesce to the latest cut with the earliest start, targeting a preview decoding duty cycle of 25% or less while capture retains complete PCM. Release, cancel and quit
+coalesce to the latest cut with the earliest start, targeting a preview decoding duty cycle of 25% or less while capture retains complete PCM.
+A preview job decodes its window once, at temperature 0, and the first one
+waits for 1.5 s of open audio: a decode already running cannot be stopped, so
+the final recognition of the hold waits for it, and Whisper's temperature
+fallback had re-decoded a quiet window up to five more times. Final
+recognition keeps the fallback. The caption gate does not track a noise floor
+on this hold-to-talk microphone, whose first window is already speech; only
+windows below the absolute silence level hold the caption. Release, cancel and quit
 invalidate the run before waiting for startup or shutting down the worker; a
 late completion cannot open a stream for an ended hold. Preview cleanup is
 bounded, and final recognition keeps its separate full recording and complete

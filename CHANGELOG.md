@@ -8,6 +8,68 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
+The first Mac release that updates itself: install it once by hand over
+0.1.0, and later versions arrive on their own. It is a signed, notarized disk
+image on [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0.2.0).
+
+### Fixed
+
+- **macOS: a short or quiet dictation no longer waits for the live preview.**
+  The preview now decodes each stretch of speech once and starts only after
+  1.5 s of it. Before, on quiet speech it could retry the same stretch up to
+  six times, and the final transcription of a short hold waited for all of
+  them: a synthetic quiet 2-second clip took 4.3 s with the preview running,
+  and takes 1.8–2.9 s now. The final transcription still retries
+  hard-to-hear speech.
+- **macOS: the live preview shows a quiet voice.** It used to take the start of
+  the hold, already speech, as the background noise level, so a soft-spoken
+  user's words seldom appeared while they spoke (a synthetic quiet 26-second
+  clip showed its first words after 12.8 s; now after 2.4 s).
+- **macOS: History shows each dictation's language.** The recognizer reported
+  it, but it never reached the History entry.
+
+### Added
+
+- **macOS: Earlet updates itself.** Once a day it checks GitHub Releases for a
+  newer version, downloads it in the background and installs it when you
+  quit Earlet. When only part of the app changed, it downloads a small patch
+  instead of the whole image. Your settings, words, History and permissions
+  stay. Turn it off under Settings → Update Earlet automatically, or check
+  now with Earlet → Check for Updates…. A copy of 0.1.0 has to be replaced by
+  hand once to get this.
+- **macOS: choose your own hold key.** "Record a Key…" at the end of the Hold
+  to talk picker takes whatever you press next: a modifier key on its own
+  (Left Option, Left Shift…) or a key combination such as ⌥Space, ⌃⌥D or F13.
+  Hold it to talk and double-tap it to keep listening, as with the preset
+  keys. While Earlet is on, other apps no longer receive a chosen
+  combination; one that macOS keeps for itself is refused when you record it.
+- **macOS: a mouse side button can start a dictation.** Settings can add
+  mouse button 4 (Back) or 5 (Forward) beside the hold key: hold it to talk,
+  or click or double-click it to keep listening and press it again to stop.
+  "Record a Mouse Button…" takes any extra button your mouse has, up to
+  button 32. While chosen, the button no longer does its usual job (Back or
+  Forward for the side buttons).
+- **Windows: a mouse side button can start a dictation.** The window can add
+  mouse button 4 or 5 beside the hold key: hold it to talk, click it once to
+  keep dictating, and press it again to stop. While chosen, the button no
+  longer goes Back or Forward.
+- **macOS: corrections are learned in Claude Code inside Witty.** A word you
+  fix in Claude Code's input box, with Claude Code filling the window or in a
+  tmux pane, is learned the same way as in Codex. Chinese text that
+  wraps onto the next row is read without a space at the wrap.
+- **macOS: a fix you send right away is still learned.** Pressing Return in a
+  chat box (Claude Code, Codex, a messenger) clears it, and a correction used
+  to count only after 4 s without typing. Now the text you sent counts if
+  you had stopped typing for 1 s before sending.
+- **macOS: the log says where a slow transcription's time went.** Each
+  dictation's line adds `asr_wait_ms` (waiting for a preview decode already
+  running), `asr_decode_ms`, `asr_windows` (30-second windows decoded),
+  `asr_retries` (re-decodes of hard-to-hear audio) and `asr_warm` (whether the
+  speech engine had already run since it loaded). These are counts, never
+  words.
+
 ## [0.1.0] - 2026-10-25
 
 The first release. Apple Silicon Macs can download a signed, notarized disk

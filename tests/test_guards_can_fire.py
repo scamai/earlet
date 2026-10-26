@@ -33,6 +33,18 @@ ROWS = [
     row("worker allowlist", "    for source in worker_files():\n",
         "    for source in sorted((ROOT / 'runtime/transcription_worker').glob('*.py')):\n",
         claims.test_the_package_ships_exactly_the_declared_worker),
+    row("Sparkle's sandbox services left out",
+        '    shutil.rmtree(target / "Versions/B/XPCServices", ignore_errors=True)\n', "",
+        claims.test_sparkle_is_embedded_without_its_sandbox_services),
+    row("Sparkle found through Frameworks", '"-add_rpath", "@executable_path/../Frameworks",',
+        '"-add_rpath", "@loader_path",', claims.test_sparkle_is_embedded_without_its_sandbox_services),
+    row("Sparkle's license ships",
+        '    shutil.copy2(SPARKLE_LICENSE, contents / "Resources/Licenses/Sparkle.txt")\n', "",
+        claims.test_sparkle_is_embedded_without_its_sandbox_services),
+    row("update feed written", "                          **update_keys(product)}, stream)", "}, stream)",
+        claims.test_the_macos_bundle_follows_the_product_update_feed),
+    row("builds ordered by build id", '"CFBundleVersion": build_id,', '"CFBundleVersion": product["version"],',
+        claims.test_sparkle_orders_builds_by_a_version_that_only_grows),
     row("alias table ships", 'WORKER_DATA = ("default_aliases.json",)', "WORKER_DATA = ()",
         claims.test_the_package_ships_exactly_the_declared_worker),
     row("closure declared", '"engine_lock", "hallucination", ', '"engine_lock", ',
@@ -243,7 +255,8 @@ def release_row(guard, anchor, replacement, claim, **parameters):
 
 
 SIGNING = '    command = ["codesign", "--force", "--options", "runtime", "--timestamp", "--sign", identity]'
-NESTED_SIGNING = "        runner(codesign(identity, path, WORKER_ENTITLEMENTS if executable else None))"
+NESTED_SIGNING = "        runner(codesign(identity, path, WORKER_ENTITLEMENTS if worker else None))"
+SPARKLE_SEALED = release_claims.test_sparkle_is_sealed_inside_out_before_the_app_with_no_worker_entitlements
 SKIPPED = "        if path.is_symlink() or not path.is_file() or path == main:"
 REFUSED = release_claims.test_what_cannot_become_a_notarized_release_is_refused
 
@@ -253,6 +266,11 @@ RELEASE_ROWS = [
     release_row("libraries get no entitlements", NESTED_SIGNING,
                 "        runner(codesign(identity, path, WORKER_ENTITLEMENTS))",
                 release_claims.test_executables_get_the_worker_entitlements_and_libraries_get_none),
+    release_row("only the interpreter's executables get the worker set",
+                "        worker = executable and resources in path.parents", "        worker = executable",
+                SPARKLE_SEALED),
+    release_row("nested bundles sealed", "    for bundle in bundles:\n        runner(codesign(identity, bundle))\n", "",
+                SPARKLE_SEALED),
     release_row("app entitlements", "    runner(codesign(identity, app, APP_ENTITLEMENTS))",
                 "    runner(codesign(identity, app))",
                 release_claims.test_the_app_is_signed_last_with_its_own_entitlements_and_never_deep),

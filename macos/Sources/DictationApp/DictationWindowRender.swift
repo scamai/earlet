@@ -31,6 +31,7 @@ enum DictationWindowRenderMode {
             await rig.drive()
             for width in widths {
                 for dark in [false, true] {
+                    rig.beforeEachImage()
                     let name = "window-\(scenario.rawValue)-\(Int(width))-\(dark ? "dark" : "light").png"
                     let url = directory.appendingPathComponent(name)
                     let written = render(model: rig.model, scenario: scenario, width: width, dark: dark, to: url)
@@ -97,6 +98,15 @@ enum DictationRenderScenario: String, CaseIterable {
     case missingResources = "missing-resources"
     /// Ready, on the Settings pane, with a history to count.
     case settings
+    /// Settings with a recorded combination as the hold key, listed after
+    /// the presets.
+    case settingsShortcut = "settings-shortcut"
+    /// Settings while it records a new hold key.
+    case settingsRecording = "settings-recording"
+    /// Settings with a recorded extra mouse button (button 7) chosen.
+    case settingsExtraMouseButton = "settings-extra-mouse-button"
+    /// Settings while it records a new mouse button.
+    case settingsMouseRecording = "settings-mouse-recording"
     /// The History pane: dictations over three days, some with recordings.
     case history
     case historyEmpty = "history-empty", historyOff = "history-off", historyLocked = "history-locked"
@@ -112,7 +122,8 @@ enum DictationRenderScenario: String, CaseIterable {
         case .vocabulary, .vocabularyUnsaved, .vocabularySaved,
              .learningChecking, .learningUnavailable, .learningPending, .learningRejected, .learnedRepo:
             return .vocabulary
-        case .settings, .troubleshooting:
+        case .settings, .troubleshooting, .settingsShortcut, .settingsRecording, .settingsExtraMouseButton,
+             .settingsMouseRecording:
             return .settings
         case .history, .historyEmpty, .historyOff, .historyLocked:
             return .history
@@ -144,6 +155,14 @@ final class DictationRenderRig {
         if scenario == .historyOff {
             DictationSettings(defaults: defaults).historyEnabled = false
         }
+        // Settings shows a chosen mouse button with its caution;
+        // Troubleshooting, on the same pane, shows none.
+        if scenario == .settings {
+            DictationSettings(defaults: defaults).mouseButton = .back
+        }
+        if scenario == .settingsExtraMouseButton {
+            DictationSettings(defaults: defaults).mouseButton = DictationMouseSideButton(buttonNumber: 6)
+        }
         if scenario == .historyLocked {
             historyKeys.refuse(.unavailable(-25293))
         }
@@ -174,6 +193,7 @@ final class DictationRenderRig {
             resolveResources: { resources },
             makeWorker: { _ in RenderWorker() },
             makeTrigger: { _ in trigger },
+            makeMouseTrigger: { _ in RenderMouseTrigger() },
             keyWatch: RenderKeyWatch(),
             stopTrap: RenderStopTrap(),
             privacyGate: { nil },
@@ -197,6 +217,13 @@ final class DictationRenderRig {
         model = DictationModel(environment: environment)
     }
 
+    /// Restores what tearing down the last image's window undid: leaving
+    /// Settings ends a recording.
+    func beforeEachImage() {
+        if scenario == .settingsRecording { _ = model.beginRecordingHoldKey() }
+        if scenario == .settingsMouseRecording { _ = model.beginRecordingMouseButton() }
+    }
+
     /// Moves the model into the scenario through its public API only (and
     /// seeds the scratch history through its store).
     func drive() async {
@@ -211,6 +238,17 @@ final class DictationRenderRig {
         case .ready, .returningUser, .missingResources, .settings, .troubleshooting, .restart,
              .history, .historyEmpty, .historyOff, .historyLocked:
             await model.toggle()
+        case .settingsShortcut:
+            await model.toggle()
+            model.selectHoldKey(.shortcut(DictationKeyShortcut(keyCode: 49, modifiers: .option)))
+        case .settingsRecording:
+            await model.toggle()
+            _ = model.beginRecordingHoldKey()
+        case .settingsExtraMouseButton:
+            await model.toggle()
+        case .settingsMouseRecording:
+            await model.toggle()
+            _ = model.beginRecordingMouseButton()
         case .paused:
             await model.toggle()
             await model.toggle()
@@ -344,6 +382,16 @@ private final class RenderTrigger: DictationHoldTrigger {
     func start() -> Bool { startResult }
     func stop() {}
     func update(_ key: DictationHoldKey) {}
+}
+
+@MainActor
+private final class RenderMouseTrigger: DictationMouseTrigger {
+    var onPress: (() -> Void)?
+    var onRelease: (() -> Void)?
+    var onDegraded: ((DictationPermissionStatus) -> Void)?
+    func start() -> Bool { true }
+    func stop() {}
+    func update(_ button: DictationMouseSideButton) {}
 }
 
 @MainActor

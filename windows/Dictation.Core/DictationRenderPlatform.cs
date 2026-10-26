@@ -126,7 +126,8 @@ public sealed class DictationRenderPlatform : IDictationPlatform, IDisposable
     {
     }
 
-    public IDictationTrigger CreateTrigger(HotkeyBinding binding, bool cancelOnChord, bool handsFree) =>
+    public IDictationTrigger CreateTrigger(
+        HotkeyBinding binding, bool cancelOnChord, bool handsFree, DictationMouseButton mouseButton) =>
         Trigger = new RenderTrigger(binding, HookRegisters);
 
     public IAudioCaptureDevice CreateMicrophone() => Microphone = new RenderMicrophone();
@@ -252,6 +253,13 @@ public sealed class DictationRenderPlatform : IDictationPlatform, IDisposable
         }
 
         public LatchEnd ConsumeLatchEnd() => LatchEnd.None;
+
+        /// <summary>No scenario uses a mouse button.</summary>
+        public bool MouseHolds => false;
+
+        public bool MouseLatched => false;
+
+        public bool MouseTriggerDegraded => false;
 
         /// <summary>The user presses or lets go of the hold key: Windows sees
         /// it, and the hook too while it is alive.</summary>

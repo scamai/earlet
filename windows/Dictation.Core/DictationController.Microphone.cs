@@ -172,7 +172,7 @@ public sealed partial class DictationController
             // that shared the line stays on it.
             Render(_status.HoldKeySentence is { } holdKey
                 ? new DictationStatus(holdKey)
-                : new DictationStatus(_session is not null ? DictationCopy.Armed(_holdKey) : DictationCopy.Paused));
+                : new DictationStatus(_session is not null ? ArmedLine : DictationCopy.Paused));
         }
         else
         {

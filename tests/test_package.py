@@ -405,8 +405,9 @@ def test_provider_requirements_are_pinned(name, provider):
 # ─── Release hygiene, through build() ────────────────────────────────────────
 
 class FakeToolchain:
-    """Stands in for dotnet, swift, strip and codesign and records each call.
-    Anything else (git) runs for real."""
+    """Stands in for dotnet, swift, strip, install_name_tool and codesign and
+    records each call. Anything else (git) runs for real. Its swift build
+    leaves a Sparkle.framework beside the executable, as SwiftPM does."""
 
     def __init__(self, tmp_path, assembly=b"clean-assembly"):
         self.commands, self.assembly, self.bin = [], assembly, tmp_path / "swift-bin"
@@ -415,7 +416,7 @@ class FakeToolchain:
     def __call__(self, command, **options):
         command = [str(part) for part in command]
         name = Path(command[0]).name
-        if name not in ("fake-dotnet", "swift", "strip", "codesign"):
+        if name not in ("fake-dotnet", "swift", "strip", "install_name_tool", "codesign"):
             return self.real(command, **options)
         self.commands.append(command)
         if name == "fake-dotnet":
@@ -429,6 +430,14 @@ class FakeToolchain:
         elif name == "swift":
             self.bin.mkdir(parents=True, exist_ok=True)
             (self.bin / "Dictation").write_bytes(self.assembly)
+            framework = self.bin / "Sparkle.framework"
+            for part in ("Sparkle", "Autoupdate", "Updater.app/Contents/MacOS/Updater",
+                         "XPCServices/Installer.xpc/Contents/MacOS/Installer"):
+                (framework / "Versions/B" / part).parent.mkdir(parents=True, exist_ok=True)
+                (framework / "Versions/B" / part).write_bytes(b"synthetic-mach-o")
+            if not (framework / "Versions/Current").exists():
+                (framework / "Versions/Current").symlink_to("B")
+                (framework / "Sparkle").symlink_to("Versions/Current/Sparkle")
         return subprocess.CompletedProcess(command, 0, stdout="")
 
 
@@ -436,6 +445,10 @@ def fake_build(tmp_path, monkeypatch, assembly=b"clean-assembly", **overrides):
     package = tool("package")
     toolchain = FakeToolchain(tmp_path, assembly)
     monkeypatch.setattr(package.subprocess, "run", toolchain)
+    license_text = tmp_path / "sparkle-artifact/LICENSE"
+    license_text.parent.mkdir(parents=True)
+    license_text.write_text("Copyright (c) 2006-2013 Andy Matuschak.\n")
+    monkeypatch.setattr(package, "SPARKLE_LICENSE", license_text)
     args = build_args(tmp_path, dotnet="fake-dotnet", **overrides)
     return package, toolchain, args
 
@@ -522,3 +535,88 @@ def test_the_macos_bundle_is_its_own_single_instance_app(tmp_path, monkeypatch):
     assert len(info["DictationBuild"]) == 14
     assert info["DictationBuild"].isascii() and info["DictationBuild"].isdigit()
     assert json.loads((args.output / "build-receipt.json").read_text())["build"] == info["DictationBuild"]
+
+
+def macos_build(tmp_path, monkeypatch, **overrides):
+    import plistlib
+    package, toolchain, args = fake_build(tmp_path, monkeypatch, platform="macos", **overrides)
+    monkeypatch.setattr(package.platform, "system", lambda: "Darwin")
+    bundle = package.build(args)
+    return package, toolchain, args, bundle, plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
+
+
+def test_sparkle_orders_builds_by_a_version_that_only_grows(tmp_path, monkeypatch):
+    # CFBundleVersion is what Sparkle compares: the build id, never the
+    # product version, which many builds share.
+    *_, info = macos_build(tmp_path, monkeypatch)
+    assert info["CFBundleVersion"] == info["DictationBuild"]
+    assert info["CFBundleShortVersionString"] == json.loads((ROOT / "product.json").read_text())["version"]
+
+
+def test_the_macos_bundle_follows_the_product_update_feed(tmp_path, monkeypatch):
+    *_, info = macos_build(tmp_path, monkeypatch)
+    updates = json.loads((ROOT / "product.json").read_text())["updates"]
+    assert info["SUFeedURL"] == updates["feed"] and info["SUFeedURL"].startswith("https://")
+    assert info["SUPublicEDKey"] == updates["ed25519_public"]
+    assert info["SUEnableAutomaticChecks"] is True and info["SUAutomaticallyUpdate"] is True
+    assert info["SUScheduledCheckInterval"] == 86400
+    assert info["SUVerifyUpdateBeforeExtraction"] is True
+
+
+@pytest.mark.parametrize("updates, accepted", [
+    (None, True),
+    ({"feed": "http://example.com/appcast.xml", "ed25519_public": "A" * 43 + "="}, False),
+    ({"feed": "https://example.com/appcast.xml", "ed25519_public": "short"}, False),
+    ({"feed": "https://example.com/appcast.xml", "ed25519_public": "A" * 43 + "="}, True),
+])
+def test_an_update_feed_must_be_https_with_a_whole_key(updates, accepted):
+    package = tool("package")
+    product = {"name": "Earlet"} | ({"updates": updates} if updates else {})
+    if accepted:
+        keys = package.update_keys(product)
+        assert ("SUFeedURL" in keys) == bool(updates)
+    else:
+        with pytest.raises(Exception):
+            package.update_keys(product)
+
+
+def test_sparkle_is_embedded_without_its_sandbox_services(tmp_path, monkeypatch):
+    _package, toolchain, _args, bundle, _info = macos_build(tmp_path, monkeypatch)
+    framework = bundle / "Contents/Frameworks/Sparkle.framework"
+    assert (framework / "Versions/B/Sparkle").is_file()
+    assert (framework / "Versions/B/Autoupdate").is_file()
+    assert (framework / "Versions/B/Updater.app/Contents/MacOS/Updater").is_file()
+    assert (framework / "Versions/Current").is_symlink() and (framework / "Sparkle").is_symlink()
+    assert not (framework / "Versions/B/XPCServices").exists()
+    # The MIT notice goes with the binary.
+    assert (bundle / "Contents/Resources/Licenses/Sparkle.txt").read_text().startswith("Copyright (c) 2006")
+    names = [Path(command[0]).name for command in toolchain.commands]
+    rpath = toolchain.commands[names.index("install_name_tool")]
+    assert rpath[1:3] == ["-add_rpath", "@executable_path/../Frameworks"]
+    assert rpath[-1] == str(bundle / "Contents/MacOS/Dictation")
+    # The rpath goes in before the signature seals the executable.
+    assert names.index("install_name_tool") < names.index("codesign")
+
+
+def test_a_build_without_sparkle_is_refused(tmp_path, monkeypatch):
+    package, toolchain, args = fake_build(tmp_path, monkeypatch, platform="macos")
+    monkeypatch.setattr(package.platform, "system", lambda: "Darwin")
+    real = toolchain.__call__
+
+    def without_sparkle(command, **options):
+        done = real(command, **options)
+        if Path(str(command[0])).name == "swift" and "--show-bin-path" not in command:
+            import shutil
+            shutil.rmtree(toolchain.bin / "Sparkle.framework")
+        return done
+    monkeypatch.setattr(package.subprocess, "run", without_sparkle)
+    with pytest.raises(ValueError, match="Sparkle.framework"):
+        package.build(args)
+
+
+def test_a_build_without_sparkles_license_is_refused(tmp_path, monkeypatch):
+    package, _toolchain, args = fake_build(tmp_path, monkeypatch, platform="macos")
+    monkeypatch.setattr(package.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(package, "SPARKLE_LICENSE", tmp_path / "missing/LICENSE")
+    with pytest.raises(ValueError, match="license"):
+        package.build(args)

@@ -23,10 +23,22 @@ public final class DictationModel: ObservableObject {
     /// Raised a moment before `recording` drops, so the two overlap for the
     /// instant of a release and are never both false in between.
     @Published public internal(set) var transcribing = false
-    /// The key held to dictate. Change it with `selectHoldKey(_:)`.
-    @Published public private(set) var holdKey: DictationHoldKey
+    /// The key held to dictate. Change it with `selectHoldKey(_:)`, or by
+    /// recording one (DictationModelHoldKeyRecording.swift).
+    @Published public internal(set) var holdKey: DictationHoldKey
+    /// Settings is recording a new hold key: the live listener is off, so
+    /// the press being recorded starts nothing.
+    @Published public internal(set) var recordingHoldKey = false
+    /// Settings is recording a new mouse button: its listener is off, and no
+    /// press starts a dictation.
+    @Published public internal(set) var recordingMouseButton = false
     /// Shown under the key picker when the key collides with something.
     @Published public private(set) var caution: String?
+    /// The mouse button that also starts a dictation, or `nil` for none.
+    /// Change it with `selectMouseButton(_:)`.
+    @Published public private(set) var mouseButton: DictationMouseSideButton?
+    /// macOS refused the mouse button's listener. The hold key still works.
+    @Published public private(set) var mouseButtonRefused = false
     /// The language dictation listens for. Change it with `selectLanguage(_:)`.
     @Published public private(set) var language: DictationLanguage
     /// Whether macOS opens Dictation at login. Off until the user turns it on.
@@ -128,7 +140,8 @@ public final class DictationModel: ObservableObject {
     var holdHealth: Task<Void, Never>?
     var recoveryExpiry: Task<Void, Never>?
     let env: DictationEnvironment
-    private var trigger: (any DictationHoldTrigger)?
+    var trigger: (any DictationHoldTrigger)?
+    var mouseTrigger: (any DictationMouseTrigger)?
     private var maximumHold: Task<Void, Never>?
     private var housekeeping: Task<Void, Never>?
 
@@ -154,6 +167,7 @@ public final class DictationModel: ObservableObject {
         self.env = environment
         self.silenceSetting = environment.settings.silenceSetting
         self.holdKey = environment.settings.holdKey
+        self.mouseButton = environment.settings.mouseButton
         self.language = environment.settings.language
         self.learningEnabled = environment.settings.learningEnabled
         self.hasCompletedFirstDictation = environment.settings.hasCompletedFirstDictation
@@ -182,7 +196,54 @@ public final class DictationModel: ObservableObject {
         keyCheck.select(key)
         if env.isDictationFrontmost() { keyCheck.startTest() }
         refreshCaution()
-        if enabled { status = "Enabled. Hold \(key.name) in a text field." }
+        if enabled { status = enabledStatus }
+    }
+
+    /// Persists the mouse button (`nil`: none) and moves a live listener
+    /// onto it at once. The hold key keeps working either way.
+    public func selectMouseButton(_ button: DictationMouseSideButton?) {
+        guard !recording, !busy, attempt == nil, button != mouseButton else { return }
+        env.settings.mouseButton = button
+        mouseButton = button
+        env.log("mouse button: \(button?.rawValue ?? "none")")
+        guard enabled else { return }
+        if let button, let mouseTrigger {
+            mouseTrigger.update(button)
+        } else {
+            armMouseTrigger()
+        }
+        status = enabledStatus
+    }
+
+    /// What the mouse button costs, shown under its picker.
+    public var mouseButtonCaution: String? { mouseButton?.caution }
+
+    /// The line after an enable or a change of trigger: every way to start.
+    var enabledStatus: String {
+        guard let mouseButton else { return "Enabled. Hold \(holdKey.name) in a text field." }
+        return "Enabled. Hold \(holdKey.name) or \(mouseButton.name) in a text field."
+    }
+
+    /// Installs the listener for the chosen mouse button, or removes it when
+    /// there is none. A refusal is reported, never an enable failure: the
+    /// hold key is the trigger every user has.
+    func armMouseTrigger() {
+        mouseTrigger?.stop(); mouseTrigger = nil
+        mouseButtonRefused = false
+        guard let mouseButton else { return }
+        let mouse = env.makeMouseTrigger(mouseButton)
+        mouse.onPress = { [weak self] in self?.mousePressed() }
+        mouse.onRelease = { [weak self] in self?.mouseReleased() }
+        mouse.onDegraded = { [weak self] degraded in
+            self?.env.log("mouse button listener degraded: \(degraded)")
+            self?.mouseButtonRefused = true
+        }
+        guard mouse.start() else {
+            env.log("enable: the mouse button listener was refused")
+            mouseButtonRefused = true
+            return
+        }
+        mouseTrigger = mouse
     }
 
     /// Refresh the current key-conflict diagnostic for the selected binding.
@@ -473,6 +534,13 @@ public final class DictationModel: ObservableObject {
         key.onDegraded = { [weak self] degraded in self?.triggerDegraded(degraded) }
         guard key.start() else {
             env.log("enable: the key listener was refused")
+            if case .shortcut = holdKey {
+                // Not a permission: macOS holds the combination for
+                // something else, and a restart would not change that.
+                await stopWorker()
+                status = holdKeyRefusedStatus
+                return
+            }
             tapCreationRefused = true
             reopenNeeded = true
             enablePending = true
@@ -482,13 +550,14 @@ public final class DictationModel: ObservableObject {
             return
         }
         trigger = key
+        armMouseTrigger()
         enabled = true
         keyCheck.setArmed(true)
         env.settings.enabled = true
         markWorkerUsed()
         startHousekeeping()
         refreshPermissions()
-        status = "Enabled. Hold \(holdKey.name) in a text field."
+        status = enabledStatus
     }
 
     private func pause() async {
@@ -499,6 +568,7 @@ public final class DictationModel: ObservableObject {
         enablePending = false
         housekeeping?.cancel(); housekeeping = nil
         trigger?.stop(); trigger = nil
+        mouseTrigger?.stop(); mouseTrigger = nil
         env.keyWatch.end()
         await env.capture.coolDown()
         await stopWorker()
@@ -674,6 +744,7 @@ public final class DictationModel: ObservableObject {
         abandonObservation("quit")
         housekeeping?.cancel(); housekeeping = nil
         trigger?.stop(); trigger = nil
+        mouseTrigger?.stop(); mouseTrigger = nil
         endHold()
         await stopLivePreview()
         // Stop the collector before closing its spool: the final retained
@@ -825,7 +896,7 @@ public final class DictationModel: ObservableObject {
         case shortcut
     }
 
-    private func makeAttempt() -> HoldAttempt {
+    private func makeAttempt(byMouse: Bool) -> HoldAttempt {
         let gate = InsertionGate()
         let transcript = TranscriptHolder()
         let target = PasteTarget()
@@ -865,7 +936,8 @@ public final class DictationModel: ObservableObject {
                 return await self.insert(text, gate: gate, transcript: transcript, target: target)
             })
         let attempt = HoldAttempt(session: session, gate: gate, transcript: transcript,
-                           diagnostics: DictationAttemptDiagnostics(log: env.log))
+                           diagnostics: DictationAttemptDiagnostics(
+                               log: env.log, trigger: byMouse ? .mouse : holdKey.chordMask == nil ? .combination : .key))
         attempt.capture = capture
         attempt.target = target
         return attempt
@@ -884,6 +956,12 @@ public final class DictationModel: ObservableObject {
     /// old double-tap stop habit — both its raw press and the detector's
     /// stray toggle edge — so it cannot open a fresh dictation by accident.
     private var stopTapSuppressUntil: TimeInterval = 0
+    /// When the mouse button last went down, on the same clock as the
+    /// trailing-tap window: its release tells a click from a hold.
+    private var mousePressedAt: TimeInterval = 0
+    /// When a click latched dictation on, on the same clock: a press soon
+    /// after is that click's double-click, not the stop.
+    private var mouseClickLatchedAt: TimeInterval?
 
     func holdStarted() {
         guard !keyCheck.isTesting else { return }
@@ -891,7 +969,7 @@ public final class DictationModel: ObservableObject {
         // any-press stop, on the key): finish and transcribe.
         if latched {
             stopTapSuppressUntil = env.holdKeyUptime()
-                + holdKey.hotkeyConfig.doubleTapWindow
+                + DictationHoldKey.doubleTapWindow
             env.log("latch ended by a \(holdKey.name) press")
             latchEnded()
             return
@@ -900,13 +978,24 @@ public final class DictationModel: ObservableObject {
             env.log("absorbed the stop pair's trailing tap")
             return
         }
-        guard enabled, !recoveringSavedTake, !isQuitting, attempt == nil else { return }
+        beginHold(byMouse: false)
+    }
+
+    /// A press of the hold key or the mouse button, past the latch's stop.
+    private func beginHold(byMouse: Bool) {
+        // While Settings records a key, a press is the key being recorded.
+        guard enabled, !recordingHoldKey, !recordingMouseButton, !recoveringSavedTake, !isQuitting,
+              attempt == nil else { return }
         guard !busy else {
             refuseBusyPress()
             return
         }
-        guard chordGuard.begin(holdMask: holdKey.binding.eventFlagMask, flags: lastModifierFlags) else {
-            return
+        // The shortcut rule tells Right Command + C from a dictation. A mouse
+        // button is not a modifier: typing while it is held is the user
+        // working, as it is during a latch.
+        // A recorded combination is a shortcut of its own: likewise.
+        if !byMouse, let chordMask = holdKey.chordMask {
+            guard chordGuard.begin(holdMask: chordMask, flags: lastModifierFlags) else { return }
         }
         // The watch on the last paste keeps running: this press may yet be a
         // shortcut on the hold key, a refused press or a cancelled one, and
@@ -914,14 +1003,19 @@ public final class DictationModel: ObservableObject {
         // The language is fixed when a hold starts, so a change made while
         // this one is under way reaches the next.
         slot.setLanguageCode(language.code)
-        keyCheck.pressed()
-        let attempt = makeAttempt()
+        if !byMouse { keyCheck.pressed() }
+        let attempt = makeAttempt(byMouse: byMouse)
         attempt.startedAt = ProcessInfo.processInfo.systemUptime
+        attempt.byMouse = byMouse
         self.attempt = attempt
         // `recording` waits for the privacy gate (`admit`): a refused press
         // never shows Listening. The key watch does not wait, so a shortcut
         // typed at once is still told apart from a dictation.
-        env.keyWatch.begin { [weak self] code in self?.keyDown(code) }
+        if byMouse || holdKey.chordMask == nil {
+            watchEscapeOnly()
+        } else {
+            env.keyWatch.begin { [weak self] code in self?.keyDown(code) }
+        }
         if worker?.isReady != true {
             // Released after idle, or died: load it while the user speaks.
             Task { _ = await ensureWorkerStarted() }
@@ -1031,10 +1125,17 @@ public final class DictationModel: ObservableObject {
             Task { @MainActor [weak self] in self?.noteInputLevel(level) }
         }
         // A double-tap may already have latched this hold while the gate ran.
-        status = latched ? latchedStatus : "Listening… Release \(holdKey.name) to insert."
+        status = latched ? latchedStatus : "Listening… Release \(pressName) to insert."
     }
 
-    private var latchedStatus: String { "Dictating. Press \(holdKey.name), Space or Return to stop." }
+    private var latchedStatus: String { "Dictating. Press \(pressName), Space or Return to stop." }
+
+    /// What the user pressed to start this dictation: the hold key, or the
+    /// mouse button.
+    private var pressName: String {
+        if attempt?.byMouse == true, let mouseButton { return mouseButton.name }
+        return holdKey.name
+    }
 
     /// What to say when the press-time gate refuses, or `nil` to proceed.
     ///
@@ -1058,7 +1159,14 @@ public final class DictationModel: ObservableObject {
         // A latch ends on the next double-tap, Escape or Cancel — the pair's
         // own releases are not releases.
         guard !latched else { return }
-        guard let attempt else { return }
+        // A hold the mouse button started ends on the button's release.
+        guard let attempt, !attempt.byMouse else { return }
+        releaseHold(attempt)
+    }
+
+    /// The press that started `attempt` is over: finish it, or ask for the
+    /// finish once capture is up.
+    private func releaseHold(_ attempt: HoldAttempt) {
         guard attempt.captureStarted else {
             attempt.releaseRequested = true
             watchEscapeOnly()
@@ -1091,8 +1199,10 @@ public final class DictationModel: ObservableObject {
     private func releaseCaptured(_ attempt: HoldAttempt) {
         watchEscapeOnly()
         let elapsed = ProcessInfo.processInfo.systemUptime - attempt.startedAt
-        let window = holdKey.hotkeyConfig.doubleTapWindow
-        guard elapsed < window else {
+        let window = DictationHoldKey.doubleTapWindow
+        // The mouse button has no second tap to wait for: its release
+        // already told a click from a hold.
+        guard !attempt.byMouse, elapsed < window else {
             Task { await finishRecording() }
             return
         }
@@ -1118,7 +1228,12 @@ public final class DictationModel: ObservableObject {
     func toggleLatch() {
         guard !keyCheck.isTesting else { return }
         if !latched { keyCheck.doubleTapped() }
-        if latched { latchEnded() } else { latchStarted() }
+        if latched {
+            latchEnded()
+        } else {
+            latchStarted()
+            if latched { env.log("hold key double-tapped: dictation keeps running") }
+        }
     }
 
     /// The double-tap that latches dictation on. Its second press already
@@ -1143,12 +1258,58 @@ public final class DictationModel: ObservableObject {
             holdStarted()
             guard attempt != nil else { return }
         }
+        latchOn()
+    }
+
+    /// The hold under way keeps running with nothing held, until a press of
+    /// the hold key or the mouse button, a stop key, Escape or Cancel.
+    private func latchOn() {
         latched = true
         watchEscapeOnly()
         if !env.stopTrap.begin({ [weak self] in self?.stopKeyPressed() }) {
             env.log("the Space/Return stop needs Input Monitoring; this latch ends by key press or Escape only")
         }
         status = latchedStatus
+    }
+
+    // ─── The mouse button ───
+    //
+    // Hold it to talk; a click (released within `clickWindow`) keeps
+    // dictation running, and the next press stops it. The model reads the
+    // button's raw edges and decides: `latched` stays the one record of a
+    // latch, however it began and however it ends.
+
+    func mousePressed() {
+        mousePressedAt = env.holdKeyUptime()
+        // Any press stops a latch, as the hold key's does, and on the press:
+        // words spoken while the button goes down are the last. Its release
+        // then finds the latch still up, or no hold at all, and does nothing.
+        if latched {
+            if let clickedAt = mouseClickLatchedAt,
+               mousePressedAt - clickedAt <= DictationMouseSideButton.doubleClickWindow {
+                // The second half of a double-click: the click already
+                // latched, and this press must not stop what it started.
+                mouseClickLatchedAt = nil
+                env.log("mouse button double-clicked: dictation keeps running")
+                return
+            }
+            env.log("latch ended by a mouse button press")
+            latchEnded()
+            return
+        }
+        beginHold(byMouse: true)
+    }
+
+    func mouseReleased() {
+        // A hold the hold key started ends on the key's release.
+        guard !latched, let attempt, attempt.byMouse else { return }
+        if env.holdKeyUptime() - mousePressedAt <= DictationMouseSideButton.clickWindow {
+            env.log("mouse button clicked: dictation keeps running")
+            mouseClickLatchedAt = env.holdKeyUptime()
+            latchOn()
+            return
+        }
+        releaseHold(attempt)
     }
 
     /// The trap swallowed a stop key's down (Space, Return or keypad Enter):
@@ -1190,6 +1351,7 @@ public final class DictationModel: ObservableObject {
     /// Clears everything that exists only while a key is held.
     func endHold() {
         attempt = nil
+        mouseClickLatchedAt = nil
         recording = false
         latched = false
         inputLevel = 0

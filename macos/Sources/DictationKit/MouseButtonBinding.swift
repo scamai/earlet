@@ -4,10 +4,10 @@ import Foundation
 ///
 /// A separate type from `HotkeyBinding` rather than a case added to it: a
 /// mouse button is a single discrete control (no modifier combination, no
-/// "hold vs double-tap" choice to make — the tap only ever treats a mouse
-/// button as hold-to-talk), and mixing the two shapes into one type would
-/// force every keyboard call site to reason about a `buttonNumber` that
-/// never applies to it.
+/// double-tap — a spare button is pressed for no other reason, so one
+/// click is enough to keep dictation running), and mixing the two shapes
+/// into one type would force every keyboard call site to reason about a
+/// `buttonNumber` that never applies to it.
 public struct MouseButtonBinding: Codable, Sendable, Equatable {
 
     /// CG button numbering: 0 left, 1 right, 2 middle, 3 = "Button 4", up to

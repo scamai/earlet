@@ -78,6 +78,13 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
         /// missing on the first read. Proposed values, not measured.
         public var anchorAttempts: Int
         public var anchorRetrySeconds: TimeInterval
+        /// How long the edited span must have been still when the whole
+        /// field empties for it to count as what was sent
+        /// (`DictationSentDraft`). Shorter than `settleSeconds` because a
+        /// send is itself the signal that editing ended; long enough that a
+        /// word still being typed when Return was pressed, which the 0.6 s
+        /// terminal poll may have caught half-way, is not learned.
+        public var sendSettleSeconds: TimeInterval
 
         public init(
             observationWindowSeconds: TimeInterval = 90,
@@ -86,7 +93,8 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
             debounceSeconds: TimeInterval = 0.15,
             settleSeconds: TimeInterval = 4.0,
             anchorAttempts: Int = 6,
-            anchorRetrySeconds: TimeInterval = 0.1
+            anchorRetrySeconds: TimeInterval = 0.1,
+            sendSettleSeconds: TimeInterval = 1.0
         ) {
             self.observationWindowSeconds = observationWindowSeconds
             self.editDistanceThreshold = editDistanceThreshold
@@ -95,6 +103,7 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
             self.settleSeconds = settleSeconds
             self.anchorAttempts = anchorAttempts
             self.anchorRetrySeconds = anchorRetrySeconds
+            self.sendSettleSeconds = sendSettleSeconds
         }
     }
 
@@ -703,6 +712,9 @@ private final class ObservationSession: @unchecked Sendable {
         }
 
         let previous = lastFieldValueSnapshot()
+        // How long the field had been still before this read: a send's
+        // last span counts only when it was not still being typed.
+        let quietBeforeRead = Date().timeIntervalSince(lastChangeAtSnapshot())
         // Bookkeeping: only a real content change resets the
         // quiet clock — a recompute triggered by e.g. a bare selection
         // change with identical field content must not look like fresh
@@ -723,6 +735,16 @@ private final class ObservationSession: @unchecked Sendable {
 
         if let condition = DictationTerminalConditionEvaluator.evaluate(tick),
            condition != .editSettled || onRevision == nil {
+            if onRevision != nil, let sent = DictationSentDraft.revision(
+                condition: condition, anchoredSpanText: anchoredSpanText,
+                lastSpan: anchor.span(in: previous), dictatedText: dictatedText,
+                quietSeconds: quietBeforeRead, sendSettleSeconds: config.sendSettleSeconds,
+                revisions: &revisions) {
+                lock.lock()
+                let allowed = !finished && forced == nil
+                lock.unlock()
+                if allowed { onRevision?(sent) }
+            }
             terminate(condition, span: anchoredSpanText)
             return
         }
@@ -894,6 +916,28 @@ private final class ObservationSession: @unchecked Sendable {
 }
 
 // ─── Stable draft revisions ───
+
+/// A chat composer (Claude Code, Codex, a messenger) sends on Return and
+/// empties itself, usually long before an edit has settled for
+/// `settleSeconds`, so the user's fix used to be lost with the send
+/// (LEARNING.md §7). When the whole field empties while the span is
+/// diverged, the last span read before it is what was sent, and it is
+/// published as one more revision of the same insertion if it had been
+/// still for `sendSettleSeconds`. Pure, so the rule is testable without
+/// Accessibility.
+enum DictationSentDraft {
+    static func revision(condition: DictationTerminalCondition, anchoredSpanText: String?,
+                         lastSpan: String?, dictatedText: String, quietSeconds: TimeInterval,
+                         sendSettleSeconds: TimeInterval,
+                         revisions: inout DictationStableRevisions) -> String? {
+        // The whole field emptied: the anchor is gone because nothing is
+        // left to hold it. The span itself emptied inside a field that still
+        // has text is a deletion, not a send.
+        guard condition == .fieldCleared, anchoredSpanText == nil else { return nil }
+        return revisions.takeIfSettled(span: lastSpan, original: dictatedText,
+                                       quietSeconds: quietSeconds, settleSeconds: sendSettleSeconds)
+    }
+}
 
 /// Pure settlement state used by the AX session. Returning to the original
 /// span is a revision too; untouched dictation never becomes positive evidence.
