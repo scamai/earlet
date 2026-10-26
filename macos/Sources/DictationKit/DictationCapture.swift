@@ -1632,6 +1632,16 @@ public final class DictationCapture: @unchecked Sendable {
         return (clock() - last) >= idleSeconds
     }
 
+    /// The bound input's transport as `MicCapture.boundDeviceTransport()`
+    /// names it (`bluetooth`, `built-in`, `usb`, …; `unknown` when nothing
+    /// is bound).
+    public var boundInputTransport: String {
+        lock.lock()
+        let engine = mic
+        lock.unlock()
+        return engine.boundDeviceTransport()
+    }
+
     /// True when the engine is warm but its input binding went stale — the
     /// system default moved (the user unplugged their earphones), the bound
     /// device disappeared out from under the engine, or the explicit bind

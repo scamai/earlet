@@ -357,6 +357,7 @@ private final class RenderCapture: DictationCaptureDevice, @unchecked Sendable {
     }
     func coolDown() async {}
     func shouldCoolDown(idleSeconds: Double) -> Bool { false }
+    var usesBluetoothInput: Bool { false }
 }
 
 private final class RenderWorker: DictationWorker, @unchecked Sendable {

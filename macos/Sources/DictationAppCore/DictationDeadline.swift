@@ -33,11 +33,22 @@ public struct DictationTiming: Sendable {
     public var workerIdleSeconds: Double = 180
     /// How often idle resources are checked.
     public var housekeepingSeconds: Double = 5
-    /// Idle time after which the warm microphone is closed. The grace is
-    /// long enough to keep the engine warm across the pauses of a working
-    /// session (a cold start loses the first word), short enough that the
-    /// microphone indicator goes out soon after the user stops.
-    public var microphoneIdleSeconds: Double = 30
+    /// Idle time after which the warm microphone is closed, counted from the
+    /// end of the last dictation. The microphone stays open only where a
+    /// cold start costs words. Over 545 real dictations on one Mac
+    /// (2026-09-29 to 10-25) a built-in microphone delivered audio 85 ms
+    /// after a cold start (median; 162 ms at p90), quicker than anyone
+    /// starts speaking after a press, so it closes almost at once.
+    public var microphoneIdleSeconds: Double = 3
+    /// The same for a Bluetooth microphone, whose first audible sound came
+    /// 269 ms after a cold start (median; 862 ms at p90): enough to lose a
+    /// first word. It stays open across the short pauses of a working
+    /// session (34% of next presses came within 10 s), but no longer: while
+    /// it is open, AirPods and other headsets play in their low-quality
+    /// call mode.
+    public var bluetoothMicrophoneIdleSeconds: Double = 10
+    /// How often an idle warm microphone is checked once a dictation ends.
+    public var microphoneCheckSeconds: Double = 0.5
 
     public init() {}
 

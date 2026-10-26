@@ -35,6 +35,13 @@ final class FakeCapture: DictationCaptureDevice, @unchecked Sendable {
         var coolDowns = 0
         var startedOnMainThread: [Bool] = []
         var idleLongEnough = false
+        /// How long the warm engine has been idle, against the grace the
+        /// model asks `shouldCoolDown` about.
+        var idleFor: Double = 0
+        /// The bound input is a Bluetooth microphone.
+        var bluetooth = false
+        /// Every grace the model asked `shouldCoolDown` about.
+        var gracesAsked: [Double] = []
         /// Settable answers for the trigger-time checks.
         var stale = false
         var warmUpError: Error?
@@ -149,9 +156,11 @@ final class FakeCapture: DictationCaptureDevice, @unchecked Sendable {
     }
 
     func shouldCoolDown(idleSeconds: Double) -> Bool {
-        let s = state.get
-        return s.warm && !s.retaining && s.idleLongEnough
+        let s = state.mutate { $0.gracesAsked.append(idleSeconds); return $0 }
+        return s.warm && !s.retaining && (s.idleLongEnough || s.idleFor >= idleSeconds)
     }
+
+    var usesBluetoothInput: Bool { state.get.bluetooth }
 }
 
 // ─── Worker ───

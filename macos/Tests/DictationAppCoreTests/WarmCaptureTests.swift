@@ -65,6 +65,88 @@ struct WarmCaptureTests {
         #expect(!harness.capture.isCurrentlyWarm)
     }
 
+    // ─── How long the microphone stays open ───
+    //
+    // Measured over 545 real dictations on one Mac: a built-in microphone
+    // gives audio 85 ms after a cold start, a Bluetooth one 269 ms (862 ms
+    // at p90). The fake's `idleFor` stands in for the time since the last
+    // dictation; housekeeping is pushed out of reach, so only the timer the
+    // end of a dictation starts can close the microphone.
+
+    private func enabledQuietHousekeeping(_ harness: Harness) async -> DictationModel {
+        var harness = harness
+        harness.timing.housekeepingSeconds = 3_600
+        harness.timing.microphoneCheckSeconds = 0.02
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.enabled)
+        return model
+    }
+
+    @Test("the graces: 3 s for a built-in or wired microphone, 10 s for Bluetooth, checked every 0.5 s")
+    func graces() {
+        let timing = DictationTiming()
+        #expect(timing.microphoneIdleSeconds == 3)
+        #expect(timing.bluetoothMicrophoneIdleSeconds == 10)
+        #expect(timing.microphoneCheckSeconds == 0.5)
+    }
+
+    @Test("a built-in microphone closes once the dictation has been idle 3 s, without waiting for housekeeping")
+    func builtInClosesSoon() async {
+        let harness = Harness()
+        let model = await enabledQuietHousekeeping(harness)
+        await dictate(harness, model)
+        harness.capture.state.mutate { $0.idleFor = 3.1 }
+        #expect(await eventually { harness.capture.state.get.coolDowns == 1 })
+        #expect(!harness.capture.isCurrentlyWarm)
+        #expect(harness.capture.state.get.gracesAsked.allSatisfy { $0 == 3 })
+        #expect(harness.logLines.get.contains { $0.contains("microphone closed after 3 s idle (other)") })
+    }
+
+    @Test("a Bluetooth microphone stays open for 10 s, then closes")
+    func bluetoothStaysOpenLonger() async {
+        let harness = Harness()
+        harness.capture.state.mutate { $0.bluetooth = true }
+        let model = await enabledQuietHousekeeping(harness)
+        await dictate(harness, model)
+        harness.capture.state.mutate { $0.idleFor = 4 }
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(harness.capture.state.get.coolDowns == 0, "4 s is inside the Bluetooth grace")
+        #expect(harness.capture.isCurrentlyWarm)
+        harness.capture.state.mutate { $0.idleFor = 10.5 }
+        #expect(await eventually { harness.capture.state.get.coolDowns == 1 })
+        #expect(harness.logLines.get.contains { $0.contains("microphone closed after 10 s idle (bluetooth)") })
+    }
+
+    @Test("a press before the grace ends keeps the microphone warm for that dictation")
+    func pressKeepsItWarm() async {
+        let harness = Harness()
+        let model = await enabledQuietHousekeeping(harness)
+        await dictate(harness, model)
+        harness.trigger.press()
+        #expect(await eventually { model.recording })
+        harness.capture.state.mutate { $0.idleFor = 60 }
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(harness.capture.state.get.coolDowns == 0, "never closed under a hold")
+        harness.trigger.release()
+        #expect(await eventually { !model.busy && !model.recording })
+        #expect(await eventually { harness.capture.state.get.coolDowns == 1 }, "and closed once that one is idle too")
+        #expect(harness.capture.state.get.arms == 2, "the second press used the warm engine")
+    }
+
+    @Test("pausing stops the timer: nothing closes or reopens afterwards")
+    func pauseStopsTheTimer() async {
+        let harness = Harness()
+        let model = await enabledQuietHousekeeping(harness)
+        await dictate(harness, model)
+        await model.toggle()
+        #expect(!model.enabled)
+        let closed = harness.capture.state.get.coolDowns
+        harness.capture.state.mutate { $0.idleFor = 60; $0.warm = true }
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(harness.capture.state.get.coolDowns == closed)
+    }
+
     @Test("a cancel keeps the engine warm")
     func cancelKeepsTheEngineWarm() async {
         let harness = Harness()

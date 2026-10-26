@@ -118,6 +118,9 @@ public protocol DictationCaptureDevice: DictationAudioSource {
     func warmUp() throws
     func coolDown() async
     func shouldCoolDown(idleSeconds: Double) -> Bool
+    /// The bound input is a Bluetooth microphone, whose cold start is slow
+    /// enough to keep it open longer between dictations.
+    var usesBluetoothInput: Bool { get }
     /// Warm but bound to an input a fresh start would not choose: the
     /// trigger-time stale-binding check. Only meaningful while warm.
     var isInputStaleWhileWarm: Bool { get }
@@ -142,6 +145,8 @@ extension DictationCapture: DictationCaptureDevice {
     public func warmUp() throws {
         try warmUp(bindDeviceUID: nil)
     }
+
+    public var usesBluetoothInput: Bool { boundInputTransport == "bluetooth" }
 
     public var lastCaptureInterruption: DictationCaptureInterruption? {
         lastInterruption().map {

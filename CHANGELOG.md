@@ -8,6 +8,20 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-26
+
+A copy of 0.2.0 updates itself to this one. It is a signed, notarized disk
+image on [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0.2.1).
+
+### Changed
+
+- **macOS: the microphone closes sooner after a dictation.** It stayed open
+  for 30–35 seconds so the next dictation would start at once. It now closes
+  3 seconds after a dictation with a built-in or wired microphone, which
+  starts again in about a tenth of a second, and 10 seconds after one with a
+  Bluetooth microphone such as AirPods, which is slower to start and plays in
+  its low-quality call mode while the microphone is open.
+
 ## [0.2.0] - 2026-10-25
 
 The first Mac release that updates itself: install it once by hand over

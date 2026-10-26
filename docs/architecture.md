@@ -200,7 +200,9 @@ and its effect on recognition is not measured.
 **Idle unload.** Both apps unload the model after 180 s without a dictation;
 the next press starts the worker again while the user speaks. The Mac checks
 every 5 s, Windows on its 30 ms housekeeping tick. The Mac also closes its warm
-microphone after 30 s idle.
+microphone once a dictation has ended and nothing used it for 3 s with a
+built-in, wired or USB microphone, or 10 s with a Bluetooth one, checked every
+0.5 s from the end of the dictation.
 
 ## What ships beyond the entry points
 

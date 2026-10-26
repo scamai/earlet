@@ -144,6 +144,9 @@ public final class DictationModel: ObservableObject {
     var mouseTrigger: (any DictationMouseTrigger)?
     private var maximumHold: Task<Void, Never>?
     private var housekeeping: Task<Void, Never>?
+    /// Closes the warm microphone once the last dictation has been idle for
+    /// its grace (DictationModelMicrophone.swift).
+    var microphoneCoolDown: Task<Void, Never>?
 
     // ─── The take spool ───
     //
@@ -567,6 +570,7 @@ public final class DictationModel: ObservableObject {
         abandonObservation("pause")
         enablePending = false
         housekeeping?.cancel(); housekeeping = nil
+        microphoneCoolDown?.cancel(); microphoneCoolDown = nil
         trigger?.stop(); trigger = nil
         mouseTrigger?.stop(); mouseTrigger = nil
         env.keyWatch.end()
@@ -743,6 +747,7 @@ public final class DictationModel: ObservableObject {
         recentResult.clear()
         abandonObservation("quit")
         housekeeping?.cancel(); housekeeping = nil
+        microphoneCoolDown?.cancel(); microphoneCoolDown = nil
         trigger?.stop(); trigger = nil
         mouseTrigger?.stop(); mouseTrigger = nil
         endHold()
@@ -860,9 +865,7 @@ public final class DictationModel: ObservableObject {
         await history.prune()
         // `shouldCoolDown` refuses while a capture is retaining audio, so a
         // long hold is never cut off here.
-        if !busy, attempt == nil, env.capture.shouldCoolDown(idleSeconds: env.timing.microphoneIdleSeconds) {
-            await env.capture.coolDown()
-        }
+        await coolDownIdleMicrophone()
         guard enabled, !busy, !recoveringSavedTake, !isQuitting, attempt == nil, workerStart == nil, worker?.isReady == true,
               ProcessInfo.processInfo.systemUptime - lastWorkerUse >= env.timing.workerIdleSeconds
         else { return }
@@ -1004,6 +1007,7 @@ public final class DictationModel: ObservableObject {
         // this one is under way reaches the next.
         slot.setLanguageCode(language.code)
         if !byMouse { keyCheck.pressed() }
+        microphoneCoolDown?.cancel(); microphoneCoolDown = nil
         let attempt = makeAttempt(byMouse: byMouse)
         attempt.startedAt = ProcessInfo.processInfo.systemUptime
         attempt.byMouse = byMouse
@@ -1352,6 +1356,7 @@ public final class DictationModel: ObservableObject {
     func endHold() {
         attempt = nil
         mouseClickLatchedAt = nil
+        scheduleMicrophoneCoolDown()
         recording = false
         latched = false
         inputLevel = 0
