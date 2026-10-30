@@ -11,10 +11,11 @@ struct DictationDecodeStatsTests {
             "waited_ms": .number(220.92), "decode_s": .number(3.102), "engine_warm": .bool(true),
             "language": .string("zh"),
             "vocabulary_search": .object(["beam_windows": .number(2), "sampling_fallbacks": .number(1),
-                                          "matched_terms": .number(1)]),
+                                          "matched_terms": .number(1), "loops_avoided": .number(1)]),
         ])
         #expect(DictationDecodeStats(stats: stats)
-                == DictationDecodeStats(waitedMs: 220.92, decodeMs: 3102, windows: 2, retries: 1, warm: true))
+                == DictationDecodeStats(waitedMs: 220.92, decodeMs: 3102, windows: 2, retries: 1,
+                                        loopsAvoided: 1, warm: true))
     }
 
     @Test("a greedy decode has no window or retry count")

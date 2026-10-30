@@ -8,6 +8,31 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-30
+
+A copy of 0.2.0, 0.2.1, 0.2.2 or 0.2.3 updates itself to this one. It is a
+signed, notarized disk image on [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0.2.4).
+
+### Changed
+
+- **macOS: the speech engine stays ready for as long as your own pauses
+  suggest.** Instead of unloading after three idle minutes, Earlet learns how
+  long you usually pause between dictations and keeps the engine (about 3 GB)
+  loaded for that long, between 3 and 30 minutes, so fewer dictations wait
+  for it to start. When macOS runs short of memory, it shortens the wait, and
+  gives the memory back at once if the shortage is critical. Only the lengths
+  of the pauses are kept.
+
+### Fixed
+
+- **macOS: dictation is faster after you stop, and your vocabulary applies
+  more often.** When a recording ended in silence, the vocabulary search
+  could run on into a made-up, repeating ending that outscored the real
+  sentence, so Earlet threw the result away and transcribed the stretch again
+  without your vocabulary. It now keeps the real sentence. On the
+  dictations measured, the extra pass cost about half a second for every
+  30 seconds of speech.
+
 ## [0.2.3] - 2026-10-30
 
 A copy of 0.2.0, 0.2.1 or 0.2.2 updates itself to this one. It is a signed,

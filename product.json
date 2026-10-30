@@ -1,6 +1,6 @@
 {
   "name": "Earlet",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "updates": {
     "feed": "https://github.com/scamai/earlet/releases/latest/download/appcast.xml",
     "ed25519_public": "fh6y8o7HXmLgzlJjx1qH7/DIO3n/hMpl2MhhYOCKUmc=",

@@ -808,6 +808,10 @@ struct Harness {
     let learningFiles = ScratchDirectory()
     /// Every line the model logged.
     let logLines = Locked([String]())
+    /// The wall time the keep-alive counts pauses by; a test moves it on.
+    let wallClock = Locked(Date(timeIntervalSince1970: 1_800_000_000))
+    /// The model's memory-pressure handler, once `launch()` has asked for it.
+    let memoryPressure = Locked<(@MainActor (DictationMemoryPressure) -> Void)?>(nil)
     /// Built lazily so every model a harness makes shares one learning actor,
     /// as the app does.
     private let learningBox = Locked<DictationLearning?>(nil)
@@ -947,6 +951,9 @@ struct Harness {
             ownBundleID: ownBundleID)
         environment.canReserveShortcut = { _ in reserves }
         environment.isDictationFrontmost = { frontmost.get }
+        let clock = wallClock, pressure = memoryPressure
+        environment.wallClock = { clock.get }
+        environment.watchMemoryPressure = { handler in pressure.mutate { $0 = handler } }
         return environment
     }
 

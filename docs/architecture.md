@@ -197,9 +197,19 @@ and its effect on recognition is not measured.
   again while the user speaks; two failed restarts end the take
   ([Long takes are never lost](design-windows.md#long-takes-are-never-lost)).
 
-**Idle unload.** Both apps unload the model after 180 s without a dictation;
-the next press starts the worker again while the user speaks. The Mac checks
-every 5 s, Windows on its 30 ms housekeeping tick. The Mac also closes its warm
+**Idle unload.** Both apps unload the model once it has gone unused for a
+while; the next press starts the worker again while the user speaks. Windows
+waits 180 s, checked on its 30 ms housekeeping tick. The Mac learns the wait
+from the user's own pauses between dictations
+(`DictationWorkerKeepAlive`): the 99th percentile of the last 200 pauses of
+30 minutes or less, plus 10%, kept between 3 and 30 minutes, and 10 minutes
+until 20 pauses have been seen. Only the pause lengths are kept, in the app's
+preferences (`dictation.worker.pauses`). A macOS memory-pressure warning
+halves the wait, down to a quarter of the learned one and never under 3
+minutes, and applies it at once; a critical warning also unloads an idle model
+at once. Each later dictation gives back an eighth. The Mac checks every 5 s
+and logs each pause, unload and pressure event as a `keep-alive` line of
+numbers. The Mac also closes its warm
 microphone once a dictation has ended and nothing used it for 3 s with a
 built-in, wired or USB microphone, or 10 s with a Bluetooth one, checked every
 0.5 s from the end of the dictation.

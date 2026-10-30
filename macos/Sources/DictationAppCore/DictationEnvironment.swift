@@ -466,6 +466,12 @@ public struct DictationEnvironment {
     /// Monotonic time for the hold key's trailing-tap suppression window.
     /// Tests advance this independently of transcription and actor scheduling.
     public var holdKeyUptime: @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    /// Wall time for the keep-alive's pauses, which counts a pause the Mac
+    /// slept through. Tests advance it.
+    public var wallClock: @MainActor () -> Date = { Date() }
+    /// Starts reporting macOS memory pressure to the handler, once, at
+    /// enable. Tests keep the handler and call it.
+    public var watchMemoryPressure: @MainActor (@escaping @MainActor (DictationMemoryPressure) -> Void) -> Void = { _ in }
     public var capture: any DictationCaptureDevice
     public var permissions: DictationPermissions
     public var resolveResources: @MainActor () -> DictationResources?
@@ -611,7 +617,7 @@ extension DictationEnvironment {
             learning = nil
             sink.log("learning unavailable: \(error)", subsystem: "dictation")
         }
-        return DictationEnvironment(
+        var environment = DictationEnvironment(
             settings: .live(),
             capture: DictationCapture(),
             permissions: .live,
@@ -654,6 +660,8 @@ extension DictationEnvironment {
             keySnapshot: { await DictationKeySnapshot.live() },
             isDictationFrontmost: { NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier },
             ownBundleID: Bundle.main.bundleIdentifier)
+        environment.watchMemoryPressure = { DictationMemoryPressureWatch.start($0) }
+        return environment
     }
 
     /// The one construction point for the product's worker. `stderrSink`
@@ -1067,5 +1075,26 @@ final class NSEventKeyWatch: DictationKeyWatch {
     func end() {
         for monitor in monitors { NSEvent.removeMonitor(monitor) }
         monitors.removeAll()
+    }
+}
+
+// ─── Memory pressure ───
+
+/// The kernel's memory-pressure notifications (warning and critical) on the
+/// main queue, for the speech engine's keep-alive.
+@MainActor
+enum DictationMemoryPressureWatch {
+    private static var source: DispatchSourceMemoryPressure?
+
+    static func start(_ handler: @escaping @MainActor (DictationMemoryPressure) -> Void) {
+        source?.cancel()
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { [weak source] in
+            guard let event = source?.data else { return }
+            let level: DictationMemoryPressure = event.contains(.critical) ? .critical : .warning
+            MainActor.assumeIsolated { handler(level) }
+        }
+        source.resume()
+        self.source = source
     }
 }

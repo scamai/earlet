@@ -985,10 +985,16 @@ MLX_PROMPT_TOKEN_BUDGET = 223
 #: 2026-08-18: at `temperature=0.0` one 15.7 s clip came back as
 #: `以下的一段简体中文和音简体中文, 以下的一段简体中文, …` — the seed itself
 #: regurgitated in a degenerate loop — and the DEFAULT temperature ladder
-#: recovered the correct English on retry. The fallback fires on 4% of real
-#: utterances and costs a full re-decode of the 30 s window each time
-#: (~790 ms here, up to 5.3 s observed), which makes it a tempting latency
-#: saving: p50 854 -> 849 ms, max 5262 -> 1357 ms for apparently nothing.
+#: recovered the correct English on retry. Measured on the prompt-only
+#: decode it fired on 4% of real utterances and cost a full re-decode of the
+#: 30 s window each time (~790 ms here, up to 5.3 s observed), which makes it
+#: a tempting latency saving: p50 854 -> 849 ms, max 5262 -> 1357 ms for
+#: apparently nothing. With the vocabulary beam it fired on 26 of 32 logged
+#: dictations (2026-10-25 to 10-30), once per window, and the cause was the
+#: beam's, not the speech's: in trailing silence one beam ran on into an outro
+#: loop until the length limit and outranked the sentence that ended. The beam
+#: now keeps the best candidate that is not a loop (`mlx_beam.REPETITION_LIMIT`)
+#: and the retry stays the net under the prompt.
 #: It is not nothing. Conditioning the decode on a prompt RAISES the
 #: probability of a degenerate loop, and the fallback is the existing net
 #: under it. Anyone changing either one must consider the other.
@@ -1593,7 +1599,7 @@ class WhisperMac:
                                  if term.lower() in by_term}
                 search_stats = dict(engine="mlx", beam_size=beam_size,
                                     terms=len(search_terms), beam_windows=0,
-                                    matched_terms=0, sampling_fallbacks=0, fallback=None)
+                                    matched_terms=0, sampling_fallbacks=0, loops_avoided=0, fallback=None)
             if self._mlx_repo_resolved is None:
                 self._mlx_repo_resolved = _resolve_mlx_repo(
                     self._mlx_repo,
@@ -1687,8 +1693,8 @@ class WhisperMac:
                         part = mlx_beam.transcribe(
                             chunk, bias_phrases=search_terms, beam_size=beam_size,
                             phrase_deltas=search_deltas, **decode_options)
-                        for key in ("beam_windows", "matched_terms", "sampling_fallbacks"):
-                            search_stats[key] += part["vocabulary_search"][key]
+                        for key in ("beam_windows", "matched_terms", "sampling_fallbacks", "loops_avoided"):
+                            search_stats[key] += part["vocabulary_search"].get(key, 0)
                     except Exception as exc:
                         # Keep dictation usable on provider/API failures. Do
                         # not retry search for later chunks of this hold, and
@@ -2261,7 +2267,8 @@ class WhisperMac:
             print("whisper_mac: vocabulary search "
                   f"beam={search_stats['beam_size']} terms={search_stats['terms']} "
                   f"windows={search_stats['beam_windows']} matches={search_stats['matched_terms']} "
-                  f"sampling={search_stats['sampling_fallbacks']} fallback={search_stats['fallback'] or 'none'} "
+                  f"sampling={search_stats['sampling_fallbacks']} loops_avoided={search_stats['loops_avoided']} "
+                  f"fallback={search_stats['fallback'] or 'none'} "
                   f"decode_s={stats['decode_s']}", file=sys.stderr, flush=True)
         result = {"text": text, "stats": stats, "dropped_reason": dropped_reason}
         if return_words:

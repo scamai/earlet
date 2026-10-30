@@ -26,7 +26,7 @@ struct AttemptDiagnosticsTests {
         #expect(ending.contains("event=finished result=inserted"))
         #expect(ending.contains("elapsed_ms=2250 release_ms=250"))
         #expect(ending.contains("asr_ms=125 asr_wait_ms=n/a asr_decode_ms=n/a"))
-        #expect(ending.contains("asr_windows=n/a asr_retries=n/a asr_warm=n/a paste_ms=n/a"))
+        #expect(ending.contains("asr_windows=n/a asr_retries=n/a asr_loops_avoided=n/a asr_warm=n/a paste_ms=n/a"))
         #expect(!lines.get.joined().contains("private"))
     }
 
@@ -38,7 +38,7 @@ struct AttemptDiagnosticsTests {
         harness.workers.made[0].state.mutate {
             $0.replies = [.text("private spoken words")]
             $0.decodeStats = DictationDecodeStats(waitedMs: 1884.4, decodeMs: 3102, windows: 2,
-                                                  retries: 1, warm: true)
+                                                  retries: 1, loopsAvoided: 1, warm: true)
         }
         harness.trigger.press()
         #expect(await eventually { model.recording })
@@ -46,7 +46,7 @@ struct AttemptDiagnosticsTests {
         #expect(await eventually { harness.logLines.get.contains { $0.contains("event=finished") } })
         #expect(await eventually { !model.busy && !model.recording })
         let receipt = harness.logLines.get.first { $0.contains("event=finished") } ?? ""
-        #expect(receipt.contains("asr_wait_ms=1884 asr_decode_ms=3102 asr_windows=2 asr_retries=1 asr_warm=true"), "\(receipt)")
+        #expect(receipt.contains("asr_wait_ms=1884 asr_decode_ms=3102 asr_windows=2 asr_retries=1 asr_loops_avoided=1 asr_warm=true"), "\(receipt)")
         #expect(!harness.logLines.get.joined().contains("private"))
         await model.prepareForQuit()
     }

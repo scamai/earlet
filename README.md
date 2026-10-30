@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <sub>macOS 14+ · Apple Silicon · 0.2.3 preview<br>
+  <sub>macOS 14+ · Apple Silicon · 0.2.4 preview<br>
   Signed and notarized by Apple.</sub>
 </p>
 
@@ -88,7 +88,7 @@ recording. Retention and deletion stay under your control.
 
 ## Install
 
-Download `Earlet-0.2.3-macos-arm64.dmg` from
+Download `Earlet-0.2.4-macos-arm64.dmg` from
 [Releases](https://github.com/scamai/earlet/releases/latest), open it and drag
 Earlet to Applications. It needs an Apple Silicon Mac with macOS 14 or later.
 The image is signed with Reality Inc.'s Developer ID and notarized by Apple,

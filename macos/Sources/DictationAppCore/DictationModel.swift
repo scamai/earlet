@@ -179,6 +179,7 @@ public final class DictationModel: ObservableObject {
         self.language = environment.settings.language
         self.learningEnabled = environment.settings.learningEnabled
         self.hasCompletedFirstDictation = environment.settings.hasCompletedFirstDictation
+        self.keepAlive = DictationWorkerKeepAlive(pauses: environment.settings.workerPauses)
         self.vocabulary = DictationVocabularyModel(learning: environment.learning, log: environment.log)
         self.recentResult = DictationRecentResult(writeClipboard: environment.clipboardFallback)
         self.history = DictationHistoryModel(store: environment.history, settings: environment.settings,
@@ -523,6 +524,7 @@ public final class DictationModel: ObservableObject {
     /// retried if a grant is still missing.
     public func launch() async {
         startRecoveryExpiry()
+        env.watchMemoryPressure { [weak self] level in self?.memoryPressure(level) }
         // Before anything else: what the last run left. A take a crash or a
         // quit cut short is offered whether or not dictation comes back on.
         offerSavedTakeAtLaunch()
@@ -911,9 +913,65 @@ public final class DictationModel: ObservableObject {
     }
 
     private var lastWorkerUse: TimeInterval = 0
+    /// How long the loaded engine waits for the next dictation, learned from
+    /// the pauses between them.
+    private(set) var keepAlive: DictationWorkerKeepAlive
+    /// When the last dictation's transcription returned, by the wall clock;
+    /// nil once the next press has counted the pause.
+    private var lastDictationEnd: Date?
 
     func markWorkerUsed() {
         lastWorkerUse = ProcessInfo.processInfo.systemUptime
+    }
+
+    /// A dictation's transcription returned: the pause to the next press
+    /// starts now.
+    func markDictationEnded() {
+        markWorkerUsed()
+        lastDictationEnd = env.wallClock()
+    }
+
+    /// The first press after a dictation: how long the user paused, and
+    /// whether the engine was still loaded for it. Numbers only.
+    private func countPause() {
+        guard let end = lastDictationEnd else { return }
+        lastDictationEnd = nil
+        let pause = env.wallClock().timeIntervalSince(end)
+        keepAlive.record(pause: pause)
+        env.settings.workerPauses = keepAlive.pauses
+        env.log("keep-alive pause_s=\(Int(pause)) warm=\(worker?.isReady == true) "
+            + "window_s=\(Int(keepAlive.seconds)) samples=\(keepAlive.samples)")
+    }
+
+    /// Nothing is using the loaded engine or about to.
+    private var workerIdle: Bool {
+        enabled && !busy && !recoveringSavedTake && !isQuitting && attempt == nil && workerStart == nil
+            && worker?.isReady == true
+    }
+
+    /// Gives back an engine idle for longer than the keep-alive window.
+    private func releaseIdleWorker() async {
+        let idle = ProcessInfo.processInfo.systemUptime - lastWorkerUse
+        let window = env.timing.workerIdleSeconds ?? keepAlive.seconds
+        guard workerIdle, idle >= window else { return }
+        env.log("keep-alive released idle_s=\(Int(idle)) window_s=\(Int(window))")
+        await stopWorker()
+    }
+
+    /// macOS asked for memory back. The window halves either way, and the
+    /// shorter window applies at once; at critical an idle engine, the
+    /// largest thing this app holds, goes now. A dictation under way keeps it.
+    func memoryPressure(_ level: DictationMemoryPressure) {
+        keepAlive.memoryPressure()
+        env.log("keep-alive memory_pressure=\(level.rawValue) window_s=\(Int(keepAlive.seconds))")
+        Task {
+            if level == .critical, workerIdle {
+                env.log("keep-alive released by memory pressure")
+                await stopWorker()
+            } else {
+                await releaseIdleWorker()
+            }
+        }
     }
 
     // ─── Housekeeping ───
@@ -943,10 +1001,7 @@ public final class DictationModel: ObservableObject {
         // `shouldCoolDown` refuses while a capture is retaining audio, so a
         // long hold is never cut off here.
         await coolDownIdleMicrophone()
-        guard enabled, !busy, !recoveringSavedTake, !isQuitting, attempt == nil, workerStart == nil, worker?.isReady == true,
-              ProcessInfo.processInfo.systemUptime - lastWorkerUse >= env.timing.workerIdleSeconds
-        else { return }
-        await stopWorker()
+        await releaseIdleWorker()
     }
 
     /// Asks the worker to exit and kills it if it does not within
@@ -1089,6 +1144,7 @@ public final class DictationModel: ObservableObject {
         attempt.startedAt = ProcessInfo.processInfo.systemUptime
         attempt.byMouse = byMouse
         self.attempt = attempt
+        countPause()
         // `recording` waits for the privacy gate (`admit`): a refused press
         // never shows Listening. The key watch does not wait, so a shortcut
         // typed at once is still told apart from a dictation.

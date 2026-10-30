@@ -213,3 +213,75 @@ def transcribe(audio, *, beam_size):
     assert (second["width"], second["phrases"]) == (1, ())
     assert provider.ModelHolder is holder and holder.model is resident
     assert provider.transcribe is original
+
+
+# ─── Trailing silence: a loop must not cost the real sentence ────────────
+
+def outro_loop_beam():
+    """Width 2: one candidate ends its sentence on EOT; the other runs on in
+    the trailing silence, repeating two tokens at a higher average score,
+    until the length limit cuts it off."""
+    search = BeamCandidates(width=2, eot=99, max_tokens=8)
+    search.start([[50], [50]])
+    search.advance([[(1, -.5, -.5), (2, -.6, -.6)], []])
+    # Row 0 ends its sentence; row 1 starts the outro.
+    search.advance([[(99, -.5, -.5), (7, -.4, -.4)], [(99, -2.0, -2.0), (8, -2.0, -2.0)]])
+    for _ in range(6):
+        search.advance([[(8, -.01, -.01), (7, -.02, -.02)], [(7, -.01, -.01), (8, -.02, -.02)]])
+    return search
+
+
+def test_a_cut_off_loop_never_evicts_the_sentence_that_reached_eot():
+    search = outro_loop_beam()
+    finished = search.finalize()
+    assert (50, 1, 99) in finished, "the real sentence is kept for the repetition fallback"
+    best = max(finished, key=lambda s: search._rank(s, finished[s][0]))
+    assert best != (50, 1, 99), "a cut-off loop may still rank first; only eviction changes"
+
+
+class Tokens:
+    """Each token is a word; 7 and 8 are the outro's two words."""
+    words = {1: "We use repo.", 2: "We use rebo.", 7: " 请不吝点赞 订阅 转发", 8: " 打赏支持 转发 打赏支持"}
+
+    def decode(self, tokens):
+        return "".join(self.words.get(t, "") for t in tokens)
+
+
+def test_a_repeating_top_candidate_gives_way_to_the_best_one_that_is_not():
+    from transcription_worker.mlx_beam import REPETITION_LIMIT, VocabularyModel, compression_ratio
+    search = outro_loop_beam()
+    search.finalize()
+
+    def generated(sequence):
+        tail = sequence[search.sample_begin:]
+        return tuple(tail[:tail.index(99)])
+
+    loops = [s for s in search.finished if len(s) > 4]
+    assert loops and all(compression_ratio(Tokens().decode(list(generated(s)))) > REPETITION_LIMIT
+                         for s in loops)
+    tokens, text, ratio = VocabularyModel._unrepeated(search, generated, Tokens())
+    assert (tokens, text) == ((1,), "We use repo.")
+    assert ratio <= REPETITION_LIMIT
+
+
+def test_when_every_candidate_repeats_the_window_is_left_to_the_temperature_fallback():
+    from transcription_worker.mlx_beam import VocabularyModel
+    search = BeamCandidates(width=1, eot=99, max_tokens=12)
+    search.start([[50]])
+    for _ in range(11):
+        search.advance([[(7, -.01, -.01)]])
+    search.finalize()
+
+    def generated(sequence):
+        tail = sequence[search.sample_begin:]
+        return tuple(tail[:tail.index(99)])
+
+    assert VocabularyModel._unrepeated(search, generated, Tokens()) is None
+
+
+def test_the_repetition_measure_is_upstreams():
+    from transcription_worker.mlx_beam import compression_ratio
+    upstream = pytest.importorskip("mlx_whisper.decoding")
+    for text in ("We use repo.", "转发 打赏支持" * 20, ""):
+        if text:
+            assert compression_ratio(text) == upstream.compression_ratio(text)

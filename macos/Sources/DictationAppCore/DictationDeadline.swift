@@ -33,10 +33,11 @@ public struct DictationTiming: Sendable {
     public var escapeAsksAfterSeconds: Double = 30
     /// How long Escape's question stands, as on Windows.
     public var escapeQuestionSeconds: Double = 5
-    /// Idle time after which the loaded model (several GB) is given back.
-    /// The next press starts the
-    /// worker again while the user speaks.
-    public var workerIdleSeconds: Double = 180
+    /// Idle time after which the loaded model (about 3 GB) is given back,
+    /// fixed. `nil`, the default, uses the window `DictationWorkerKeepAlive`
+    /// learns from the user's pauses. The next press starts the worker again
+    /// while the user speaks.
+    public var workerIdleSeconds: Double?
     /// How often idle resources are checked.
     public var housekeepingSeconds: Double = 5
     /// Idle time after which the warm microphone is closed, counted from the

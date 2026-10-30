@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import replace
 import math
 from types import FunctionType
+import zlib
 
 import numpy as np
 
@@ -25,6 +26,16 @@ DEFAULT_BEAM_SIZE = 2
 DEFAULT_DELTA = 0.5  # Combined with a prompt; not the old CPU-only delta=2.5.
 MAX_BEAM_SIZE = 4
 MAX_TERMS = 32
+#: mlx_whisper.transcribe's `compression_ratio_threshold` default, which the
+#: worker leaves as it is: above it a decode counts as a repetition loop and
+#: the window is decoded again by the sampler, without the vocabulary.
+REPETITION_LIMIT = 2.4
+
+
+def compression_ratio(text: str) -> float:
+    """mlx_whisper.decoding.compression_ratio, the measure that limit applies to."""
+    data = text.encode("utf-8")
+    return len(data) / len(zlib.compress(data))
 
 
 def _length_penalty(length, alpha):
@@ -155,11 +166,20 @@ class BeamCandidates:
             return self.finished
         # Length-limited beams also lose unearned partial-word credit. EOT is
         # synthetic here, so no acoustic likelihood is invented for it.
+        ended = dict(self.finished)
         for i in sorted(range(self.width), key=lambda i: self.scores[i], reverse=True):
             state = self.states[i]
             refund = state.advance(self.eot)[1] if state else 0.0
             self._finish(self.prefixes[i] + (self.eot,),
                          self.scores[i] + refund, self.acoustic[i])
+        # A cut-off candidate may still rank first, but it never evicts a
+        # sentence that really reached EOT. In trailing silence the other
+        # beam often runs on into a self-reinforcing outro loop until the
+        # length limit, whose high average score used to push the real
+        # sentence out; the decode adapter now falls back to it instead of
+        # re-decoding the window without the vocabulary.
+        for sequence, value in ended.items():
+            self.finished.setdefault(sequence, value)
         return self.finished
 
 
@@ -369,17 +389,42 @@ class VocabularyModel:
         task = _task_type()(self.model, options, self.build_trie)
         result = task.run(mx.expand_dims(mel, 0))[0]
         self.metrics["beam_windows"] += 1
-        for sequence, (_, acoustic) in task.decoder.search.finished.items():
-            generated = sequence[task.sample_begin:]
-            generated = generated[:generated.index(task.tokenizer.eot)]
-            if tuple(result.tokens) == generated:
-                state = task.decoder.search.trie.initial_state() if task.decoder.search.trie else None
-                if state is not None:
-                    for token in generated:
-                        state, _ = state.advance(token)
-                    self.metrics["matched_terms"] += len(state.completed)
-                return replace(result, avg_logprob=acoustic / (len(result.tokens) + 1))
-        raise RuntimeError("selected beam lost its acoustic score")
+        search = task.decoder.search
+        eot = task.tokenizer.eot
+
+        def generated(sequence):
+            tail = sequence[task.sample_begin:]
+            return tuple(tail[:tail.index(eot)])
+
+        acoustic_of = {generated(sequence): acoustic for sequence, (_, acoustic) in search.finished.items()}
+        tokens = tuple(result.tokens)
+        if tokens not in acoustic_of:
+            raise RuntimeError("selected beam lost its acoustic score")
+        if result.compression_ratio > REPETITION_LIMIT:
+            replacement = self._unrepeated(search, generated, task.tokenizer)
+            if replacement is not None:
+                tokens, text, ratio = replacement
+                result = replace(result, tokens=list(tokens), text=text, compression_ratio=ratio)
+                self.metrics["loops_avoided"] += 1
+        state = search.trie.initial_state() if search.trie else None
+        if state is not None:
+            for token in tokens:
+                state, _ = state.advance(token)
+            self.metrics["matched_terms"] += len(state.completed)
+        return replace(result, avg_logprob=acoustic_of[tokens] / (len(tokens) + 1))
+
+    @staticmethod
+    def _unrepeated(search, generated, tokenizer):
+        """The best-ranked finished candidate that is not a repetition loop,
+        as (tokens, text, compression ratio), or None when every one is."""
+        ranked = sorted(search.finished, key=lambda s: (-search._rank(s, search.finished[s][0]), s))
+        for sequence in ranked:
+            tokens = generated(sequence)
+            text = tokenizer.decode(list(tokens)).strip()
+            ratio = compression_ratio(text)
+            if text and ratio <= REPETITION_LIMIT:
+                return tokens, text, ratio
+        return None
 
 
 def transcribe(audio, *, bias_phrases=(), beam_size=DEFAULT_BEAM_SIZE, delta=DEFAULT_DELTA,
@@ -400,7 +445,7 @@ def transcribe(audio, *, bias_phrases=(), beam_size=DEFAULT_BEAM_SIZE, delta=DEF
         raise ValueError("invalid per-term vocabulary strength")
     original = mlx_whisper.transcribe
     holder = original.__globals__["ModelHolder"]
-    metrics = {"beam_windows": 0, "sampling_fallbacks": 0, "matched_terms": 0}
+    metrics = {"beam_windows": 0, "sampling_fallbacks": 0, "matched_terms": 0, "loops_avoided": 0}
 
     class LocalHolder:
         @staticmethod

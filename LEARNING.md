@@ -447,7 +447,14 @@ failures are handled differently:
   The comparison baseline retains the same beam width with no vocabulary.
   Search failures fall back to prompt decoding for the rest of the hold and
   are reported in `stats.vocabulary_search` and counts-only worker logs.
-  Temperature retries use the upstream sampler, not the beam. The beam is a
+  Temperature retries use the upstream sampler, not the beam, so a retry
+  loses the trie adjustment. In trailing silence one beam candidate can run
+  on into an outro hallucination ("请不吝点赞 订阅 转发 打赏支持" repeated) until the
+  length limit; such a cut-off candidate never evicts a candidate that reached
+  EOT, and when the top-ranked candidate's compression ratio exceeds
+  upstream's 2.4 the adapter keeps the best-ranked one that does not,
+  instead of handing the window to the sampler (`loops_avoided` in the
+  counts). Only when every candidate repeats does the retry run. The beam is a
   local adapter, because mlx-whisper 0.4.3 has no beam decoder, and it avoids
   moving recognition to the older Torch/CPU path. How it keeps upstream
   windowing and timestamp decoding, shares audio-attention caches, reorders

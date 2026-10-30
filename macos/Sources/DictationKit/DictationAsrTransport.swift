@@ -157,14 +157,19 @@ public struct DictationDecodeStats: Sendable, Equatable {
     public var decodeMs: Double?
     public var windows: Int?
     public var retries: Int?
+    /// Windows whose top beam candidate was a repetition loop (in trailing
+    /// silence, an outro hallucination run to the length limit) and that
+    /// kept the best candidate that was not one, instead of a retry.
+    public var loopsAvoided: Int?
     public var warm: Bool?
 
     public init(waitedMs: Double? = nil, decodeMs: Double? = nil, windows: Int? = nil,
-                retries: Int? = nil, warm: Bool? = nil) {
+                retries: Int? = nil, loopsAvoided: Int? = nil, warm: Bool? = nil) {
         self.waitedMs = waitedMs
         self.decodeMs = decodeMs
         self.windows = windows
         self.retries = retries
+        self.loopsAvoided = loopsAvoided
         self.warm = warm
     }
 
@@ -178,6 +183,7 @@ public struct DictationDecodeStats: Sendable, Equatable {
                   decodeMs: stats["decode_s"]?.doubleValue.map { $0 * 1_000 },
                   windows: search?["beam_windows"]?.doubleValue.map { Int($0) },
                   retries: search?["sampling_fallbacks"]?.doubleValue.map { Int($0) },
+                  loopsAvoided: search?["loops_avoided"]?.doubleValue.map { Int($0) },
                   warm: stats["engine_warm"]?.boolValue)
         if self == DictationDecodeStats() { return nil }
     }

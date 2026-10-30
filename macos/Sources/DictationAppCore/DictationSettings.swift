@@ -12,6 +12,7 @@ public final class DictationSettings: @unchecked Sendable {
     static let completedFirstDictationKey = "dictation.completedFirstDictation"
     static let historyEnabledKey = "dictation.history.enabled"
     static let historyKeepKey = "dictation.history.keep"
+    static let workerPausesKey = "dictation.worker.pauses"
     static let recordingKeepKey = "dictation.history.recordings"
 
     public var silenceSetting: DictationSilenceSetting {
@@ -108,6 +109,13 @@ public final class DictationSettings: @unchecked Sendable {
     public var resumeEnableAfterRelaunch: Bool {
         get { defaults.bool(forKey: Self.resumeEnableKey) }
         set { defaults.set(newValue, forKey: Self.resumeEnableKey) }
+    }
+
+    /// The pauses between dictations, in seconds, that the speech engine's
+    /// keep-alive learns from (`DictationWorkerKeepAlive`). Lengths only.
+    public var workerPauses: [Double] {
+        get { defaults.array(forKey: Self.workerPausesKey) as? [Double] ?? [] }
+        set { defaults.set(newValue, forKey: Self.workerPausesKey) }
     }
 
     /// A setup milestone only, never text or a dictation count. Once a real

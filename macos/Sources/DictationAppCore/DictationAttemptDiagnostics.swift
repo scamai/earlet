@@ -103,6 +103,7 @@ final class DictationAttemptDiagnostics {
         " asr_wait_ms=\(ms(stats?.waitedMs)) asr_decode_ms=\(ms(stats?.decodeMs))"
             + " asr_windows=\(stats?.windows.map { String($0) } ?? "n/a")"
             + " asr_retries=\(stats?.retries.map { String($0) } ?? "n/a")"
+            + " asr_loops_avoided=\(stats?.loopsAvoided.map { String($0) } ?? "n/a")"
             + " asr_warm=\(stats?.warm.map { String($0) } ?? "n/a")"
     }
 

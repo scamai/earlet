@@ -64,9 +64,11 @@ the app with the text in your destination. The Mac log's `asr_repeat` and
 verification of the pasted words. You do not need to share the full text.
 
 For a slow dictation, the same line's `asr_wait_ms`, `asr_decode_ms`,
-`asr_windows`, `asr_retries` and `asr_warm` say whether the transcription
-waited for the live preview, re-decoded hard-to-hear audio, or ran on a speech
-engine that had just loaded.
+`asr_windows`, `asr_retries`, `asr_loops_avoided` and `asr_warm` say whether
+the transcription waited for the live preview, re-decoded hard-to-hear audio,
+kept a sentence instead of a repeating ending, or ran on a speech engine that
+had just loaded. The Mac's `keep-alive` lines say how long you paused before
+each dictation, whether the engine was still loaded, and when it was unloaded.
 
 Do not attach your vocabulary file (`learning.json`): it holds the words you
 taught the app or corrected. Never attach a recording of someone else's

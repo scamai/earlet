@@ -110,7 +110,7 @@ extension DictationModel {
                 onAbandon: { worker.forceTerminate() })
         }
         guard !isQuitting else { return }
-        markWorkerUsed()
+        markDictationEnded()
 
         guard let finished else {
             // The transcription carries on in the worker and its text is
