@@ -92,7 +92,8 @@ struct DictationHUDOutcomeTests {
     /// and left out of the list's reckoning.
     nonisolated static let kinds: [Kind] = [
         .inserted, .stoppedAtLimit(seconds: 120), .keptOnClipboard, .notInserted, .accessibilityNeeded, .passwordField,
-        .secureInput, .nothingHeard, .noWords, .microphoneSilent, .microphoneBlocked,
+        .secureInput, .nothingHeard(speakUp: false), .noWords, .tooQuiet, .languageUnclear, .wordsUnclear,
+        .microphoneSilent(deviceName: nil), .microphoneBlocked,
         .cancelled, .engineRestarting, .engineUnavailable, .engineError, .stillFinishing,
         .commandDone, .textRecoverable, .resultCopied, .resultCopyFailed, .vocabularyLearned,
     ]
@@ -100,7 +101,8 @@ struct DictationHUDOutcomeTests {
     nonisolated static func listed(_ kind: Kind) -> Bool {
         switch kind {
         case .inserted, .stoppedAtLimit, .keptOnClipboard, .notInserted, .accessibilityNeeded, .passwordField,
-             .secureInput, .nothingHeard, .noWords, .microphoneSilent, .microphoneBlocked,
+             .secureInput, .nothingHeard, .noWords, .tooQuiet, .languageUnclear, .wordsUnclear,
+             .microphoneSilent, .microphoneBlocked,
              .cancelled, .engineRestarting, .engineUnavailable, .engineError, .stillFinishing,
              .commandDone, .textRecoverable, .resultCopied, .resultCopyFailed, .vocabularyLearned:
             return kinds.contains(kind)
@@ -125,6 +127,16 @@ struct DictationHUDOutcomeTests {
         if let detail = outcome.detail { #expect(detail.hasSuffix(".")) }
     }
 
+    @Test("the endings that send the user to a menu name Earlet's menu bar icon, where those items are")
+    func endingsPointAtTheMenuBarIcon() {
+        #expect(words(.textRecoverable).detail == "Click Earlet's menu bar icon → Copy last text.")
+        #expect(words(.vocabularyLearned).detail == "Review or undo from Earlet's menu bar icon.")
+        for kind in Self.kinds {
+            // The app menu next to the Apple menu has neither Copy last text nor Undo.
+            #expect(words(kind).detail?.contains("Earlet menu") != true, "\(kind)")
+        }
+    }
+
     @Test("only a successful clipboard write promises ⌘V")
     func onlyTheClipboardPromisesPaste() {
         for kind in Self.kinds {
@@ -146,18 +158,92 @@ struct DictationHUDOutcomeTests {
     @Test("a receipt is brief and calm; nothing heard and cancel are not alarms")
     func calmEndings() {
         #expect(words(.inserted).dwell <= 1)
-        for kind: Kind in [.inserted, .nothingHeard, .noWords, .cancelled, .commandDone] {
+        for kind: Kind in [.inserted, .nothingHeard(speakUp: false), .nothingHeard(speakUp: true), .noWords,
+                           .cancelled, .commandDone] {
             #expect(words(kind).tone == .neutral, "\(kind)")
         }
-        #expect(words(.nothingHeard).detail == "Hold Right Command while you speak.")
+        #expect(words(.nothingHeard(speakUp: false)).detail == "Hold Right Command while you speak.")
+    }
+
+    @Test("nothing heard after a hold long enough to speak asks for a louder voice, not a hold")
+    func nothingHeardAfterALongHold() {
+        let quiet = words(.nothingHeard(speakUp: true))
+        #expect(quiet.title == "Nothing heard")
+        #expect(quiet.detail == "Speak up, or move closer to the microphone.")
+        #expect(quiet.dwell == words(.nothingHeard(speakUp: false)).dwell)
+        #expect(Content.ending(for: .emptyTranscript, stage: .capture, heldSeconds: 0.59)
+            == .nothingHeard(speakUp: false))
+        #expect(Content.ending(for: .emptyTranscript, stage: .capture, heldSeconds: DictationCopy.speakUpAfterSeconds)
+            == .nothingHeard(speakUp: true))
+        #expect(Content.ending(for: .emptyTranscript, stage: .asr, heldSeconds: 5) == .noWords)
+        // A hold that heard no signal was not a voice too quiet: under the
+        // silent-input length it is still told to hold the key.
+        let floor = DictationSession.silentInputPeak
+        #expect(Content.ending(for: .emptyTranscript, stage: .capture, heldSeconds: 0.8, peak: floor / 5)
+            == .nothingHeard(speakUp: false))
+        #expect(Content.ending(for: .emptyTranscript, stage: .capture, heldSeconds: 0.8, peak: floor)
+            == .nothingHeard(speakUp: true))
+    }
+
+    @Test("a silent microphone is named when the capture knows its name")
+    func silentMicrophoneIsNamed() {
+        let named = words(.microphoneSilent(deviceName: "AirPods Pro"))
+        #expect(named.title == "No sound from AirPods Pro")
+        #expect(named.detail == "Check it isn't muted, or pick another input in Sound settings.")
+        #expect(named.tone == .caution)
+        #expect(named.dwell == 3.5)
+        #expect(Content.ending(for: .emptyCapture, stage: .capture, heldSeconds: 2, deviceName: "AirPods Pro")
+            == .microphoneSilent(deviceName: "AirPods Pro"))
+        // A raw Core Audio id or a placeholder is not a name.
+        for raw in [nil, "", "  ", "device 117", "(unbound)", "(unknown)"] as [String?] {
+            #expect(words(.microphoneSilent(deviceName: raw)).title == "No sound from the microphone",
+                    "\(raw ?? "nil")")
+        }
+    }
+
+    @Test("an empty decode's ending says why, and only a kept take promises its recording")
+    func noWordsEndings() {
+        #expect(words(.noWords).title == "No words recognized")
+        #expect(words(.noWords).detail == "Try again.")
+        #expect(words(.tooQuiet).title == "Too quiet to make out")
+        #expect(words(.tooQuiet).detail == "Speak up, or move closer to the microphone.")
+        #expect(words(.languageUnclear).title == "Couldn't tell the language")
+        #expect(words(.languageUnclear).detail
+            == "Recording kept. Choose your language in Settings, then recover it.")
+        #expect(words(.wordsUnclear).title == "Couldn't make out the words")
+        #expect(words(.wordsUnclear).detail == "Recording kept. Recover it from Earlet's menu bar icon.")
+        for kind in Self.kinds where kind != .languageUnclear && kind != .wordsUnclear {
+            #expect(words(kind).detail?.contains("Recording kept") != true, "\(kind)")
+            #expect(words(kind).detail?.contains("shorter phrase") != true, "\(kind)")
+        }
+        #expect(Content.ending(forNoWords: .tooQuiet, kept: false) == .tooQuiet)
+        #expect(Content.ending(forNoWords: .languageUnclear, kept: true) == .languageUnclear)
+        #expect(Content.ending(forNoWords: .languageUnclear, kept: false) == .noWords)
+        #expect(Content.ending(forNoWords: .wordsUnclear, kept: true) == .wordsUnclear)
+        #expect(Content.ending(forNoWords: .wordsUnclear, kept: false) == .noWords)
+        #expect(Content.ending(forNoWords: .unexplained, kept: false) == .noWords)
+    }
+
+    @Test("the worker's reason and the take's peak decide the reason, and which takes are kept")
+    func noWordsReasons() {
+        typealias Reason = DictationNoWordsReason
+        #expect(Reason(dropReason: .quiet, capturePeak: 0.5) == .tooQuiet)
+        #expect(Reason(dropReason: .language, capturePeak: 0.01) == .languageUnclear)
+        #expect(Reason(dropReason: .junk, capturePeak: 0.1) == .wordsUnclear)
+        #expect(Reason(dropReason: .other, capturePeak: 0.3) == .wordsUnclear)
+        #expect(Reason(dropReason: .junk, capturePeak: 0.099) == .unexplained)
+        #expect(Reason(dropReason: .other, capturePeak: nil) == .unexplained)
+        #expect(Reason(dropReason: nil, capturePeak: 0.9) == .unexplained, "an older worker says nothing")
+        let reasons: [Reason] = [.tooQuiet, .languageUnclear, .wordsUnclear, .unexplained]
+        #expect(reasons.map(\.keepsTake) == [false, true, true, false])
     }
 
     @Test("every session failure maps to the ending the status line describes")
     func failuresMapToEndings() {
         let expected: [(DictationSession.SessionFailure, DictationSession.Stage, Kind)] = [
             (.micPermissionDenied, .capture, .microphoneBlocked),
-            (.emptyCapture, .capture, .microphoneSilent),
-            (.emptyTranscript, .capture, .nothingHeard),
+            (.emptyCapture, .capture, .microphoneSilent(deviceName: nil)),
+            (.emptyTranscript, .capture, .nothingHeard(speakUp: false)),
             (.emptyTranscript, .asr, .noWords),
             (.asr(.engineError("x")), .asr, .engineError),
             (.asr(.ioError("eof")), .asr, .engineRestarting),

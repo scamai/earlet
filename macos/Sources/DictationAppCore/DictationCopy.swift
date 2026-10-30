@@ -9,10 +9,15 @@ import DictationKit
 /// log instead, where it can be diagnosed.
 public enum DictationCopy {
 
+    /// `heldSeconds` is how long the capture recorded and `peak` its loudest
+    /// sample (nil when not measured): together they tell a tap, or an input
+    /// that sent nothing, from a hold whose speech was too quiet.
     public static func failure(
         _ failure: DictationSession.SessionFailure,
         stage: DictationSession.Stage,
-        holdKey: DictationHoldKey
+        holdKey: DictationHoldKey,
+        heldSeconds: TimeInterval = 0,
+        peak: Float? = nil
     ) -> String {
         switch failure {
         case .micPermissionDenied:
@@ -22,9 +27,10 @@ public enum DictationCopy {
         case .emptyTranscript:
             // At capture the silence gate refused the clip; at ASR audible
             // audio decoded to nothing. Different causes, different advice.
-            return stage == .capture
-                ? "Nothing was heard. Hold \(holdKey.name) while you speak, then release."
-                : "No words were recognized. Try again, or say a shorter phrase."
+            guard stage == .capture else { return noWordsRecognized }
+            return asksToSpeakUp(heldSeconds: heldSeconds, peak: peak)
+                ? "Nothing was heard. Speak up, or move closer to the microphone."
+                : "Nothing was heard. Hold \(holdKey.name) while you speak, then release."
         case .asr(let asrFailure):
             switch asrFailure {
             case .engineError:
@@ -36,6 +42,60 @@ public enum DictationCopy {
             return insert(insertFailure, keptOnClipboard: false)
         case .invalidSequencing:
             return "That press landed while the last dictation was still finishing. Nothing was lost; hold \(holdKey.name) again."
+        }
+    }
+
+    /// A hold this long had time for speech, so "Nothing heard" after it asks
+    /// for a louder voice rather than for a hold. Longer than
+    /// `DictationHoldKey.doubleTapWindow`, so a parked tap still reads as one.
+    public static let speakUpAfterSeconds: TimeInterval = 0.6
+
+    /// Whether "Nothing heard" asks for a louder voice: the hold lasted
+    /// `speakUpAfterSeconds` and the input sent a signal, a `peak` at or above
+    /// `DictationSession.silentInputPeak` (nil, unmeasured, counts as one).
+    /// A hold under that floor and too short to be a silent input
+    /// (`DictationSession.isSilentInput`) is told to hold the key: a headset
+    /// can still be waking that long, and no voice was too quiet.
+    public static func asksToSpeakUp(heldSeconds: TimeInterval, peak: Float?) -> Bool {
+        heldSeconds >= speakUpAfterSeconds && (peak.map { $0 >= DictationSession.silentInputPeak } ?? true)
+    }
+
+    /// The input's name for a sentence, or nil when the capture knows only a
+    /// placeholder: empty, "(unbound)" or "(unknown)", or Core Audio's raw
+    /// "device 117" for a device whose name it could not read.
+    public static func inputName(_ raw: String?) -> String? {
+        guard let name = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
+              !name.hasPrefix("("),
+              name.range(of: #"^device \d+$"#, options: .regularExpression) == nil
+        else { return nil }
+        return name
+    }
+
+    /// The hint line once a hold has heard nothing from the input for
+    /// `DictationHoldTracker.silentInputNoticeSeconds`.
+    public static func silentInputDuringHold(deviceName: String?) -> String {
+        guard let name = inputName(deviceName) else { return "No sound from the microphone — check it isn't muted." }
+        return "No sound from \(name) — check the microphone."
+    }
+
+    /// Audible audio decoded to no words, and nothing explains it.
+    public static let noWordsRecognized = "No words were recognized. Try again."
+
+    /// Audible audio that came back with no words, by why
+    /// (`DictationNoWordsReason`), and whether its recording was kept.
+    /// Mirrors `DictationHUDContent.ending(forNoWords:kept:)`.
+    public static func noWords(_ reason: DictationNoWordsReason, kept: Bool) -> String {
+        switch reason {
+        case .tooQuiet:
+            return "That was too quiet to make out, so nothing was inserted. Speak up, or move closer to the microphone."
+        case .languageUnclear:
+            return "Earlet couldn't tell which language that was, so nothing was inserted. "
+                + (kept ? "Choose your language in Settings. " + takeSavedWhere
+                        : "Choose your language in Settings, then try again.")
+        case .wordsUnclear where kept:
+            return "Earlet couldn't make out the words, so nothing was inserted. " + takeSavedWhere
+        case .wordsUnclear, .unexplained:
+            return noWordsRecognized
         }
     }
 
@@ -69,16 +129,22 @@ public enum DictationCopy {
         "The speech engine stopped unexpectedly, so nothing was inserted. It is restarting; try again in a moment."
 
     /// A refused paste, and whether the text was left on the clipboard.
-    public static func insert(_ failure: DictationInsertFailure, keptOnClipboard: Bool) -> String {
+    /// `accessibilitySettingsName` is what System Settings calls the
+    /// Accessibility pane on this Mac.
+    public static func insert(
+        _ failure: DictationInsertFailure, keptOnClipboard: Bool,
+        accessibilitySettingsName: String = DictationPermissionStep.accessibilitySettingsName
+    ) -> String {
         switch failure {
         case .secureFieldFocused:
             return "Earlet does not type into password fields. Nothing was kept."
         case .secureInputActive:
             return "Secure input is on, usually because a password field has focus. Nothing was typed or kept."
         case .accessibilityPermissionMissing:
+            let pane = accessibilitySettingsName
             return keptOnClipboard
-                ? "Earlet needs Accessibility permission to type. Your text is on the clipboard; press ⌘V to paste it."
-                : "Earlet needs Accessibility permission to type. Allow it in System Settings → Privacy & Security → Accessibility."
+                ? "Earlet needs \(pane) permission to type. Your text is on the clipboard; press ⌘V to paste it."
+                : "Earlet needs \(pane) permission to type. Allow it in System Settings → Privacy & Security → \(pane)."
         case .focusedElementNotEditable, .noFocusedElement, .pasteNeverRequested, .keyEventPostFailed:
             return keptOnClipboard
                 ? "The text could not be typed here. It is on the clipboard; press ⌘V to paste it."
@@ -107,7 +173,7 @@ public enum DictationCopy {
 
     /// Where a kept recording is pointed at, as the end of a sentence.
     public static let takeSavedWhere =
-        "The recording is saved: choose Recover Last Dictation from the Earlet menu to try again."
+        "The recording is saved. Recover it from Earlet's menu bar icon or on Home."
 
     /// A transcription failure whose recording is kept.
     public static let takeSaved = "Couldn't transcribe that dictation, so nothing was inserted. " + takeSavedWhere
@@ -171,5 +237,5 @@ public enum DictationCopy {
 
     /// The launch offer for a take a quit or crash left mid-recording.
     public static let savedTakeOfferedAtLaunch =
-        "Earlet closed before a dictation was transcribed. The recording is saved: choose Recover Last Dictation from the Earlet menu."
+        "Earlet closed before a dictation was transcribed. The recording is saved: recover it from Earlet's menu bar icon or on Home."
 }

@@ -7,15 +7,40 @@ extension DictationModel {
         env.settings.silenceSetting = setting
     }
 
-    public func keepRecording() {
-        confirmingDiscard = false
-        holdNotice = nil
-    }
+    // ─── Escape's question ───
 
-    public func confirmDiscard() async {
-        guard recording else { return }
-        // SwiftUI may dismiss the dialog before this async action runs.
-        confirmingDiscard = true
+    /// Escape's question stands: the next Escape discards.
+    var confirmingDiscard: Bool { discardQuestion != nil }
+
+    /// Escape during a hold. On a take longer than
+    /// `escapeAsksAfterSeconds` the first press only asks, in the HUD: the
+    /// window is not brought forward, so the field being dictated into
+    /// keeps the keyboard. A second press within `escapeQuestionSeconds`
+    /// discards; after that the take carries on and the next press asks
+    /// again. The key watch drops autorepeats (`isARepeat`), so Escape held
+    /// down asks once and never answers. The window's and the menu's Cancel
+    /// never ask (`cancel()`): a button is a choice, a key can be a slip.
+    func escapePressed() async {
+        guard let attempt, !busy else { return }
+        let timing = env.timing
+        if !confirmingDiscard, let start = holdStartedAt {
+            let length = Date().timeIntervalSince(start)
+            if length > timing.escapeAsksAfterSeconds {
+                discardQuestion = DictationHUDContent.discardQuestion(seconds: length)
+                holdNotice = DictationHUDContent.discardQuestionHint
+                env.log("Escape on a take of \(Int(length)) s asks before it discards")
+                Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(timing.escapeQuestionSeconds)) } catch { return }
+                    guard let self, self.attempt === attempt, self.confirmingDiscard else { return }
+                    self.discardQuestion = nil
+                    // A silence warning that is due comes back on the hold
+                    // monitor's next check.
+                    self.holdNotice = nil
+                    self.env.log("Escape's question lapsed; the take carries on")
+                }
+                return
+            }
+        }
         await cancelHold(.user)
     }
 
@@ -93,15 +118,32 @@ extension DictationModel {
     func checkHoldSilence(_ attempt: HoldAttempt) async {
         guard self.attempt === attempt, attempt.captureStarted,
               let snapshot = takeTap.live()?.tracker.snapshot(mode: latched ? .handsFree : .held) else { return }
-        switch snapshot.decision {
-        case .continueListening:
-            if !confirmingDiscard { holdNotice = nil }
-        case .silenceWarning:
-            if !confirmingDiscard { holdNotice = "Quiet now — keep speaking to continue." }
-        case .stop(let reason):
+        if case .stop(let reason) = snapshot.decision {
             env.log("hold stopped for silence: \(reason)")
             env.playCaution()
             await finishRecording()
+            return
         }
+        guard !confirmingDiscard else { return }
+        // An input sending nothing outranks the quiet warning: speaking up
+        // cannot help.
+        guard snapshot.silentInputSeconds >= DictationHoldTracker.silentInputNoticeSeconds else {
+            attempt.silentInputNotice = nil
+            holdNotice = snapshot.decision == .silenceWarning ? "Quiet now — keep speaking to continue." : nil
+            return
+        }
+        guard let notice = attempt.silentInputNotice else {
+            // Naming the input reads Core Audio: off the main actor, bounded,
+            // once per silent run. Then decide again on the audio by now,
+            // which may no longer be silent.
+            let capture = env.capture
+            let name = await DictationDeadline.run(seconds: 0.5, work: { capture.boundInputName })
+            guard self.attempt === attempt, recording else { return }
+            attempt.silentInputNotice = DictationHUDMetrics.silentInputNotice(
+                deviceName: name, holdKeyName: holdKey.name, maximumHoldSeconds: maximumHoldSeconds)
+            await checkHoldSilence(attempt)
+            return
+        }
+        holdNotice = notice
     }
 }

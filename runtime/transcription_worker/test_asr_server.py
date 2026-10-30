@@ -1323,3 +1323,77 @@ def test_scene_reaches_final_decoder_and_preview_without_strength_or_alias_escal
     assert engine.calls[-1]["bias_phrases"] == ["Noise", "Miles"]
     asr_server.op_transcribe(dict(request, client="notes"))
     assert engine.calls[-1]["bias_phrases"] == ["Noise", "Miles"]
+
+
+# --- an empty decode says why, in one word; a recovery skips the gates ------
+#
+# The Mac's ending reads `dropped` (DictationAsrDropReason) to say why no
+# words came back and whether to keep the take for Recover Last Dictation.
+# Mutations: tests/test_guards_can_fire.py drives the same contract through
+# the staged worker.
+
+
+class DroppingEngine:
+    """Answers with the text and `dropped_reason` the test sets, and records
+    whether a call was a recovery."""
+
+    def __init__(self, text="", dropped_reason=None):
+        self.text = text
+        self.dropped_reason = dropped_reason
+        self.calls: list[dict] = []
+
+    def transcribe(self, audio, bias_phrases=None, beam_size=1, p_you=None, recovery=False, **_kw):
+        self.calls.append({"recovery": recovery})
+        return {"text": self.text, "stats": {"chunks": 1, "tokens": 0},
+                "dropped_reason": self.dropped_reason}
+
+
+@pytest.mark.parametrize("reason, word", [
+    ("silence-precheck", "quiet"),
+    ("language-prob-gate", "language"),
+    ("language-prob-gate+avg-logprob", "language"),
+    ("junk-filter", "junk"),
+    ("hallucination-phrase:'Thank you for watching.'", "other"),
+    (None, "other"),
+])
+def test_an_empty_decode_says_why_in_one_word(reason, word):
+    asr_server._engine = DroppingEngine(dropped_reason=reason)
+
+    resp = asr_server.op_transcribe({"pcm_b64": _pcm_b64()})
+
+    assert resp["ok"] is True and resp["text"] == ""
+    assert resp["dropped"] == word
+    # The log's detail is unchanged; the word never carries the decode.
+    assert resp["dropped_reason"] == reason
+    assert "Thank" not in resp["dropped"]
+
+
+def test_a_decode_with_words_keeps_yesterdays_reply_keys():
+    asr_server._engine = DroppingEngine(text="hello there")
+
+    resp = asr_server.op_transcribe({"pcm_b64": _pcm_b64()})
+
+    assert resp["text"] == "hello there"
+    assert "dropped" not in resp
+
+
+@pytest.mark.parametrize("sent, forwarded", [(True, True), (None, False), (False, False), ("yes", False), (1, False)])
+def test_only_a_literal_recovery_request_reaches_the_engine(sent, forwarded):
+    engine = DroppingEngine(text="kept words")
+    asr_server._engine = engine
+    request = {"pcm_b64": _pcm_b64()}
+    if sent is not None:
+        request["recovery"] = sent
+
+    assert asr_server.op_transcribe(request)["ok"] is True
+
+    assert engine.calls[-1]["recovery"] is forwarded
+
+
+def test_an_engine_without_recovery_still_decodes_a_recovery():
+    engine = FakeEngine()
+    asr_server._engine = engine
+
+    resp = asr_server.op_transcribe({"pcm_b64": _pcm_b64(), "recovery": True})
+
+    assert resp["ok"] is True and resp["text"] == "call-1"

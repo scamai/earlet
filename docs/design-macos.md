@@ -92,7 +92,10 @@ correction notices
 ([Correction notices, save receipts and Save again](#correction-notices-save-receipts-and-save-again)).
 When the vocabulary file could not be opened at launch, the pane says
 "Vocabulary is unavailable" and that the log under Troubleshooting says why,
-instead of showing an empty list.
+instead of showing an empty list. The teach row's line about the "Often
+misheard as" field is a footnote under the two fields, above any refusal, and
+is also set as that field's accessibility hint; no one has yet seen the line
+rendered or heard VoiceOver read the hint.
 
 **Settings**, in this order, as headed groups of rows (a row's words on the
 leading side, its control on the trailing side, or under the words in a
@@ -139,8 +142,8 @@ restart, whether dictation is on or off; words left after a refused paste; a
 recording kept for Recover Last Dictation; or a recording file that could not
 be removed. Paused by the user and a learning receipt are not marked: neither
 needs anything done. VoiceOver reads the item as "Home, needs your attention".
-The confirmation for discarding a long take is asked from the window, on
-whichever pane is shown.
+Escape's question on a long take is asked on the indicator, never from the
+window ([Recording, silence and recovery](#recording-silence-and-recovery)).
 
 ### Look and components
 
@@ -248,6 +251,20 @@ fix, then the quiet states.
 | A restart due | `exclamationmark.triangle` | Reopen Earlet to finish |
 | The speech engine failed | `exclamationmark.triangle` | Speech engine unavailable |
 
+While words or a recording wait in the menu for the user, the icon carries a
+badge: a dot in the caution colour at its top trailing corner, inside a clear
+ring, the same signal as the rail's Home mark. Words left after a refused
+paste (for Copy last text) and a recording kept for Recover Last Dictation
+badge it; VoiceOver hears the state, then "words waiting" or "recording
+waiting" ("Earlet, on, words waiting"), words first when both wait. A missing
+grant or a due restart marks Home but not the badge, since the glyph is
+already the triangle, and so does a recording file Earlet could not remove,
+which Earlet retries itself and the menu has no item for. A template image
+cannot carry a colour, so the badged icon is drawn: the symbol in the menu
+bar's ink and the dot, chosen for a light or dark menu bar and Increase
+Contrast each time it is drawn. Windows has no badge on its notification-area
+icon.
+
 The two permission headlines appear in the menu; the window header shows the
 setup step instead. The model publishes no engine-failed flag yet, so the last
 row is never drawn: a failed Enable shows as off, and the status sentence says
@@ -268,8 +285,15 @@ requests one permission, and coming back from System Settings advances to the
 next action without another system prompt. While the microphone request is
 open the header shows progress, and the button refuses a second click. The
 system microphone prompt reads "Earlet records while you hold the shortcut
-to type your speech locally." On macOS 27 and later, Accessibility is called
-"Device Control and Data Access" in the checklist and the recovery text.
+to type your speech locally." On macOS 27 and later, System Settings calls
+Accessibility "Device Control and Data Access", and so does every sentence
+that names it: the checklist, the recovery text, the status line, the
+floating indicator ("Allow Earlet in Privacy & Security → Device Control and
+Data Access, then try again."), the key test and the refused mouse button.
+`DictationPermissionStep.accessibilitySettingsName` picks the name, and
+`tests/test_accessibility_pane_name.py` fails on any other Mac source string
+that spells "Accessibility", except one failure description only the log
+reads.
 
 The checklist is read-only progress: a "Permissions · N of 3 allowed" header,
 one row per grant (Microphone, Accessibility, Input Monitoring) that says
@@ -309,18 +333,50 @@ The Mac recording ceiling is 600 seconds. The indicator counts down the last
 hands-free hold can stop after 30 or 60 seconds of silence, or never stop on
 silence; unless silence stopping is Off, before any speech it stops after 15 seconds, and after speech it
 warns for 10 seconds before the selected silence deadline. A held key has a
-60-second no-speech stuck guard. Escape after more than 30 seconds asks for
-confirmation before discarding the take.
+60-second no-speech stuck guard.
+
+Escape after more than 30 seconds of a hold asks first, on the indicator: its
+title becomes "Discard 0:42 of speech?" (the hold's clock when Escape was
+pressed) and its hint "Press Esc again to discard. Keep talking to continue."
+The take carries on. A second press of Escape within 5 s discards it; after
+5 s the question goes, and the next Escape asks again. Escape held down asks
+once: macOS marks its repeats and the key watch ignores them, so the second
+Escape is a new press. Releasing the key, or ending a latch, inserts the words
+as usual. The window is not brought forward and no dialog opens, so the field
+being dictated into keeps the keyboard and receives the words. The window's
+and the menu bar's Cancel never ask: a button is a choice, a key can be a
+slip. A hold of 30 seconds or less is cancelled by its first Escape. Windows
+asks the same question on its indicator
+([Long takes are never lost](design-windows.md#long-takes-are-never-lost)).
 
 Capture retains complete 16 kHz PCM16 in a private folder (0700 directory,
 0600 files), about 32 KB/s. A successful insertion or an available text/clipboard fallback deletes the file. At
 most one failed take is retained for up to 7 days, is recovered on the next
 launch after a crash, and is available through Recover last dictation and its
-clipboard copy path. A microphone fault ends the hold and transcribes the
+clipboard copy path. The status line says where: "The recording is saved.
+Recover it from Earlet's menu bar icon or on Home.", and the icon carries its
+waiting badge while the recording is kept. A microphone fault ends the hold and transcribes the
 captured prefix; an unavailable file is retained for another recovery attempt. Failed deletion
 is shown separately and retried; cancellation erases the audio before unlinking. One transport or deadline failure is retried exactly once with the same
 PCM on a fresh worker. A second failure keeps the take, and hold-health checks
 wait for worker startup before deciding that a hold failed.
+
+Audible audio the worker returns no words for ends by the reason the reply
+gives (`dropped`, `DictationNoWordsReason`). Too quiet for the worker's silence
+check: "Too quiet to make out", and the take is deleted. Emptied by its
+language-probability gate: "Couldn't tell the language", and the take is kept.
+Emptied by its junk filter or another filter, from a take whose peak reaches
+0.1: "Couldn't make out the words", and the take is kept. A quieter take a
+filter emptied, or a reply that names no reason, ends on "No words
+recognized" and keeps nothing. When the take cannot be kept after all, the
+two kept endings fall back to "No words recognized"; the status line still
+names the reason. Recover Last Dictation decodes with the current Language
+setting and asks the worker (`recovery: true`) to skip the checks that judge
+whether the audio was speech: the language gate, Whisper's no-speech segment
+drop and the junk filter. The silence check still applies. Every recovery
+asks this, not only the recovery of a take a gate emptied: the spool keeps
+audio only, so a take offered at launch carries no reason, and a recovery's
+words are copied, never typed into a field.
 
 Capture preferences use `dictation.echoCancellation` (off when unset) and
 `dictation.micDeviceUID` (the system input when unset or empty). The capture
@@ -347,7 +403,15 @@ Mac." when they were handed to the [history](#history), otherwise "It isn't
 saved to disk." (Windows, which keeps no history, always says the second).
 
 The menu bar menu offers "Copy last text · <time>" without showing the words,
-with a "Your words are still here" line above it after a failed paste. Copy
+with a "Your words are still here" line above it after a failed paste, and the
+menu bar icon carries its waiting badge as long as that line shows: until the
+words are dismissed or a newer result replaces them, since a copy keeps them
+([Status header and menu bar glyph](#status-header-and-menu-bar-glyph)).
+When the clipboard took nothing either, the status line sends the user there:
+"Your words are still available below, or from Earlet's menu bar icon → Copy
+last text." (after a missing Accessibility grant, "Your words are kept: use
+Copy last text on Home or from Earlet's menu bar icon."), and so does the
+indicator ([the endings](#the-floating-indicator-on-macos)). Copy
 uses the same clipboard-safe writer as a refused paste: it waits for any
 clipboard restoration to finish, and a press during the copy is refused like a
 press during a dictation. The indicator then says "Copied" or "Couldn't copy";
@@ -536,16 +600,19 @@ In order:
 1. The headline, 40 characters at most, because a menu item does not wrap.
 2. While a recent result is held: a separator, "Your words are still here"
    after a failed paste, and "Copy last text · <time>".
-3. While a learning receipt is live: a separator, "Remembered your
+3. While a recording is kept: "Recover Last Dictation · <time>" ("Recovering…"
+   while it runs), after a separator of its own when no recent result is held.
+4. While a learning receipt is live: a separator, "Remembered your
    correction", "Review vocabulary…" and "Undo last learning".
-4. "Enable dictation" or "Pause dictation"; while dictation is off and setup is
+5. "Enable dictation" or "Pause dictation"; while dictation is off and setup is
    incomplete, "Finish permission setup…", which opens the window.
-5. "Cancel dictation", only while there is something to cancel.
-6. A separator, "Show Earlet", "Settings… ⌘," and "Open Log Folder".
-7. A separator, "Preview Earlet Indicator" and "Quit Earlet ⌘Q".
+6. "Cancel dictation", only while there is something to cancel.
+7. A separator, "Show Earlet", "Settings… ⌘," and "Open Log Folder".
+8. A separator, "Preview Earlet Indicator" and "Quit Earlet ⌘Q".
 
 Windows draws the same items in the same order in its notification-area menu,
-without the headline (its icon's tooltip says what the headline says),
+except that "Recover last dictation · <time>" leads it, above Copy last text,
+and without the headline (its icon's tooltip says what the headline says),
 Settings…, "Preview Earlet Indicator" or the shortcuts, and with its separators
 between groups instead of under the headline
 ([Windows: window and tray](design-windows.md#windows-window-and-tray)).
@@ -565,13 +632,28 @@ tries a last vocabulary save.
 
 ### Diagnostics and the log
 
-An empty recording or one containing only exact digital zeros is an input
-fault. The window gives the existing microphone-check guidance and capture
-is cooled down once, so the next physical hold opens the input again. The
-app does not change the selected device or claim the lost speech was recovered.
-Nonzero room tone below the audibility gate keeps the calm "Nothing was heard"
-ending. A watchdog that already rebound the microphone owns its recovery and
-is not cooled down again by this path.
+An empty recording, one containing only exact digital zeros, or a hold of a
+second or more in which no sample reached 0.0001 (−80 dBFS) is an input fault:
+a connected input can deliver samples that are not exactly zero and still
+carry no signal. The indicator names the input the capture recorded from ("No
+sound from AirPods Pro"; "the microphone" when only a raw device id or no name
+is known), the window gives the existing microphone-check guidance, and
+capture is cooled down once, so the next physical hold opens the input again.
+The app does not change the selected device or claim the lost speech was
+recovered. Room tone above that floor but below the audibility gate keeps the
+calm "Nothing was heard" ending. After a hold the microphone recorded for
+under 0.6 s, or one under 1 s that never reached the floor (a headset can
+still be waking), it asks the user to hold the key while speaking; after a
+longer one that carried a signal, to speak up or move closer. A watchdog that
+already rebound the microphone owns its recovery and is not cooled down again
+by this path. While a hold records, 2.5 s of input under the same floor
+replaces the indicator's hint with "No sound from AirPods Pro — check the
+microphone." until a louder sample arrives. Without a name, or with one too
+long for the hint's single line, it reads "No sound from the microphone —
+check it isn't muted." instead, so the advice is never cut off. The per-press
+log line's cause names the same verdict ("sent no signal"). The floor and the
+three lengths are chosen values; they have not been measured against working
+microphones in quiet rooms.
 
 Before final recognition, the captured PCM must contain at least 90 ms of
 energy above the shared 0.004 RMS floor, measured in 10 ms frames. A brief
@@ -679,7 +761,9 @@ stops, unnamed); "Stops in 0:NN · …" in the last 60 s before the 600-second
 limit; "Esc to cancel" while transcribing. While recording, the title becomes
 the live preview of the user's words once there are any (display only, never
 inserted, oldest words clipped on one line); `DICTATION_PREVIEW=0` turns the
-preview off.
+preview off. Escape's question on a long take takes the title and the hint
+for its 5 s ("Discard 0:42 of speech?" over "Press Esc again to discard. Keep
+talking to continue."; [Recording, silence and recovery](#recording-silence-and-recovery)).
 
 A cold preview waits for the same bounded worker startup used by final
 recognition, while keeping only the most recent three seconds of pending
@@ -718,8 +802,11 @@ event (the last rows below) in the same form; Windows has both
 | Password field | That's a password field | caution | 4.5 |
 | Secure Input on | Another app is blocking the keyboard | caution | 4.5 |
 | Silence | Nothing heard | neutral | 1.6 |
-| Audio without words | No words recognized | neutral | 1.6 |
-| No audio from the microphone | No sound from the microphone | caution | 3.5 |
+| Audio without words, and no reason, or a quiet take a filter emptied | No words recognized | neutral | 1.6 |
+| Too quiet for the worker's silence check | Too quiet to make out | neutral | 2.5 |
+| The language gate emptied the take; recording kept | Couldn't tell the language | caution | 4.5 |
+| A filter emptied a loud take; recording kept | Couldn't make out the words | caution | 4 |
+| No audio from the microphone, or none above −80 dBFS for a second or more | No sound from the input's name, else from the microphone | caution | 3.5 |
 | Microphone access off | Microphone access is off | caution | 4.5 |
 | Escape or Cancel | Cancelled | neutral | 1 |
 | Engine died, restarting | Speech engine restarting | caution | 3.5 |
@@ -730,6 +817,12 @@ event (the last rows below) in the same form; Windows has both
 | Copy last text succeeded | Copied | neutral | 2 |
 | Copy last text failed | Couldn't copy | caution | 4 |
 | Automatic learning saved a new word | Remembered your correction | neutral | 3 |
+
+Two endings send the user to a menu, and both name Earlet's menu bar icon,
+where those items are: words kept in Earlet ("Click Earlet's menu bar icon →
+Copy last text.") and a remembered correction ("Review or undo from Earlet's
+menu bar icon."). Earlet's app menu, next to the Apple menu, has neither, so
+no line points there.
 
 **Placement.** Horizontally centred on the screen the user is working on, with
 the capsule's bottom edge 120 pt above the bottom of that screen's visible frame
@@ -762,9 +855,11 @@ device has not been seen.
 
 **Size.** Every busy state (held, hands-free, transcribing) is one capsule, 52 pt
 high, as wide as the widest line any of them can show: the live-preview budget,
-the Transcribing title and every hint, including the hands-free clock and the
-countdown at the most digits a 600-second hold reaches. The width is measured
-from the fonts at run time, so it depends on the hold key's name.
+the Transcribing title, Escape's question and every hint, including the
+hands-free clock, the countdown at the most digits a 600-second hold reaches
+and the unnamed "No sound from the microphone" hint (a named one is shown
+only when it fits). The width is measured from the fonts at run time, so it
+depends on the hold key's name.
 Nothing moves or resizes between a press, a latch and the release.
 An ending or a mic change starts at that width and grows to 420 pt at most,
 then wraps.
@@ -791,7 +886,8 @@ arrive on the main queue, so the indicator updates while a menu is open.
 
 **VoiceOver.** One constant label per state: "Listening", "Listening,
 hands-free", "Transcribing", the mic-change sentence, or an ending's title and
-detail; never the live words, the level or the clock. A panel that is never key
+detail; never the live words, the level, the clock or Escape's question, which
+is shown and not spoken. A panel that is never key
 is not read on its own, so the app posts the label as an announcement, once per
 change, and only for an ending or the mic-change sentence. **Nothing is spoken
 while the microphone is open, and that includes Transcribing.** Capture runs
@@ -823,8 +919,12 @@ for 2 s each, then shows whatever dictation is doing; a real dictation that
 starts meanwhile is held back and shown at the end, and only the newest of two
 overlapping previews hands the panel back. Any build, release included, run
 with `DICTATION_HUD_RENDER_DIR=<dir>` writes every state and every ending to
-PNG offscreen, plus a six-frame stability sequence of one recording, and exits,
-failing when a shadow is cut or two busy states differ in size.
+PNG offscreen, Escape's question held and hands-free
+(`hud-recording-discard-question.png`, `hud-recording-latched-discard-question.png`),
+plus a six-frame stability sequence of one recording and the badged menu bar
+icon (on and needs-permission) on a light and a dark menu bar stand-in
+(`hud-menu-icon-*.png`), and exits, failing when a shadow is cut or two busy
+states differ in size.
 `DICTATION_WINDOW_RENDER_DIR` writes the window's scenarios the same way. The
 render modes are not compiled out of release builds (what a release build
 refuses is a `DICTATION_*` resource path outside the bundle).

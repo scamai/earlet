@@ -463,6 +463,8 @@ public partial class MainWindow : Window, IDictationView, IVocabularyView, IVoca
         AutomationProperties.SetName(TeachWord, DictationCopy.TeachWordPlaceholder);
         TeachSoundsLikeHint.Text = DictationCopy.TeachSoundsLikePlaceholder;
         AutomationProperties.SetName(TeachSoundsLike, DictationCopy.TeachSoundsLikePlaceholder);
+        AutomationProperties.SetHelpText(TeachSoundsLike, DictationCopy.TeachSoundsLikeHelp);
+        TeachSoundsLikeHelp.Text = DictationCopy.TeachSoundsLikeHelp;
         TeachButton.Content = WithAccessKey(DictationCopy.TeachAdd, "A");
         ForgetAllButton.Content = WithAccessKey(DictationCopy.ForgetAll, "g");
         ForgetAllQuestion.Text = DictationCopy.ForgetAllQuestion;

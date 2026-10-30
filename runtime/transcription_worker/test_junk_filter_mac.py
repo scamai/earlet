@@ -20,6 +20,7 @@ Run: macos/runtime/bin/python3.11 -m pytest transcription_worker/test_junk_filte
 """
 
 import random
+import pytest
 
 from transcription_worker.whisper_mac import LONG_FORM_AUDIO_S, looks_like_junk
 
@@ -274,3 +275,107 @@ def test_engine_hands_the_callers_guard_to_the_junk_filter():
             guard = {kw.arg: kw.value for kw in call.keywords}.get("hallucination_guard")
             assert isinstance(guard, ast.Name) and guard.id == "hallucination_guard", \
                 f"{cls}.transcribe calls looks_like_junk without the caller's hallucination_guard"
+
+
+def test_preview_commit_gate_matches_dictation_final_filter():
+    """Dictation preview keeps a real sign-off; meeting captions still drop it."""
+    from transcription_worker import ops_stream_whisper as osw
+
+    captions = osw._CommitLog()
+    assert captions.gate("You", "Thank you.", channel="mic") == ""
+    preview = osw._CommitLog()
+    preview.hallucination_guard = False
+    assert preview.gate("You", "Thank you.", channel="mic") == "Thank you."
+    assert preview.gate("You", "See you next week, everyone.", channel="mic") \
+        == "See you next week, everyone."
+    # Only stock phrases are optional, not loops, annotations or compression.
+    for log in (captions, preview):
+        for junk in ("the the the the the the the the", "[BLANK_AUDIO]",
+                     _long_natural_english(500)):
+            assert log.gate("You", junk, channel="mic") == ""
+
+
+def test_preview_partial_gate_matches_dictation_final_filter():
+    from transcription_worker import ops_stream_whisper as osw
+
+    class Engine:
+        def transcribe(self, audio, **kwargs):
+            return {"text": "x"}
+
+    captions = osw._ChannelStream(Engine(), osw._CommitLog(), None,
+                                  fixed_label="You", channel_tag="mic")
+    preview = osw._ChannelStream(Engine(), osw._CommitLog(), None,
+                                 fixed_label="You", channel_tag="mic",
+                                 hallucination_guard=False)
+    for channel, expected in ((captions, ""), (preview, "[You] Thank you.")):
+        with channel.lock:
+            channel.partial = "Thank you."
+        assert channel.partial_line() == expected
+
+
+@pytest.mark.parametrize("client", ["dictation", "notes"])
+@pytest.mark.parametrize("script,real_words", [
+    ("Thank you.", True),
+    ("See you next week, everyone.", True),
+    ("[BLANK_AUDIO]", False),
+    ("snap " * 50, False),
+], ids=["thanks", "signoff", "annotation", "repetition"])
+def test_stream_replies_keep_dictated_signoffs_but_not_decoder_junk(
+        monkeypatch, client, script, real_words):
+    """Observe both wire replies, through real session setup and decoding."""
+    import base64
+    import threading
+    import time
+    from transcription_worker import ops_stream_whisper as osw
+
+    class ScriptedEngine:
+        _engine_name = "mlx"
+
+        def __init__(self):
+            self.called = threading.Event()
+
+        def transcribe(self, audio, **kwargs):
+            self.called.set()
+            return {"text": script}
+
+    engine = ScriptedEngine()
+    monkeypatch.setattr(osw, "_get_engine", lambda: engine)
+    monkeypatch.setattr(osw, "_make_embed_fn", lambda: None)
+    monkeypatch.setattr(osw, "_sessions", {})
+    # Exercise the caption partial surface too, even though normally hidden.
+    monkeypatch.setenv("DICTATION_NOTES_SHOW_PARTIAL", "1")
+    started = osw.start({"client": client, "languages": ["en"], "live_beam": 1})
+    assert started["ok"]
+    stream_id = started["stream_id"]
+    session = osw._sessions[stream_id]
+    audio = (0.1 * np.random.default_rng(7).standard_normal(
+        int(1.6 * osw.SAMPLE_RATE))).astype(np.float32).clip(-1, 1)
+
+    def push(samples):
+        pcm = (samples * 32768).astype(np.int16).tobytes()
+        reply = osw.push({"stream_id": stream_id, "channel": "mic",
+                          "pcm_b64": base64.b64encode(pcm).decode()})
+        assert reply["ok"], reply
+        return reply
+
+    try:
+        push(audio)
+        assert engine.called.wait(5), "preview never reached the decoder"
+        deadline = time.monotonic() + 5
+        while True:
+            with session.mic.lock:
+                if not session.mic.decoding:
+                    break
+            assert time.monotonic() < deadline, "preview decode never finished"
+            time.sleep(0.005)
+        partial = push(audio[:1600])
+        finished = osw.finish({"stream_id": stream_id})
+        assert finished["ok"], finished
+        for reply in (partial, finished):
+            if client == "dictation" and real_words:
+                assert script in reply["text"]
+            else:
+                assert reply["text"] == ""
+    finally:
+        if stream_id in osw._sessions:
+            osw.cancel({"stream_id": stream_id})

@@ -107,6 +107,8 @@ enum DictationRenderScenario: String, CaseIterable {
     case settingsExtraMouseButton = "settings-extra-mouse-button"
     /// Settings while it records a new mouse button.
     case settingsMouseRecording = "settings-mouse-recording"
+    /// Settings after macOS refused the chosen mouse button's listener.
+    case settingsMouseRefused = "settings-mouse-refused"
     /// The History pane: dictations over three days, some with recordings.
     case history
     case historyEmpty = "history-empty", historyOff = "history-off", historyLocked = "history-locked"
@@ -123,7 +125,7 @@ enum DictationRenderScenario: String, CaseIterable {
              .learningChecking, .learningUnavailable, .learningPending, .learningRejected, .learnedRepo:
             return .vocabulary
         case .settings, .troubleshooting, .settingsShortcut, .settingsRecording, .settingsExtraMouseButton,
-             .settingsMouseRecording:
+             .settingsMouseRecording, .settingsMouseRefused:
             return .settings
         case .history, .historyEmpty, .historyOff, .historyLocked:
             return .history
@@ -157,7 +159,7 @@ final class DictationRenderRig {
         }
         // Settings shows a chosen mouse button with its caution;
         // Troubleshooting, on the same pane, shows none.
-        if scenario == .settings {
+        if scenario == .settings || scenario == .settingsMouseRefused {
             DictationSettings(defaults: defaults).mouseButton = .back
         }
         if scenario == .settingsExtraMouseButton {
@@ -172,6 +174,7 @@ final class DictationRenderRig {
         let accessibility = microphone && scenario != .accessibility && scenario != .permissionRecovery
         let inputMonitoring = accessibility && scenario != .inputMonitoring
         trigger.startResult = scenario != .restart
+        let mouseStarts = scenario != .settingsMouseRefused
         let resources: DictationResources? = scenario == .missingResources
             ? nil : DictationResources(python: "/usr/bin/true", runtime: "/tmp", model: "/tmp")
         try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
@@ -193,7 +196,7 @@ final class DictationRenderRig {
             resolveResources: { resources },
             makeWorker: { _ in RenderWorker() },
             makeTrigger: { _ in trigger },
-            makeMouseTrigger: { _ in RenderMouseTrigger() },
+            makeMouseTrigger: { _ in RenderMouseTrigger(starts: mouseStarts) },
             keyWatch: RenderKeyWatch(),
             stopTrap: RenderStopTrap(),
             privacyGate: { nil },
@@ -244,7 +247,7 @@ final class DictationRenderRig {
         case .settingsRecording:
             await model.toggle()
             _ = model.beginRecordingHoldKey()
-        case .settingsExtraMouseButton:
+        case .settingsExtraMouseButton, .settingsMouseRefused:
             await model.toggle()
         case .settingsMouseRecording:
             await model.toggle()
@@ -345,6 +348,7 @@ private final class RenderCapture: DictationCaptureDevice, @unchecked Sendable {
     var isCurrentlyWarm: Bool { false }
     var isInputStaleWhileWarm: Bool { false }
     var lastCaptureInterruption: DictationCaptureInterruption? { nil }
+    var boundInputName: String { "MacBook Pro Microphone" }
     var onAudioLevel: (@Sendable (Float) -> Void)?
     var onRetainedAudio: (@Sendable ([Float], Int) -> Void)?
     var onInterruptionDiscardedAudio: (@Sendable () -> Void)?
@@ -390,7 +394,9 @@ private final class RenderMouseTrigger: DictationMouseTrigger {
     var onPress: (() -> Void)?
     var onRelease: (() -> Void)?
     var onDegraded: ((DictationPermissionStatus) -> Void)?
-    func start() -> Bool { true }
+    private let starts: Bool
+    init(starts: Bool) { self.starts = starts }
+    func start() -> Bool { starts }
     func stop() {}
     func update(_ button: DictationMouseSideButton) {}
 }

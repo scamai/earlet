@@ -29,6 +29,8 @@ public final class DictationKeyCheckModel: ObservableObject {
     private let isFrontmost: @MainActor () -> Bool
     private let ownPID: Int32
     private let clock: () -> TimeInterval
+    /// What System Settings calls the Accessibility pane on this Mac.
+    private let accessibilitySettingsName: String
     private var key = DictationHoldKey.standard
     private var testTrigger: (any DictationHoldTrigger)?
     private var idleTask: Task<Void, Never>?
@@ -60,9 +62,11 @@ public final class DictationKeyCheckModel: ObservableObject {
                 snapshot: @escaping @MainActor () async -> DictationKeySnapshot,
                 isFrontmost: @escaping @MainActor () -> Bool,
                 ownPID: Int32 = ProcessInfo.processInfo.processIdentifier,
-                clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+                clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                accessibilitySettingsName: String = DictationPermissionStep.accessibilitySettingsName) {
         self.settings = settings; self.makeTrigger = makeTrigger; self.snapshot = snapshot
         self.isFrontmost = isFrontmost; self.ownPID = ownPID; self.clock = clock
+        self.accessibilitySettingsName = accessibilitySettingsName
         select(settings.holdKey)
     }
 
@@ -126,8 +130,9 @@ public final class DictationKeyCheckModel: ObservableObject {
         trigger.onHoldEnd = { [weak self] in self?.released() }
         trigger.onLatchStart = { [weak self] in self?.doubleTapped() }
         trigger.onLatchEnd = { [weak self] in self?.doubleTapped() }
+        let pane = accessibilitySettingsName
         trigger.onDegraded = { [weak self] _ in
-            self?.message = "Allow Input Monitoring and Accessibility, then restart Earlet to test this key."
+            self?.message = "In Privacy & Security, allow Earlet under Input Monitoring and under \(pane), then restart Earlet to test this key."
         }
         if trigger.start() { testTrigger = trigger; return true }
         message = "The key listener could not start. Check permissions, then restart Earlet."

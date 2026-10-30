@@ -14,9 +14,14 @@ import DictationKit
 @testable import DictationAppCore
 
 /// The worker's side of the wire, answering each op the way `asr_server.py`
-/// does and remembering every op it was sent, in order.
+/// does and remembering every op it was sent, in order, and each transcribe
+/// request's fields.
 private actor ScriptedWire: AsrWireClient {
     private var sent: [String] = []
+    private var transcribeFields: [[String: JSONValue]] = []
+    /// The next transcribe replies' `dropped` words, in order; none answers
+    /// with words.
+    private var dropped: [String] = []
 
     func start() async throws {}
     func stop() async {}
@@ -33,13 +38,19 @@ private actor ScriptedWire: AsrWireClient {
             return Self.reply(["ok": .bool(true), "text": .string("[You] newest words"),
                                "is_endpoint": .bool(false)])
         case "transcribe":
-            return Self.reply(["ok": .bool(true), "text": .string("hello world")])
+            transcribeFields.append(fields)
+            guard !dropped.isEmpty else {
+                return Self.reply(["ok": .bool(true), "text": .string("hello world")])
+            }
+            return Self.reply(["ok": .bool(true), "text": .string(""), "dropped": .string(dropped.removeFirst())])
         default:
             return Self.reply(["ok": .bool(true)])
         }
     }
 
     var ops: [String] { sent }
+    var transcribes: [[String: JSONValue]] { transcribeFields }
+    func answerDropped(_ words: [String]) { dropped = words }
 
     private static func reply(_ fields: [String: JSONValue]) -> IpcResponse {
         let data = try! JSONEncoder().encode(JSONValue.object(fields))
@@ -121,6 +132,53 @@ extension WorkerLaunchTests {
             #expect(metrics.streamOpenMs != nil)
             #expect(metrics.pushCount >= 1)
             #expect(await wire.ops == ["init", "stream_start", "stream_push", "stream_cancel"])
+        }
+    }
+
+    @Suite("The product's worker carries an empty decode's reason and a recovery")
+    struct LiveWorkerNoWordsTests {
+
+        @Test("the reply's drop word reaches the detail; an unknown one reads as other")
+        func dropWordReachesTheDetail() async throws {
+            let wire = ScriptedWire()
+            let worker = DictationEnvironment.makeLiveWorker(
+                anyResources, stderrSink: { _ in }, wireClient: wire)
+            #expect(await worker.start())
+            let slot = WorkerSlot()
+            slot.worker = worker
+            await wire.answerDropped(["language", "louder"])
+            let samples = [Float](repeating: 0.2, count: 1_600)
+
+            var reasons: [DictationAsrDropReason?] = []
+            for _ in 0..<3 {
+                guard case .result(let detail) = await slot.transcribeDetailed(
+                    samples: samples, sampleRate: 16_000, compareBaseline: false) else {
+                    Issue.record("the decode failed"); return
+                }
+                reasons.append(detail.dropReason)
+            }
+            #expect(reasons == [.language, .other, nil])
+        }
+
+        @Test("only Recover Last Dictation's decode asks the worker to skip its checks")
+        func recoveryReachesTheWire() async throws {
+            let wire = ScriptedWire()
+            let worker = DictationEnvironment.makeLiveWorker(
+                anyResources, stderrSink: { _ in }, wireClient: wire)
+            #expect(await worker.start())
+            let slot = WorkerSlot()
+            slot.worker = worker
+            slot.setLanguageCode("ja")
+            let samples = [Float](repeating: 0.2, count: 1_600)
+
+            _ = await slot.transcribeDetailed(samples: samples, sampleRate: 16_000, compareBaseline: false)
+            #expect(await slot.transcribeForRecovery(samples: samples, sampleRate: 16_000) == .text("hello world"))
+
+            let sent = await wire.transcribes
+            #expect(sent.count == 2)
+            #expect(sent.first?["recovery"] == nil)
+            #expect(sent.last?["recovery"] == .bool(true))
+            #expect(sent.last?["language"] == .string("ja"), "a recovery keeps the chosen language")
         }
     }
 

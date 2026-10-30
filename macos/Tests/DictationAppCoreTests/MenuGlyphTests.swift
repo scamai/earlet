@@ -132,6 +132,24 @@ struct MenuGlyphTests {
         #expect(DictationMenuGlyph.ready.menuHeadline(holdKeyName: "Right Command") == "On — hold Right Command")
         #expect(DictationMenuGlyph.paused.menuHeadline(holdKeyName: "Right Command") == "Earlet is off")
     }
+
+    @Test("the waiting badge: words outrank a recording, and VoiceOver hears it after the state")
+    func waitingBadge() {
+        #expect(DictationMenuWaiting.resolve(wordsWaiting: false, recordingSaved: false) == nil)
+        #expect(DictationMenuWaiting.resolve(wordsWaiting: true, recordingSaved: false) == .words)
+        #expect(DictationMenuWaiting.resolve(wordsWaiting: false, recordingSaved: true) == .recording)
+        #expect(DictationMenuWaiting.resolve(wordsWaiting: true, recordingSaved: true) == .words)
+        let quiet = DictationMenuIconState(glyph: .ready, waiting: nil)
+        #expect(!quiet.badged)
+        #expect(quiet.accessibilityLabel == "Earlet, on")
+        let words = DictationMenuIconState(glyph: .ready, waiting: .words)
+        #expect(words.badged)
+        #expect(words.accessibilityLabel == "Earlet, on, words waiting")
+        #expect(DictationMenuIconState(glyph: .needsPermission, waiting: .recording).accessibilityLabel
+                == "Earlet, needs permission, recording waiting")
+        let phrases = Set(DictationMenuWaiting.allCases.map(\.accessibilityPhrase))
+        #expect(phrases.count == DictationMenuWaiting.allCases.count, "VoiceOver tells the two apart")
+    }
 }
 
 @MainActor
@@ -195,6 +213,64 @@ struct ModelMenuGlyphTests {
         model.refreshPermissions()
         #expect(model.menuGlyph == .needsPermission)
         #expect(model.menuGlyph.menuHeadline(holdKeyName: model.holdKey.name) == "Needs permission")
+        #expect(model.homeNeedsAttention)
+        #expect(model.menuIcon == DictationMenuIconState(glyph: .needsPermission, waiting: nil),
+                "a missing grant marks Home but not the badge: the triangle already says it")
+    }
+
+    private func enabled(_ harness: Harness) async -> DictationModel {
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.enabled)
+        return model
+    }
+
+    /// One press and release.
+    private func dictate(_ harness: Harness, _ model: DictationModel, audio: Bool = false) async {
+        harness.trigger.press()
+        #expect(await eventually { model.recording })
+        if audio { harness.capture.emitRetainedAudio([Float](repeating: 0.2, count: 16_000)) }
+        harness.trigger.release()
+        #expect(await eventually { !model.busy && !model.recording })
+    }
+
+    @Test("words left after a refused paste badge the icon until they are dismissed", .timeLimit(.minutes(1)))
+    func wordsWaitingBadgeTheIcon() async {
+        let harness = Harness()
+        harness.clipboardWorks.mutate { $0 = false }
+        harness.inserts.outcome.mutate { $0 = .failed(.focusedElementNotEditable) }
+        let model = await enabled(harness)
+        await dictate(harness, model)
+        #expect(model.recentResult.entry?.needsRecovery == true)
+        #expect(model.menuIcon == DictationMenuIconState(glyph: .ready, waiting: .words))
+        #expect(model.menuIcon.accessibilityLabel == "Earlet, on, words waiting")
+        #expect(model.homeNeedsAttention, "the same signal as Home's rail mark")
+        await model.dismissRecentResult()
+        #expect(model.menuIcon == DictationMenuIconState(glyph: .ready, waiting: nil))
+    }
+
+    @Test("a recording kept for Recover Last Dictation badges the icon until it is discarded",
+          .timeLimit(.minutes(1)))
+    func savedRecordingBadgesTheIcon() async {
+        let harness = Harness()
+        let model = await enabled(harness)
+        harness.workers.made[0].state.mutate { $0.replies = [.failure(.engineError("bad audio"))] }
+        await dictate(harness, model, audio: true)
+        #expect(model.savedTake != nil)
+        #expect(model.menuIcon.waiting == .recording)
+        #expect(model.menuIcon.accessibilityLabel.hasSuffix(", recording waiting"))
+        await model.discardSavedTake()
+        #expect(model.savedTake == nil)
+        #expect(!model.menuIcon.badged)
+    }
+
+    @Test("an inserted dictation, kept to copy again, leaves the icon unbadged", .timeLimit(.minutes(1)))
+    func insertedResultLeavesTheIconQuiet() async {
+        let harness = Harness()
+        let model = await enabled(harness)
+        await dictate(harness, model)
+        #expect(model.recentResult.entry?.needsRecovery == false)
+        #expect(model.menuIcon == DictationMenuIconState(glyph: .ready, waiting: nil))
     }
 }
 #endif

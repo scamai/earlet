@@ -152,22 +152,29 @@ public enum DictationHUDMetrics {
 
     /// The text column every busy state shares: the widest line any of
     /// them can show. That is the live preview's caption budget, the
-    /// Transcribing title, and every hint — held and hands-free, with a
-    /// hands-free hold's clock and the countdown at the most digits a hold
-    /// of `maximumHoldSeconds` reaches. Two points spare, so SwiftUI's own
-    /// measurement never truncates a line this one measured as fitting.
+    /// Transcribing title, Escape's question, and every hint — held and
+    /// hands-free, with a hands-free hold's clock and the countdown at the
+    /// most digits a hold of `maximumHoldSeconds` reaches — and the unnamed
+    /// silent-input notice (`silentInputNotice`). Two points spare, so
+    /// SwiftUI's own measurement never truncates a line this one measured
+    /// as fitting.
     public static func textColumnWidth(holdKeyName: String, maximumHoldSeconds: TimeInterval) -> CGFloat {
+        let limit = maximumHoldSeconds
         let titles = [
             DictationHUDContent.recordingTitleReferenceCJK,
             DictationHUDContent.recordingTitleReferenceWords,
             DictationHUDContent.title(for: .transcribing) ?? "",
+            DictationHUDContent.discardQuestion(seconds: limit),
         ]
-        let limit = maximumHoldSeconds
         let countdown = DictationHUDContent.countdownSeconds
         // Just before the countdown is the longest clock a hands-free hold
         // shows; at the countdown's start, the longest "Stops in".
         let clocks: [TimeInterval?] = [nil, 0, max(0, limit - countdown - 1), max(0, limit - countdown)]
-        var hints = [DictationHUDContent.hint(for: .transcribing, holdKeyName: holdKeyName)]
+        var hints: [String?] = [
+            DictationHUDContent.hint(for: .transcribing, holdKeyName: holdKeyName),
+            DictationHUDContent.discardQuestionHint,
+            DictationCopy.silentInputDuringHold(deviceName: nil),
+        ]
         for latched in [false, true] {
             for elapsed in clocks {
                 hints.append(DictationHUDContent.hint(
@@ -179,6 +186,17 @@ public enum DictationHUDMetrics {
             titles.map { width(of: $0, font: titleFont) }.max() ?? 0,
             hints.compactMap { $0 }.map { width(of: $0, font: hintFont) }.max() ?? 0)
         return widest + 2
+    }
+
+    /// The recording hint for an input that has sent nothing: named when
+    /// that line fits the busy column, else unnamed, which always fits. The
+    /// hint is one line, and a long input name would cut off the advice.
+    public static func silentInputNotice(
+        deviceName: String?, holdKeyName: String, maximumHoldSeconds: TimeInterval
+    ) -> String {
+        let named = DictationCopy.silentInputDuringHold(deviceName: deviceName)
+        let column = textColumnWidth(holdKeyName: holdKeyName, maximumHoldSeconds: maximumHoldSeconds)
+        return width(of: named, font: hintFont) <= column ? named : DictationCopy.silentInputDuringHold(deviceName: nil)
     }
 
     /// Whether `state` is a busy state, drawn at exactly the one fixed

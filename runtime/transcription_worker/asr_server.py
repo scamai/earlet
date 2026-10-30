@@ -75,7 +75,20 @@ Ops:
      retained under "encoder_id" (reply key; null when skipped --
      multi-chunk/greedy/gated -- with the reason in stats.encoder_cache).
      A request without return_fired/keep_encoder gets yesterday's reply,
-     key for key.
+     key for key, unless the decode came back empty: then the reply also
+     carries "dropped", why, as one word a host can put to the user --
+     "quiet" (the silence pre-check), "language" (the language-probability
+     gate), "junk" (the junk filter) or "other" (any other filter, or a
+     decode that produced no words without one). Never the words:
+     `dropped_reason` stays the log's detail, and one of its forms quotes
+     the decoded text.
+     recovery (optional, true only): a Recover Last Dictation decode of a
+     take an earlier decode may have emptied. The gates that judge whether
+     the audio was speech -- the language-probability gate, the no-speech
+     segment drop and the junk filter -- are skipped, so the take is not
+     emptied again and deleted; the silence pre-check and the request's
+     language still apply. Safe only because a recovered result is shown
+     and copied, never typed into a field. Transcribe only.
      command_prefix (optional, L1b closed-set constraint = "option A";
         letters A-G are defined in docs/speech/README.md; voice workflows
      only): {"phrases":[...],"max_tokens":3,"mode":"soft"|"hard",
@@ -656,6 +669,12 @@ def op_transcribe(req: dict) -> dict:
     if "hallucination_guard" in _inspect.signature(_engine.transcribe).parameters:
         kwargs["hallucination_guard"] = bool(req.get("hallucination_guard", False))
 
+    # Recover Last Dictation (see `recovery` in the module docstring). The
+    # literal true only, and capability-checked like the fields above: an
+    # engine without the parameter decodes under its usual gates.
+    if req.get("recovery") is True and "recovery" in _inspect.signature(_engine.transcribe).parameters:
+        kwargs["recovery"] = True
+
     # loop-v2 P6 additions, both opt-in and both capability-checked like
     # return_words: a request without them produces today's engine call and
     # today's reply keys, exactly. `fired` is what the trie COMPLETED on each
@@ -929,10 +948,26 @@ def _apply_text_passes(result: dict, merged_bias: list[str],
               file=sys.stderr, flush=True)
 
 
+def _dropped(result: dict) -> str | None:
+    """The reply's `dropped` word for an empty decode, or None when it has
+    words. Derived from the engine's `dropped_reason`, never from the text."""
+    if (result.get("text") or "").strip():
+        return None
+    reason = result.get("dropped_reason") or ""
+    if reason == "silence-precheck":
+        return "quiet"
+    # "language-prob-gate", and its prompted form "+avg-logprob".
+    if reason.startswith("language-prob-gate"):
+        return "language"
+    if reason == "junk-filter":
+        return "junk"
+    return "other"
+
+
 def _transcribe_reply(result: dict, req: dict, baseline_text, run_compare: bool) -> dict:
     """The `transcribe` wire shape. One function so `rescore` cannot drift
     from it."""
-    return {
+    reply = {
         "ok": True,
         "text": result["text"],
         "words": result.get("words"),
@@ -962,6 +997,12 @@ def _transcribe_reply(result: dict, req: dict, baseline_text, run_compare: bool)
         "avg_logprob": _finite_or_none((result.get("stats") or {}).get("avg_logprob")),
         "nbest": _wire_nbest((result.get("stats") or {}).get("nbest")),
     }
+    # Only on an empty decode, so a reply with words keeps yesterday's keys.
+    # The Mac's ending says which it was, and keeps the take for a gate.
+    dropped = _dropped(result)
+    if dropped is not None:
+        reply["dropped"] = dropped
+    return reply
 
 
 # Admissible per-phrase delta, in nats added per matched token.

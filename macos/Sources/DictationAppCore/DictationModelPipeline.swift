@@ -36,9 +36,11 @@ extension DictationModel {
         }
 
         // Close the microphone at release, before waiting for a cold worker.
-        // The session later consumes this cached result exactly once.
+        // The session later consumes this cached result exactly once; its
+        // forensic record is kept for the ending's words.
+        var released: DictationCapture.CaptureResult?
         if let capture = attempt.capture {
-            _ = await DictationDeadline.run(seconds: 3, work: {
+            released = await DictationDeadline.run(seconds: 3, work: {
                 await capture.stop(keepWarm: capture.isCurrentlyWarm)
             })
         }
@@ -222,17 +224,29 @@ extension DictationModel {
                 recentResult.noteInHistory(inHistory, for: remembered)
             }
             attempt.diagnostics.recovery(clipboard: kept, retained: recentResult.entry != nil)
-            status = DictationCopy.insert(failure, keptOnClipboard: kept)
+            let pane = env.permissions.accessibilitySettingsName
+            status = DictationCopy.insert(failure, keptOnClipboard: kept, accessibilitySettingsName: pane)
             if !kept, recentResult.entry != nil {
                 if case .accessibilityPermissionMissing = failure {
-                    status = "Allow \(DictationPermissionStep.accessibilitySettingsName) to type here. Your text is available in Earlet → Copy last text."
+                    status = "Allow \(pane) to type here. "
+                        + "Your words are kept: use Copy last text on Home or from Earlet's menu bar icon."
                 } else {
-                    status = "The text could not be typed here. Your words are still available below or from Earlet → Copy last text."
+                    status = "The text could not be typed here. Your words are still available below, "
+                        + "or from Earlet's menu bar icon → Copy last text."
                 }
                 showOutcome(.textRecoverable)
             } else {
                 showOutcome(DictationHUDContent.ending(forRefusedPaste: failure, keptOnClipboard: kept))
             }
+        case .failed(.asr, .emptyTranscript, let timings) where !interrupted:
+            // Audible audio, no words: the ending says why, and a take a
+            // recognition gate emptied is kept for Recover Last Dictation
+            // (rule zero), whose decode skips those gates.
+            let reason = DictationNoWordsReason(dropReason: timings.dropReason, capturePeak: timings.capturePeak)
+            let kept = await settleTake(worthKeeping: reason.keepsTake)
+            env.log("no words: \(reason), recording \(kept ? "kept" : "not kept")")
+            status = DictationCopy.noWords(reason, kept: kept)
+            showOutcome(DictationHUDContent.ending(forNoWords: reason, kept: kept))
         case .failed(let stage, let failure, _):
             // A device failure with unreadable RAM still keeps its disk copy.
             let kept = await settleTake(worthKeeping: interrupted)
@@ -243,8 +257,15 @@ extension DictationModel {
                         : "Mic changed to \(interruption.deviceName) — could you say that again?")
                 showMicChangedNotice(status)
             } else {
-                status = DictationCopy.failure(failure, stage: stage, holdKey: holdKey)
-                showOutcome(DictationHUDContent.ending(for: failure, stage: stage))
+                // How long the microphone recorded, how loud, and from what:
+                // a cold start or a parked tap makes the time since the press
+                // longer.
+                let record = released?.forensics
+                let recorded = record?.holdSeconds ?? heldSeconds
+                status = DictationCopy.failure(failure, stage: stage, holdKey: holdKey,
+                                               heldSeconds: recorded, peak: record?.peak)
+                showOutcome(DictationHUDContent.ending(for: failure, stage: stage, heldSeconds: recorded,
+                                                       peak: record?.peak, deviceName: record?.deviceName))
             }
         case .commandHandled, .spokenCommand:
             await settleTake(worthKeeping: false)

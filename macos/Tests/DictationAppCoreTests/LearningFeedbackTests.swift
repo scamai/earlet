@@ -28,6 +28,7 @@ struct LearningFeedbackTests {
         #expect(harness.learningFile?.words.map(\.text) == ["Trovioo"])
         #expect(model.vocabulary.learningNotice?.contains("Remembered") == true)
         #expect(await eventually { model.hudOutcome?.title == "Remembered your correction" })
+        #expect(model.hudOutcome?.detail == "Review or undo from Earlet's menu bar icon.")
         await model.vocabulary.undoLastLearning()
         #expect(harness.learningFile == .empty)
         #expect(model.vocabulary.rows.isEmpty)

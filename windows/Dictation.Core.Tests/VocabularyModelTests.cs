@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using Dictation.Core.Learning;
 using Dictation.Core.Tests.Learning;
 
@@ -170,7 +171,7 @@ public sealed class VocabularyModelTests
         { "Trovioo", "t", "Type a word first." },
         { new string('x', 61), null, "That is too long. Use up to 60 characters." },
         { "one two three four five six seven", null, "That is too long. Use up to 60 characters." },
-        { "Trovioo Cloud", "trovioo", "“Sounds like” cannot be part of the word itself." },
+        { "Trovioo Cloud", "trovioo", "The misheard form can't be part of the word itself." },
     };
 
     [Theory]
@@ -373,6 +374,22 @@ public sealed class VocabularyModelTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>LEARNING.md §4.3 names the second field as the window does
+    /// and never calls it a pronunciation again.</summary>
+    [Fact]
+    public void Learning_md_names_the_misheard_field_as_the_window_does()
+    {
+        var spec = System.Text.RegularExpressions.Regex.Replace(
+            File.ReadAllText(Path.Combine(DictationOverridesTests.WindowsRoot(), "..", "LEARNING.md")), @"\s+", " ");
+        var teaching = spec[spec.IndexOf("### 4.3 Teaching", StringComparison.Ordinal)..spec.IndexOf("### 4.4", StringComparison.Ordinal)];
+
+        Assert.Contains(
+            $"\"{DictationCopy.TeachSoundsLikePlaceholder.Replace(" (optional)", "", StringComparison.Ordinal)}\" field",
+            teaching, StringComparison.Ordinal);
+        Assert.DoesNotContain("how it sounds", teaching, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sounds-like", teaching, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ─── The copy ───────────────────────────────────────────────────────
 
     [Fact]
@@ -385,11 +402,103 @@ public sealed class VocabularyModelTests
             + "Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences.",
             DictationCopy.LearnFromCorrectionsDisclosure);
         Assert.Equal("Word or name", DictationCopy.TeachWordPlaceholder);
-        Assert.Equal("Sounds like (optional)", DictationCopy.TeachSoundsLikePlaceholder);
+        Assert.Equal("Often misheard as (optional)", DictationCopy.TeachSoundsLikePlaceholder);
+        Assert.Equal(
+            "Optional: how Earlet writes it now, like “get hub” for GitHub. Earlet will write the word instead.",
+            DictationCopy.TeachSoundsLikeHelp);
         Assert.Equal("Add", DictationCopy.TeachAdd);
         Assert.Equal("Remove", DictationCopy.RemoveEntry);
         Assert.Equal("Learned from your fix", DictationCopy.LearnedFromYourFix);
         Assert.Equal("Added by you", DictationCopy.AddedByYou);
         Assert.Equal("trovio → Trovioo", DictationCopy.AliasRow("trovio", "Trovioo"));
+    }
+
+    public static TheoryData<string> MisheardFieldSentences => new()
+    {
+        DictationCopy.TeachSoundsLikePlaceholder,
+        DictationCopy.TeachSoundsLikeHelp,
+        DictationCopy.TeachSelfContaining,
+    };
+
+    /// <summary>The second field is what Earlet writes now, rewritten to the
+    /// word ("heard → meant"), not a pronunciation. Its label, the line under
+    /// the row and its refusal are word for word the Mac's, read from its
+    /// source as the correction notices are.</summary>
+    [Theory]
+    [MemberData(nameof(MisheardFieldSentences))]
+    public void The_misheard_field_is_the_macs_sentence_word_for_word(string sentence) =>
+        Assert.Contains(
+            $"\"{sentence}\"", File.ReadAllText(MacSource("DictationAppCore", "DictationVocabulary.swift")),
+            StringComparison.Ordinal);
+
+    // ─── The teach row's hint, read from source ─────────────────────────
+
+    private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+    private static string MacSource(string folder, string file) =>
+        Path.Combine(DictationOverridesTests.WindowsRoot(), "..", "macos", "Sources", folder, file);
+
+    /// <summary>From <paramref name="start"/> to the end of that member: the
+    /// first line holding only a closing brace at its indentation.</summary>
+    private static string Member(string code, string start)
+    {
+        var at = code.IndexOf(start, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"no '{start}'");
+        var end = code.IndexOf("\n    }\n", at, StringComparison.Ordinal);
+        Assert.True(end > at, $"no end to '{start}'");
+        return code[at..end];
+    }
+
+    [Fact]
+    public void The_hint_sits_under_the_teach_row_in_the_secondary_style_on_both_windows()
+    {
+        var xaml = XDocument.Load(Path.Combine(DictationOverridesTests.WindowsRoot(), "Dictation.App", "MainWindow.xaml"));
+        var hint = xaml.Descendants().Single(e => (string?)e.Attribute(X + "Name") == "TeachSoundsLikeHelp");
+        var siblings = hint.Parent!.Elements().ToList();
+        int At(string name) => siblings.FindIndex(e => (string?)e.Attribute(X + "Name") == name);
+        var teachRow = siblings.FindIndex(e => e.Descendants().Any(d => (string?)d.Attribute(X + "Name") == "TeachSoundsLike"));
+
+        Assert.Equal("VocabularySection", (string?)hint.Parent.Attribute(X + "Name"));
+        Assert.Equal(teachRow + 1, At("TeachSoundsLikeHelp"));
+        Assert.Equal(At("TeachSoundsLikeHelp") + 1, At("TeachMessage"));
+        Assert.Null(hint.Attribute("Visibility"));
+        Assert.Equal("Wrap", (string?)hint.Attribute("TextWrapping"));
+        Assert.Equal(
+            (string?)siblings[At("LearnDisclosure")].Attribute("Foreground"), (string?)hint.Attribute("Foreground"));
+
+        // Both placeholders end in an ellipsis in a narrow window instead of
+        // being cut mid-word.
+        foreach (var placeholder in new[] { "TeachWordHint", "TeachSoundsLikeHint" })
+        {
+            Assert.Equal(
+                "CharacterEllipsis",
+                (string?)xaml.Descendants().Single(e => (string?)e.Attribute(X + "Name") == placeholder)
+                    .Attribute("TextTrimming"));
+        }
+
+        var labels = Member(
+            File.ReadAllText(Path.Combine(DictationOverridesTests.WindowsRoot(), "Dictation.App", "MainWindow.xaml.cs"))
+                .ReplaceLineEndings("\n"),
+            "private void ShowVocabularyLabels(");
+        Assert.Contains("TeachSoundsLikeHint.Text = DictationCopy.TeachSoundsLikePlaceholder;", labels, StringComparison.Ordinal);
+        Assert.Contains(
+            "AutomationProperties.SetName(TeachSoundsLike, DictationCopy.TeachSoundsLikePlaceholder);", labels,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AutomationProperties.SetHelpText(TeachSoundsLike, DictationCopy.TeachSoundsLikeHelp);", labels,
+            StringComparison.Ordinal);
+        Assert.Contains("TeachSoundsLikeHelp.Text = DictationCopy.TeachSoundsLikeHelp;", labels, StringComparison.Ordinal);
+
+        // The Mac's row: the same line as a footnote under the fields and
+        // above the refusal, and the field's VoiceOver hint.
+        var view = File.ReadAllText(MacSource("DictationApp", "DictationVocabularyView.swift")).ReplaceLineEndings("\n");
+        var teaching = Member(view, "private var teaching: some View {");
+        var fields = teaching.IndexOf("ViewThatFits(in: .horizontal)", StringComparison.Ordinal);
+        var footnote = teaching.IndexOf("DictationFootnote(Copy.soundsLikeHelp)", StringComparison.Ordinal);
+        var refusal = teaching.IndexOf("if let message = vocabulary.teachMessage", StringComparison.Ordinal);
+        Assert.True(fields >= 0 && fields < footnote && footnote < refusal, $"{fields} < {footnote} < {refusal}");
+        Assert.Contains(
+            ".accessibilityHint(Text(Copy.soundsLikeHelp))", Member(view, "private var soundsLikeField: some View {"),
+            StringComparison.Ordinal);
     }
 }

@@ -434,7 +434,7 @@ the Mac puts one under its headline:
 1. While a take is kept: "Recover last dictation · <time>", which shows no
    words, reads "Recovering…" during a recovery and is inactive while one may
    not start ([Long takes are never lost](#long-takes-are-never-lost)).
-   Windows only for now.
+   The Mac's menu has it too, after Copy last text.
 2. While a recent result is held: "Your words are still here" (an inactive
    line) after a failed paste, and "Copy last text · <time>", which shows no
    words and is inactive while a copy may not start.
@@ -499,6 +499,14 @@ name; from the menu, the window also comes forward to show that line, as it
 does for an Enable from the menu that fails. The menu is built and tested on
 Linux only (`TrayMenuTests`, the WinForms half pinned on its source); no one
 has opened it on Windows.
+
+Under the teach row, the Mac's line about the "Often misheard as" field
+([The Vocabulary section](../DESIGN.md#the-vocabulary-section)) is always
+shown in the disclosure's grey, and it is set as that field's UI Automation
+help text (`AutomationProperties.HelpText`). Both placeholders end in an
+ellipsis when the window is too narrow for them. This is pinned on its source
+on Linux only (`VocabularyModelTests`); no one has seen it or heard Narrator
+read it on Windows.
 
 The Vocabulary section shows the Mac's correction notices
 ([Correction notices, save receipts and Save again](design-macos.md#correction-notices-save-receipts-and-save-again))
@@ -1435,10 +1443,12 @@ unknown.
   "Couldn't type or copy — click a text field and try again" (the paste and
   the clipboard both failed and nothing kept the words), "No window had focus
   — click a text field and try again", "Nothing heard — hold Right Ctrl and
-  speak" (the Mac's "while you speak", shortened to be read in 2.5 s), "No
-  sound from the microphone — check the input device in Windows sound
-  settings", "The microphone would not open — check that one is connected
-  and not in use", and "Too short — hold Right Ctrl longer" (never shown:
+  speak" (the Mac's "while you speak", shortened to be read in 2.5 s; the
+  Mac's "speak up" after a longer hold is not here), "No sound from the
+  microphone — check the input device in Windows sound settings" (the Mac
+  also names the input and counts a whole near-silent hold as no sound;
+  Windows does not), "The microphone would not open — check that one is
+  connected and not in use", and "Too short — hold Right Ctrl longer" (never shown:
   this app's tap has no minimum hold); each keeps the shared model's tone and
   dwell. Other lines cover the press refusals ("Still typing the last one —
   hold again", "Password field — nothing was recorded", "Still copying your

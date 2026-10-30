@@ -100,7 +100,8 @@ struct WarmCaptureTests {
         #expect(await eventually { harness.capture.state.get.coolDowns == 1 })
         #expect(!harness.capture.isCurrentlyWarm)
         #expect(harness.capture.state.get.gracesAsked.allSatisfy { $0 == 3 })
-        #expect(harness.logLines.get.contains { $0.contains("microphone closed after 3 s idle (other)") })
+        // The model logs after `coolDown()` returns, so the line can trail the count.
+        #expect(await eventually { harness.logLines.get.contains { $0.contains("microphone closed after 3 s idle (other)") } })
     }
 
     @Test("a Bluetooth microphone stays open for 10 s, then closes")
@@ -115,7 +116,7 @@ struct WarmCaptureTests {
         #expect(harness.capture.isCurrentlyWarm)
         harness.capture.state.mutate { $0.idleFor = 10.5 }
         #expect(await eventually { harness.capture.state.get.coolDowns == 1 })
-        #expect(harness.logLines.get.contains { $0.contains("microphone closed after 10 s idle (bluetooth)") })
+        #expect(await eventually { harness.logLines.get.contains { $0.contains("microphone closed after 10 s idle (bluetooth)") } })
     }
 
     @Test("a press before the grace ends keeps the microphone warm for that dictation")

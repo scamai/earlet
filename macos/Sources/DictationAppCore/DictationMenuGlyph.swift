@@ -161,6 +161,71 @@ extension DictationModel {
     }
 }
 
+// ─── Waiting badge ───
+
+/// What waits in the menu bar icon's menu for the user to finish: words
+/// for Copy last text after a refused paste, or a recording for Recover
+/// Last Dictation. While one does, the icon carries a dot in the caution
+/// colour, the rail's Home dot, because with the window closed the icon is
+/// all that is on screen and the ending that pointed at it is gone in a few
+/// seconds. A missing grant or a due restart is not on the list: the glyph
+/// is already the warning triangle. Neither is a recording file that could
+/// not be removed: Earlet retries that itself, and the menu offers nothing
+/// for it, so it marks Home only.
+public enum DictationMenuWaiting: Equatable, Sendable, CaseIterable {
+    case words
+    case recording
+
+    /// Words outrank a recording: they are one click from the clipboard.
+    public static func resolve(wordsWaiting: Bool, recordingSaved: Bool) -> DictationMenuWaiting? {
+        if wordsWaiting { return .words }
+        if recordingSaved { return .recording }
+        return nil
+    }
+
+    /// The badge in words, after the glyph's VoiceOver label: a dot is not
+    /// an accessible channel on its own.
+    public var accessibilityPhrase: String {
+        switch self {
+        case .words: return "words waiting"
+        case .recording: return "recording waiting"
+        }
+    }
+}
+
+/// What the menu bar icon draws: the state's glyph, with the waiting
+/// badge over it while something waits. The scene reads only this.
+public struct DictationMenuIconState: Equatable, Sendable {
+    public let glyph: DictationMenuGlyph
+    public let waiting: DictationMenuWaiting?
+
+    public init(glyph: DictationMenuGlyph, waiting: DictationMenuWaiting?) {
+        self.glyph = glyph
+        self.waiting = waiting
+    }
+
+    public var badged: Bool { waiting != nil }
+
+    /// "Earlet, on", or "Earlet, on, words waiting" while badged.
+    public var accessibilityLabel: String {
+        guard let waiting else { return glyph.accessibilityLabel }
+        return "\(glyph.accessibilityLabel), \(waiting.accessibilityPhrase)"
+    }
+}
+
+extension DictationModel {
+    /// What waits for the user now; Home's rail mark includes it
+    /// (`homeNeedsAttention`).
+    public var menuWaiting: DictationMenuWaiting? {
+        .resolve(wordsWaiting: recentResult.entry?.needsRecovery == true, recordingSaved: savedTake != nil)
+    }
+
+    /// The menu bar icon for what the model publishes now.
+    public var menuIcon: DictationMenuIconState {
+        DictationMenuIconState(glyph: menuGlyph, waiting: menuWaiting)
+    }
+}
+
 // ─── Menu order ───
 
 /// One line of the menu bar menu as the scene draws it: the model's items

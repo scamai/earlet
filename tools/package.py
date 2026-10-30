@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -18,6 +19,7 @@ import platform
 import re
 import plistlib
 import shutil
+import stat
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +80,181 @@ def worker_files(root: Path = ROOT) -> list[Path]:
     if missing:
         raise ValueError(f"Worker files missing from runtime/transcription_worker: {missing}")
     return files
+
+
+# ─── Runtime pruning (macOS) ─────────────────────────────────────────────────
+# The supplied Python is a whole interpreter with the provider installed, and
+# it carries more than the shipped worker imports. The packager removes these
+# from its staged copy, never from the input. The reason beside each name is
+# why nothing on the dictation path loads it. On the 0.2.1 runtime they were
+# most of its 1.38 GB: torch alone was 601 MB.
+MAC_PRUNED_DISTRIBUTIONS = {
+    "torch": "declared by mlx-whisper 0.4.3, which imports it only in torch_whisper.py, its "
+             "checkpoint converter; the worker and mlx_whisper.transcribe never load that module",
+    "sympy": "torch only", "mpmath": "sympy only", "networkx": "torch only",
+    "jinja2": "torch only", "markupsafe": "jinja2 only",
+    "setuptools": "torch only; no shipped module imports setuptools or pkg_resources",
+    "pip": "installs packages; the app never installs anything"}
+#: A kept distribution may still declare a pruned one only where the reason
+#: above says why the import never runs.
+MAC_PRUNE_DECLARED = {("mlx-whisper", "torch")}
+#: Interpreter parts no shipped module imports, relative to the Python root:
+#: Tcl/Tk and what is built on it (tkinter, IDLE, turtle), the pip
+#: bootstrapper, and the two extra copies of the interpreter that copy_tree
+#: materializes from bin's links. Both hosts start bin/python3 only.
+MAC_PRUNED_PATHS = ("bin/python", "bin/python3.[0-9]*", "bin/idle3*",
+                    # Tcl/Tk 9 ships libtcl9tk9.0; older builds ship libtk8.6.
+                    "lib/libtcl*", "lib/libtk*", "lib/tcl[0-9]*", "lib/tk[0-9]*", "lib/itcl[0-9]*",
+                    "lib/thread[0-9]*", "lib/python3.*/tkinter", "lib/python3.*/idlelib",
+                    "lib/python3.*/turtledemo", "lib/python3.*/turtle.py",
+                    "lib/python3.*/__pycache__/turtle.*", "lib/python3.*/lib-dynload/_tkinter.*",
+                    "lib/python3.*/ensurepip")
+#: Every top-level name the pruning removes; the import smoke asserts the
+#: staged interpreter finds none of them.
+MAC_PRUNED_IMPORTS = ("torch", "functorch", "torchgen", "sympy", "isympy", "mpmath", "networkx", "jinja2",
+                      "markupsafe", "setuptools", "pkg_resources", "_distutils_hack", "pip", "tkinter",
+                      "_tkinter", "idlelib", "turtle", "turtledemo", "ensurepip")
+
+
+def canonical_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def installed_distributions(python: Path) -> list[tuple[str, Path]]:
+    """Each .dist-info in the Python's site-packages, with its canonical name."""
+    return [(canonical_name(metadata_headers(info).get("Name", [info.name.split("-")[0]])[0]), info)
+            for info in sorted([*python.glob("lib/python3*/site-packages/*.dist-info"),
+                                *python.glob("lib/site-packages/*.dist-info")])]
+
+
+def metadata_headers(info: Path) -> dict[str, list[str]]:
+    """The METADATA header fields; the description after the first blank line is not read."""
+    headers: dict[str, list[str]] = {}
+    path = info / "METADATA"
+    if not path.is_file():
+        return headers
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            break
+        key, colon, value = line.partition(":")
+        if colon and not key.startswith((" ", "\t")):
+            headers.setdefault(key.strip(), []).append(value.strip())
+    return headers
+
+
+def declared_requirements(info: Path) -> set[str]:
+    """What a distribution requires outside its extras. Only a marker whose
+    every flat ``or`` branch requires a nonempty extra is skipped. Nested
+    expressions and platform markers count conservatively as requirements."""
+    names = set()
+    for requirement in metadata_headers(info).get("Requires-Dist", []):
+        spec, _, marker = requirement.partition(";")
+        match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", spec)
+        branches = re.split(r"\bor\b", marker) if marker.strip() else []
+        extras_only = bool(branches) and all(
+            not any(char in branch for char in "()") and any(
+                re.fullmatch(r'''extra\s*==\s*(['"])[A-Za-z0-9][A-Za-z0-9._-]*\1''', atom.strip())
+                for atom in re.split(r"\band\b", branch))
+            for branch in branches)
+        if match and not extras_only:
+            names.add(canonical_name(match.group(1)))
+    return names
+
+
+def recorded_paths(info: Path, python: Path) -> list[Path]:
+    """The files a distribution's RECORD lists, refusing any outside the Python."""
+    record = info / "RECORD"
+    if not record.is_file():
+        raise ValueError(f"{info.name} has no RECORD, so the files it owns are unknown")
+    root = python.resolve()
+    paths = []
+    with record.open(encoding="utf-8", newline="") as stream:
+        for row in csv.reader(stream):
+            if not row or not row[0]:
+                continue
+            path = Path(os.path.normpath(info.parent.resolve() / row[0]))
+            if not path.is_relative_to(root):
+                raise ValueError(f"{info.name}/RECORD names a file outside the Python: {row[0]}")
+            paths.append(path)
+    return paths
+
+
+def remove(path: Path) -> int:
+    """Delete a file or a tree and return the bytes it held."""
+    if path.is_dir() and not path.is_symlink():
+        size = sum(item.stat().st_size for item in path.rglob("*") if item.is_file() and not item.is_symlink())
+        shutil.rmtree(path)
+        return size
+    size = path.lstat().st_size if path.is_file() or path.is_symlink() else 0
+    path.unlink(missing_ok=True)
+    return size
+
+
+def prune_mac_runtime(python: Path) -> dict:
+    """Remove from a staged Mac Python what no shipped module imports.
+
+    Refuses, before deleting anything, when a kept distribution requires a
+    pruned one (unless MAC_PRUNE_DECLARED says why that import never runs),
+    or a RECORD is missing, names a file outside the Python or names a
+    directory. A pruned package directory goes whole, with the bytecode
+    compiled after install, unless a kept distribution also installs into
+    it (a namespace package); then only the pruned distribution's own files
+    go.
+    """
+    root = python.resolve()
+    installed = installed_distributions(python)
+    pruned = [(name, info) for name, info in installed if name in MAC_PRUNED_DISTRIBUTIONS]
+    kept = [(name, info) for name, info in installed if name not in MAC_PRUNED_DISTRIBUTIONS]
+    needed = sorted(f"{owner} requires {name}" for owner, info in kept
+                    for name in declared_requirements(info)
+                    if name in MAC_PRUNED_DISTRIBUTIONS and (owner, name) not in MAC_PRUNE_DECLARED
+                    and any(name == present for present, _ in pruned))
+    if needed:
+        raise ValueError(f"A kept distribution requires one the package prunes: {needed}")
+    kept_files = {path for _, info in kept for path in recorded_paths(info, python)}
+    sites = {info.parent.resolve() for _, info in kept}
+    claimed = {path.relative_to(site).parts[0] for path in kept_files for site in sites
+               if path.is_relative_to(site) and path != site}
+    removed, removed_bytes = [], 0
+
+    def take(path: Path, name: str) -> None:
+        nonlocal removed_bytes
+        removed_bytes += remove(path)
+        removed.append(name)
+
+    # Every RECORD is read, and checked, before anything is deleted. A row
+    # naming a directory is refused, so a directory only ever goes whole
+    # below, as an unclaimed package.
+    records = [(info, recorded_paths(info, python)) for _, info in pruned]
+    for info, paths in records:
+        listed = [path for path in paths if path.is_dir() and not path.is_symlink()]
+        if listed:
+            raise ValueError(f"{info.name}/RECORD names a directory: {listed[0].relative_to(root)}")
+    # The staged copy keeps the input's modes; deleting needs write access
+    # to each directory.
+    for folder in [python, *python.rglob("*")]:
+        if folder.is_dir() and not folder.is_symlink() and not folder.stat().st_mode & stat.S_IWUSR:
+            folder.chmod(folder.stat().st_mode | stat.S_IWUSR)
+    for info, paths in records:
+        site = info.parent.resolve()
+        for path in paths:
+            top = path.relative_to(site).parts[0] if path.is_relative_to(site) else None
+            whole = top and top not in claimed and top != "__pycache__" and (site / top).is_dir()
+            target = site / top if whole else path
+            if target in kept_files or not (target.exists() or target.is_symlink()):
+                continue
+            take(target, str(target.relative_to(root)))
+            parent = target.parent
+            while parent != site and parent != root and parent.is_dir() and not any(parent.iterdir()):
+                parent.rmdir()
+                parent = parent.parent
+        if info.exists():
+            take(info, str(info.relative_to(python)))
+    for pattern in MAC_PRUNED_PATHS:
+        for path in sorted(python.glob(pattern)):
+            take(path, str(path.relative_to(python)))
+    return {"distributions": sorted({name for name, _ in pruned}), "paths": sorted(removed),
+            "bytes": removed_bytes}
 
 
 # ─── Staging ─────────────────────────────────────────────────────────────────
@@ -173,9 +350,21 @@ def worker_environment(runtime: Path) -> dict[str, str]:
 
 
 def import_smoke(executable: Path, runtime: Path, target: str) -> None:
-    """Import the worker and its provider the way the hosts launch it."""
+    """Import the worker and its provider the way the hosts launch it, and on
+    macOS check that the pruned modules are gone."""
     probe = (f"import transcription_worker.asr_server as server, {PROVIDERS[target]}\n"
              "assert server.op_ping({})['ok']\n")
+    if target == "macos":
+        # Only a module inside the staged Python counts: a test interpreter
+        # borrows the builder's standard library.
+        root = os.path.realpath(executable.parents[1]) + os.sep
+        probe += ("import importlib.util, os\n"
+                  "def staged(spec):\n"
+                  "    places = [spec.origin] if spec.origin else list(spec.submodule_search_locations or ())\n"
+                  f"    return any(os.path.realpath(place).startswith({root!r}) for place in places if place)\n"
+                  f"found = [name for name in {MAC_PRUNED_IMPORTS!r}\n"
+                  "         if (spec := importlib.util.find_spec(name)) and staged(spec)]\n"
+                  "assert not found, f'pruned modules still import: {found}'\n")
     try:
         subprocess.run([str(executable), "-c", probe], cwd=runtime, env=worker_environment(runtime),
                        capture_output=True, text=True, timeout=300, check=True)
@@ -216,6 +405,8 @@ def stage_resources(resources: Path, target: str, python: Path | None, model: Pa
     if not app_only:
         copy_tree(python, resources / "python")
         copy_tree(model, resources / "model")
+        if target == "macos":
+            facts["pruned"] = prune_mac_runtime(resources / "python")
         facts["python_path_files"] = extend_path_files(resources / "python", runtime, target)
         if run_python is None:
             run_python = host_runs(target)

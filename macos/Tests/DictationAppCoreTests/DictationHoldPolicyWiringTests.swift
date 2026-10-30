@@ -92,36 +92,151 @@ struct DictationHoldPolicyWiringTests {
         #expect(model.status.contains("again to continue"))
     }
 
-    @Test("a long cancel asks for confirmation, keep resumes, and confirmation discards")
-    func longCancelConfirmation() async {
-        let harness = Harness()
+    // ─── Escape's question on a long take ───
+
+    /// Enabled, with every take "long" from its first moment, and a held
+    /// key whose capture is up.
+    private func longTake(_ harness: Harness) async -> DictationModel {
         let model = harness.model()
         await model.toggle()
         harness.trigger.press()
-        #expect(await eventually { model.recording })
+        #expect(await eventually { model.recording && model.holdStartedAt != nil })
         harness.capture.emitRetainedAudio([Float](repeating: 0.2, count: 16_000))
-        // The elapsed-time branch is exercised by the model's live monitor;
-        // the confirmation actions themselves use the published internal
-        // state so this test stays deterministic and does not sleep 30 s.
-        model.confirmingDiscard = true
-        #expect(model.recording)
-        #expect(model.confirmingDiscard)
+        return model
+    }
 
-        model.keepRecording()
-        #expect(model.recording)
-        #expect(!model.confirmingDiscard)
-        await model.cancel()
-        #expect(await eventually { !model.recording && !model.busy })
+    private func escape(_ harness: Harness) {
+        harness.keyWatch.type(HoldChordGuard.escapeKeyCode)
+    }
 
-        harness.trigger.press()
-        #expect(await eventually { model.recording })
-        harness.capture.emitRetainedAudio([Float](repeating: 0.2, count: 16_000))
-        model.confirmingDiscard = true
-        #expect(model.confirmingDiscard)
-        await model.confirmDiscard()
+    @Test("the question waits 30 s and stands 5 s, as on Windows")
+    func escapeQuestionDefaults() {
+        let timing = DictationTiming()
+        #expect(timing.escapeAsksAfterSeconds == 30)
+        #expect(timing.escapeQuestionSeconds == 5)
+        #expect(DictationHUDContent.discardQuestion(seconds: 222.7) == "Discard 3:42 of speech?")
+        #expect(DictationHUDContent.discardQuestionHint == "Press Esc again to discard. Keep talking to continue.")
+    }
+
+    @Test("Escape on a long take asks in the indicator, never the window, and a second Escape discards")
+    func escapeAsksInTheIndicator() async {
+        var harness = Harness()
+        harness.timing.escapeAsksAfterSeconds = 0
+        harness.timing.escapeQuestionSeconds = 30
+        let model = await longTake(harness)
+        let attention = model.windowAttention
+
+        escape(harness)
+        #expect(await eventually { model.confirmingDiscard })
+        // The take carries on and the window stays where it is: bringing
+        // it forward took the keyboard from the field being dictated into.
+        #expect(model.recording)
+        #expect(model.windowAttention == attention)
+        #expect(model.discardQuestion?.hasPrefix("Discard 0:") == true)
+        #expect(model.discardQuestion?.hasSuffix(" of speech?") == true)
+        #expect(model.holdNotice == DictationHUDContent.discardQuestionHint)
+        #expect(!model.status.contains("cancelled"))
+
+        escape(harness)
         #expect(await eventually { !model.recording && !model.busy })
+        #expect(model.status == "Recording cancelled. Nothing inserted.")
+        #expect(model.discardQuestion == nil)
+        #expect(model.holdNotice == nil)
+        #expect(model.windowAttention == attention)
         #expect(model.savedTake == nil)
         #expect(harness.takeSpoolFiles().isEmpty)
+        #expect(harness.workers.made[0].state.get.transcribes == 0)
+        harness.trigger.release()
+    }
+
+    @Test("Escape's question lapses after its time, and the next Escape asks again")
+    func escapeQuestionLapses() async {
+        var harness = Harness()
+        harness.timing.escapeAsksAfterSeconds = 0
+        harness.timing.escapeQuestionSeconds = 0.5
+        let model = await longTake(harness)
+
+        escape(harness)
+        #expect(await eventually { model.confirmingDiscard })
+        #expect(await eventually { !model.confirmingDiscard })
+        #expect(model.recording)
+        #expect(model.discardQuestion == nil)
+        #expect(model.holdNotice == nil)
+
+        // A lapsed question is no answer: this Escape asks again.
+        escape(harness)
+        #expect(await eventually { model.confirmingDiscard })
+        #expect(model.recording)
+
+        harness.trigger.release()
+        #expect(await eventually { !model.busy && !model.recording })
+        #expect(harness.inserts.texts.get == ["Hello world"], "letting go inserts, question or not")
+        #expect(model.discardQuestion == nil)
+    }
+
+    @Test("a hands-free take asks too, on the latch's Escape watch")
+    func latchedEscapeAsks() async {
+        var harness = Harness()
+        harness.timing.escapeAsksAfterSeconds = 0
+        harness.timing.escapeQuestionSeconds = 30
+        let model = harness.model()
+        await model.toggle()
+        harness.trigger.doubleTap()
+        #expect(await eventually { model.latched && model.holdStartedAt != nil })
+
+        escape(harness)
+        #expect(await eventually { model.confirmingDiscard })
+        #expect(model.latched && model.recording)
+
+        escape(harness)
+        #expect(await eventually { !model.recording && !model.latched && model.status.contains("cancelled") })
+        #expect(harness.inserts.texts.get.isEmpty)
+    }
+
+    @Test("the window's and the menu's Cancel discard a long take without asking")
+    func cancelNeverAsks() async {
+        var harness = Harness()
+        harness.timing.escapeAsksAfterSeconds = 0
+        let model = await longTake(harness)
+        let attention = model.windowAttention
+
+        await model.cancel()
+        #expect(!model.recording)
+        #expect(model.status == "Recording cancelled. Nothing inserted.")
+        #expect(model.discardQuestion == nil)
+        #expect(model.windowAttention == attention)
+        #expect(await eventually { !model.busy })
+        #expect(model.savedTake == nil)
+        #expect(harness.takeSpoolFiles().isEmpty)
+        harness.trigger.release()
+    }
+
+    @Test("Cancel answers a standing question too")
+    func cancelAnswersTheQuestion() async {
+        var harness = Harness()
+        harness.timing.escapeAsksAfterSeconds = 0
+        harness.timing.escapeQuestionSeconds = 30
+        let model = await longTake(harness)
+
+        escape(harness)
+        #expect(await eventually { model.confirmingDiscard })
+        await model.cancel()
+        #expect(!model.recording)
+        #expect(model.discardQuestion == nil)
+        #expect(await eventually { !model.busy })
+        harness.trigger.release()
+    }
+
+    @Test("a short take is cancelled by its first Escape")
+    func shortTakeEscapeCancels() async {
+        let harness = Harness()
+        let model = await longTake(harness)
+
+        escape(harness)
+        #expect(await eventually { !model.recording && !model.busy })
+        #expect(model.status == "Recording cancelled. Nothing inserted.")
+        #expect(model.discardQuestion == nil)
+        harness.trigger.release()
     }
 }
 #endif

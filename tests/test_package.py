@@ -276,12 +276,343 @@ def test_a_path_file_python_imports_the_staged_worker(tmp_path):
     resources = tmp_path / "Dictation.app/Contents/Resources"
     facts = tool("package").stage_resources(resources, "macos", python, mlx_model(tmp_path / "model"),
                                             False, run_python=True, jobs=2)
-    assert facts == {"python_path_files": ["bin/python3._pth"], "import_smoke": "passed"}
+    assert facts == {"python_path_files": ["bin/python3._pth"], "import_smoke": "passed",
+                     "pruned": {"distributions": [], "paths": [], "bytes": 0}}
     bytecode = list((resources / "runtime/transcription_worker/__pycache__").glob("*.pyc"))
     assert len(bytecode) == len(tool("package").WORKER_MODULES) == 19
     assert any(path.name.startswith("learned_vocabulary.") for path in bytecode)
     assert any(path.name.startswith("context_vocabulary.") for path in bytecode)
     assert not [path for path in bytecode if str(tmp_path).encode() in path.read_bytes()]
+
+
+# ─── The pruned Mac Python ───────────────────────────────────────────────────
+
+def distribution(site, name, version, files, requires=(), metadata_name=None, record_self=True, rows=()):
+    """A .dist-info as pip leaves it: METADATA, RECORD listing every file
+    (paths relative to site-packages, ../../../bin for scripts) and itself.
+    ``rows`` adds RECORD rows for files the distribution does not write."""
+    info = site / f"{name}-{version}.dist-info"
+    info.mkdir(parents=True)
+    headers = [f"Name: {metadata_name or name}", f"Version: {version}",
+               *(f"Requires-Dist: {requirement}" for requirement in requires)]
+    # The description follows a blank line and is not metadata: read as a
+    # header, it would make every kept distribution require jinja2.
+    (info / "METADATA").write_text("\n".join(headers) + "\n\nRequires-Dist: jinja2\n")
+    for relative, content in files.items():
+        path = Path(os.path.normpath(site / relative))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    listed = [*files, *rows, *([f"{info.name}/METADATA", f"{info.name}/RECORD"] if record_self else [])]
+    (info / "RECORD").write_text("".join(f"{row},,\n" for row in listed))
+    return info
+
+
+SITE = "lib/python3.11/site-packages"
+
+
+def mac_runtime(folder):
+    """The layout of the 0.2.1 runtime, shrunk: what the worker uses and what it never imports."""
+    site = folder / SITE
+    for name, content in {"bin/python3": b"interpreter", "bin/python3.11": b"interpreter",
+                          "bin/python": b"interpreter", "bin/python3.11-config": b"#!config",
+                          "bin/python3-config": b"#!config", "bin/idle3": b"#!idle", "bin/idle3.11": b"#!idle",
+                          "lib/libpython3.11.dylib": b"libpython", "lib/libtcl9.0.dylib": b"tcl",
+                          "lib/libtcl9tk9.0.dylib": b"tk", "lib/tcl9.0/init.tcl": b"tcl-script",
+                          "lib/tcl9/tcl9.0.tm": b"tcl-module", "lib/tk9.0/tk.tcl": b"tk-script",
+                          # Older python-build-standalone releases ship Tk 8.6 as its own library.
+                          "lib/libtk8.6.dylib": b"tk8",
+                          "lib/itcl4.3.8/itcl.tcl": b"itcl", "lib/thread3.0.6/pkgIndex.tcl": b"thread",
+                          "share/man/man1/python3.11.1": b"python-man",
+                          "lib/python3.11/os.py": b"# os", "lib/python3.11/turtle.py": b"# turtle",
+                          "lib/python3.11/__pycache__/turtle.cpython-311.pyc": b"turtle-bytecode",
+                          "lib/python3.11/__pycache__/os.cpython-311.pyc": b"os-bytecode",
+                          "lib/python3.11/tkinter/__init__.py": b"# tkinter",
+                          "lib/python3.11/idlelib/__init__.py": b"# idle",
+                          "lib/python3.11/turtledemo/__init__.py": b"# turtledemo",
+                          "lib/python3.11/ensurepip/__init__.py": b"# ensurepip",
+                          "lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so": b"tkinter-ext",
+                          "lib/python3.11/lib-dynload/_ssl.cpython-311-darwin.so": b"ssl-ext"}.items():
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_bytes(content)
+    distribution(site, "torch", "2.14.0", {"torch/__init__.py": b"torch", "torch/lib/libtorch.dylib": b"x" * 4096,
+                                           "functorch/__init__.py": b"functorch", "torchgen/__init__.py": b"torchgen",
+                                           "../../../bin/torchrun": b"#!torchrun",
+                                           # The only file in its folder, which then goes too.
+                                           "../../../share/torch/notes.txt": b"notes"},
+                 requires=["sympy>=1.13.3", "jinja2", "filelock",
+                           'triton~=3.8.0; platform_system == "Linux"'])
+    # Bytecode compiled after install is not in RECORD; the package directory goes whole.
+    (site / "torch/__pycache__").mkdir()
+    (site / "torch/__pycache__/__init__.cpython-311.pyc").write_bytes(b"torch-bytecode")
+    distribution(site, "sympy", "1.14.0", {"sympy/__init__.py": b"sympy", "isympy.py": b"isympy",
+                                           "__pycache__/isympy.cpython-311.pyc": b"isympy-bytecode",
+                                           "../../../bin/isympy": b"#!isympy",
+                                           "../../../share/man/man1/isympy.1": b"isympy-man"},
+                 requires=["mpmath<1.4,>=1.1.0"])
+    # A RECORD that does not list its own .dist-info still loses it.
+    distribution(site, "mpmath", "1.3.0", {"mpmath/__init__.py": b"mpmath"}, record_self=False)
+    distribution(site, "networkx", "3.6.1", {"networkx/__init__.py": b"networkx"})
+    distribution(site, "jinja2", "3.1.6", {"jinja2/__init__.py": b"jinja2"}, requires=["MarkupSafe>=2.0"])
+    distribution(site, "markupsafe", "3.0.3", {"markupsafe/__init__.py": b"markupsafe"}, metadata_name="MarkupSafe")
+    # setuptools also drops a file into a directory a kept distribution owns,
+    # and its RECORD names a file that a kept distribution owns as well.
+    distribution(site, "setuptools", "84.0.0", {"setuptools/__init__.py": b"setuptools",
+                                                "_distutils_hack/__init__.py": b"hack",
+                                                "distutils-precedence.pth": b"import _distutils_hack",
+                                                "mlx/_setuptools_plugin.py": b"plugin"}, rows=["mlx/core.py"])
+    distribution(site, "pip", "26.2.1", {"pip/__init__.py": b"pip", "../../../bin/pip": b"#!pip",
+                                         "../../../bin/pip3.11": b"#!pip"})
+    distribution(site, "mlx", "0.32.2", {"mlx/core.py": b"mlx", "mlx/lib/libmlx.dylib": b"libmlx"})
+    distribution(site, "mlx_whisper", "0.4.3", {"mlx_whisper/__init__.py": b"mlx-whisper",
+                                                "mlx_whisper/torch_whisper.py": b"import torch",
+                                                "../../../bin/mlx_whisper": b"#!mlx_whisper"},
+                 requires=["mlx>=0.11", "numba", "numpy", "torch", "tqdm", "huggingface_hub", "scipy"],
+                 metadata_name="mlx-whisper")
+    distribution(site, "huggingface_hub", "2.0.0", {"huggingface_hub/__init__.py": b"hub"},
+                 requires=["filelock", 'Jinja2; extra == "templates"'], metadata_name="huggingface-hub")
+    distribution(site, "filelock", "4.0.5", {"filelock/__init__.py": b"filelock"})
+    # A kept module compiled after install shares site-packages/__pycache__.
+    distribution(site, "six", "1.17.0", {"six.py": b"six"})
+    (site / "__pycache__/six.cpython-311.pyc").write_bytes(b"six-bytecode")
+    return folder
+
+
+MAC_PRUNED = {"bin/python", "bin/python3.11", "bin/python3.11-config", "bin/idle3", "bin/idle3.11", "bin/torchrun",
+              "bin/isympy", "bin/pip", "bin/pip3.11", "share/torch/notes.txt", "share/man/man1/isympy.1",
+              "lib/libtcl9.0.dylib", "lib/libtcl9tk9.0.dylib", "lib/libtk8.6.dylib", "lib/tcl9.0", "lib/tcl9",
+              "lib/tk9.0", "lib/itcl4.3.8", "lib/thread3.0.6", "lib/python3.11/turtle.py",
+              "lib/python3.11/__pycache__/turtle.cpython-311.pyc", "lib/python3.11/tkinter",
+              "lib/python3.11/idlelib", "lib/python3.11/turtledemo", "lib/python3.11/ensurepip",
+              "lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so",
+              *(f"{SITE}/{name}" for name in (
+                  "torch", "functorch", "torchgen", "torch-2.14.0.dist-info", "sympy", "isympy.py",
+                  "__pycache__/isympy.cpython-311.pyc", "sympy-1.14.0.dist-info", "mpmath",
+                  "mpmath-1.3.0.dist-info", "networkx", "networkx-3.6.1.dist-info", "jinja2",
+                  "jinja2-3.1.6.dist-info", "markupsafe", "markupsafe-3.0.3.dist-info", "setuptools",
+                  "_distutils_hack", "distutils-precedence.pth", "mlx/_setuptools_plugin.py",
+                  "setuptools-84.0.0.dist-info", "pip", "pip-26.2.1.dist-info"))}
+
+
+def tree_bytes(folder):
+    return {str(path.relative_to(folder)): path.stat().st_size for path in folder.rglob("*") if path.is_file()}
+
+
+def stage_mac(tmp_path, python):
+    return tool("package").stage_resources(tmp_path / "Earlet.app/Contents/Resources", "macos", python,
+                                           mlx_model(tmp_path / "model"), False, run_python=False)
+
+
+def staged_python(tmp_path):
+    return tmp_path / "Earlet.app/Contents/Resources/python"
+
+
+def test_staging_a_mac_python_prunes_what_the_worker_never_imports(tmp_path):
+    python = mac_runtime(tmp_path / "input-python")
+    before = tree_bytes(python)
+    facts = stage_mac(tmp_path, python)
+    staged = staged_python(tmp_path)
+    after = tree_bytes(staged)
+    gone = set(before) - set(after)
+    # Every pruned path is gone, with everything under it, and nothing else is.
+    assert {name for name in gone if not any(name.startswith(f"{p}/") for p in MAC_PRUNED)} == MAC_PRUNED & set(before)
+    assert not any((staged / name).exists() for name in MAC_PRUNED)
+    assert set(after) <= set(before)
+    for kept in ("bin/python3", "bin/python3-config", "bin/mlx_whisper", "lib/libpython3.11.dylib",
+                 "lib/python3.11/os.py", "lib/python3.11/__pycache__/os.cpython-311.pyc",
+                 "lib/python3.11/lib-dynload/_ssl.cpython-311-darwin.so", "share/man/man1/python3.11.1",
+                 f"{SITE}/mlx/core.py", f"{SITE}/mlx/lib/libmlx.dylib", f"{SITE}/mlx_whisper/torch_whisper.py",
+                 f"{SITE}/huggingface_hub/__init__.py", f"{SITE}/__pycache__/six.cpython-311.pyc",
+                 f"{SITE}/filelock-4.0.5.dist-info/RECORD"):
+        assert kept in after, kept
+    # A folder its last pruned file leaves empty goes; one still holding a kept file stays.
+    assert not (staged / "share/torch").exists() and (staged / "share/man/man1").is_dir()
+    assert facts["pruned"] == {
+        "distributions": ["jinja2", "markupsafe", "mpmath", "networkx", "pip", "setuptools", "sympy", "torch"],
+        "paths": sorted(MAC_PRUNED), "bytes": sum(size for name, size in before.items() if name in gone)}
+    # The builder's own Python is left as it was.
+    assert tree_bytes(python) == before
+
+
+def test_a_windows_python_is_not_pruned(tmp_path):
+    python = windows_python(tmp_path / "embeddable")
+    # Lower-case paths, which the Mac pruning's globs would match on any filesystem.
+    distribution(python / "lib/site-packages", "torch", "2.14.0", {"torch/__init__.py": b"torch"})
+    (python / "lib/python3.11/ensurepip").mkdir(parents=True)
+    (python / "lib/python3.11/ensurepip/__init__.py").write_bytes(b"ensurepip")
+    before = tree_bytes(python)
+    facts = tool("package").stage_resources(tmp_path / "Earlet/resources", "windows", python,
+                                            ct2_model(tmp_path / "model"), False, run_python=False)
+    assert "pruned" not in facts
+    # python311._pth is rewritten on purpose, so names are compared, not sizes.
+    assert set(before) <= set(tree_bytes(tmp_path / "Earlet/resources/python"))
+
+
+@pytest.mark.parametrize("requirement, refused", [
+    ("Jinja2>=3", True), ('jinja2; platform_system == "Linux"', True),
+    ('jinja2; sys_platform == "darwin" or extra == "templates"', True),
+    ('jinja2; extra != "templates"', True), ('jinja2; sys_platform == "extra"', True),
+    ('jinja2; extra == ""', True),
+    ('jinja2; (extra == "templates" or sys_platform == "darwin")', True),
+    ('jinja2; extra == "templates" and python_version >= "3.11"', False),
+    ('jinja2; extra == "templates"', False), ('jinja2; extra == "a" or extra == "b"', False)])
+def test_a_kept_distribution_that_requires_a_pruned_one_stops_the_package(tmp_path, requirement, refused):
+    python = mac_runtime(tmp_path / "input-python")
+    distribution(python / SITE, "needs_jinja", "1.0", {"needs_jinja.py": b"import jinja2"},
+                 requires=[requirement], metadata_name="needs-jinja")
+    if refused:
+        with pytest.raises(ValueError, match=r"needs-jinja requires jinja2"):
+            stage_mac(tmp_path, python)
+        assert (staged_python(tmp_path) / SITE / "jinja2/__init__.py").is_file()
+    else:
+        assert "jinja2" in stage_mac(tmp_path, python)["pruned"]["distributions"]
+
+
+def test_only_mlx_whisper_may_declare_torch(tmp_path):
+    python = mac_runtime(tmp_path / "input-python")
+    distribution(python / SITE, "needs_torch", "1.0", {"needs_torch.py": b"import torch"},
+                 requires=["torch"], metadata_name="needs-torch")
+    with pytest.raises(ValueError, match=r"\['needs-torch requires torch'\]"):
+        stage_mac(tmp_path, python)
+
+
+def test_a_requirement_on_a_pruned_distribution_that_is_absent_is_not_refused(tmp_path):
+    python = mac_runtime(tmp_path / "input-python")
+    site = python / SITE
+    for name in ("setuptools", "_distutils_hack", "setuptools-84.0.0.dist-info"):
+        shutil.rmtree(site / name)
+    (site / "distutils-precedence.pth").unlink()
+    (site / "mlx/_setuptools_plugin.py").unlink()
+    distribution(site, "needs_setuptools", "1.0", {"needs_setuptools.py": b""}, requires=["setuptools"],
+                 metadata_name="needs-setuptools")
+    assert "setuptools" not in stage_mac(tmp_path, python)["pruned"]["distributions"]
+
+
+def test_a_record_naming_a_file_outside_the_python_is_refused(tmp_path):
+    python = mac_runtime(tmp_path / "input-python")
+    outside = tmp_path / "Earlet.app/Contents/Resources/model/config.json"
+    record = python / SITE / "pip-26.2.1.dist-info/RECORD"
+    record.write_text(record.read_text() + "../../../../model/config.json,,\n")
+    with pytest.raises(ValueError, match="outside the Python"):
+        stage_mac(tmp_path, python)
+    assert outside.is_file()
+    # Every RECORD is checked first: jinja2 sorts before pip and is still there.
+    assert (staged_python(tmp_path) / SITE / "jinja2").is_dir()
+
+
+@pytest.mark.parametrize("row", ["mlx/", "../../../bin", "__pycache__", ".", "../"])
+def test_a_record_naming_a_directory_is_refused(tmp_path, row):
+    # Only files may be listed: a directory row would take a kept package,
+    # bin/, the shared bytecode or site-packages itself with it.
+    python = mac_runtime(tmp_path / "input-python")
+    record = python / SITE / "pip-26.2.1.dist-info/RECORD"
+    record.write_text(record.read_text() + f"{row},,\n")
+    before = tree_bytes(python)
+    with pytest.raises(ValueError, match="names a directory"):
+        stage_mac(tmp_path, python)
+    assert set(tree_bytes(staged_python(tmp_path))) == set(before)
+
+
+@pytest.mark.parametrize("owner", ["mlx-0.32.2", "torch-2.14.0"])
+def test_a_distribution_without_a_record_is_refused(tmp_path, owner):
+    # Without RECORD the files a distribution owns are unknown: a kept one
+    # could lose its namespace directory, a pruned one would stay importable.
+    python = mac_runtime(tmp_path / "input-python")
+    (python / SITE / f"{owner}.dist-info/RECORD").unlink()
+    before = tree_bytes(python)
+    with pytest.raises(ValueError, match=f"{owner}.dist-info has no RECORD"):
+        stage_mac(tmp_path, python)
+    assert set(tree_bytes(staged_python(tmp_path))) == set(before)
+
+
+def test_a_read_only_input_python_is_still_pruned(tmp_path):
+    if os.name == "nt":
+        pytest.skip("POSIX permissions")
+    python = mac_runtime(tmp_path / "input-python")
+    folders = [python, *(path for path in python.rglob("*") if path.is_dir())]
+    for path in python.rglob("*"):
+        if path.is_file():
+            path.chmod(0o444)
+    for folder in reversed(folders):
+        folder.chmod(0o555)
+    try:
+        facts = stage_mac(tmp_path, python)
+    finally:
+        for folder in folders:
+            folder.chmod(0o755)
+    staged = staged_python(tmp_path)
+    assert "torch" in facts["pruned"]["distributions"]
+    assert not (staged / SITE / "torch").exists() and not (staged / "lib/tcl9").exists()
+    assert (staged / "bin/python3").is_file()
+
+
+def test_the_mac_requirements_leave_out_what_the_package_prunes():
+    package = tool("package")
+    pinned = {package.canonical_name(line.split("==")[0])
+              for line in (ROOT / "runtime/requirements-macos.txt").read_text().splitlines()
+              if line and not line.startswith((" ", "#"))}
+    assert {"mlx-whisper", "numpy", "numba", "scipy", "huggingface-hub"} <= pinned
+    assert pinned & set(package.MAC_PRUNED_DISTRIBUTIONS) == set()
+
+
+def test_the_import_smoke_looks_for_every_top_level_name_the_pruning_removes(tmp_path):
+    facts = stage_mac(tmp_path, mac_runtime(tmp_path / "input-python"))
+    names = set()
+    for path in facts["pruned"]["paths"]:
+        parts = Path(path).parts
+        nested = len(parts) == 4 and parts[2] in ("site-packages", "lib-dynload")
+        if parts[:2] == ("lib", "python3.11") and (nested or len(parts) == 3):
+            name = parts[-1]
+            if name != "__pycache__" and not name.endswith((".dist-info", ".pth")):
+                names.add(name.split(".")[0])
+    assert names == {"torch", "functorch", "torchgen", "sympy", "isympy", "mpmath", "networkx", "jinja2",
+                     "markupsafe", "setuptools", "_distutils_hack", "pip", "tkinter", "_tkinter", "idlelib",
+                     "turtle", "turtledemo", "ensurepip"}
+    assert names <= set(tool("package").MAC_PRUNED_IMPORTS)
+
+
+def first_on_path(python, entry):
+    pth = python / "bin/python3._pth"
+    lines = [line for line in pth.read_text().splitlines() if line != entry]
+    pth.write_text("\n".join([entry, *lines]) + "\n")
+
+
+@pytest.mark.parametrize("survivor", tool("package").MAC_PRUNED_IMPORTS)
+def test_the_import_smoke_fails_when_a_pruned_module_survives(tmp_path, survivor):
+    # A module with no .dist-info escapes the distribution pruning; the
+    # smoke, run by the staged interpreter, still finds it.
+    python = relocatable_python(tmp_path / "input-python")
+    (python / "lib/site-packages" / survivor).mkdir()
+    (python / "lib/site-packages" / survivor / "__init__.py").write_text("")
+    first_on_path(python, "../lib/site-packages")  # ahead of this machine's own copies
+    with pytest.raises(ValueError, match=f"pruned modules still import: \\['{survivor}'\\]"):
+        tool("package").stage_resources(tmp_path / "Earlet.app/Contents/Resources", "macos", python,
+                                        mlx_model(tmp_path / "model"), False, run_python=True)
+
+
+def test_the_import_smoke_finds_a_surviving_namespace_package(tmp_path):
+    # No __init__.py: the spec has no origin, only search locations. A name
+    # no machine installs, since a regular package elsewhere would win.
+    package = tool("package")
+    package.MAC_PRUNED_IMPORTS = ("earlet_pruned_namespace",)
+    python = relocatable_python(tmp_path / "input-python")
+    (python / "lib/site-packages/earlet_pruned_namespace").mkdir()
+    (python / "lib/site-packages/earlet_pruned_namespace/part.py").write_text("")
+    with pytest.raises(ValueError, match=r"pruned modules still import: \['earlet_pruned_namespace'\]"):
+        package.stage_resources(tmp_path / "Earlet.app/Contents/Resources", "macos", python,
+                                mlx_model(tmp_path / "model"), False, run_python=True)
+
+
+def test_the_import_smoke_ignores_modules_outside_the_staged_python(tmp_path):
+    # The test interpreter borrows this machine's standard library; a pruned
+    # name found there is not in the package.
+    python = relocatable_python(tmp_path / "input-python")
+    borrowed = tmp_path / "builder-site"
+    (borrowed / "pip").mkdir(parents=True)
+    (borrowed / "pip/__init__.py").write_text("")
+    first_on_path(python, str(borrowed))
+    facts = tool("package").stage_resources(tmp_path / "Earlet.app/Contents/Resources", "macos", python,
+                                            mlx_model(tmp_path / "model"), False, run_python=True)
+    assert facts["import_smoke"] == "passed"
 
 
 # ─── Refused and materialized inputs ─────────────────────────────────────────

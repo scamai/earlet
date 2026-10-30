@@ -46,6 +46,11 @@ final class FakeCapture: DictationCaptureDevice, @unchecked Sendable {
         var stale = false
         var warmUpError: Error?
         var interruption: DictationCaptureInterruption?
+        /// The bound input's name, as `boundInputName` reports it.
+        var inputName = "Test Microphone"
+        /// The forensic record the next `stop` carries, as the real capture
+        /// measures one: the hold's length and the input's name.
+        var forensics: DictationCaptureForensics?
         /// While set, a cold warm-up blocks until `finishWarmUp()`: the
         /// microphone comes up at a moment the test chooses.
         var holdWarmUp = false
@@ -59,6 +64,7 @@ final class FakeCapture: DictationCaptureDevice, @unchecked Sendable {
     var isCurrentlyWarm: Bool { state.get.warm }
     var isInputStaleWhileWarm: Bool { let s = state.get; return s.warm && s.stale }
     var lastCaptureInterruption: DictationCaptureInterruption? { state.get.interruption }
+    var boundInputName: String { state.get.inputName }
 
     private let levelHandler = Locked<(@Sendable (Float) -> Void)?>(nil)
     var onAudioLevel: (@Sendable (Float) -> Void)? {
@@ -148,7 +154,7 @@ final class FakeCapture: DictationCaptureDevice, @unchecked Sendable {
         // D15 path: the partial hold is never transcribed.
         let interrupted = state.get.interruption != nil
         return DictationCapture.CaptureResult(
-            samples: interrupted ? [] : samples.get, sampleRate: 16_000)
+            samples: interrupted ? [] : samples.get, sampleRate: 16_000, forensics: state.get.forensics)
     }
 
     func coolDown() async {
@@ -167,8 +173,12 @@ final class FakeCapture: DictationCaptureDevice, @unchecked Sendable {
 
 final class FakeWorker: DictationWorker, @unchecked Sendable {
     enum StartReply { case succeed, fail, hang }
-    /// `delayed` answers after `seconds`, as a slow decode of a long clip.
-    enum Reply { case text(String), failure(DictationAsrFailure), hang, delayed(String, seconds: Double) }
+    /// `delayed` answers after `seconds`, as a slow decode of a long clip;
+    /// `dropped` answers no words, with the worker's reason for them.
+    enum Reply {
+        case text(String), failure(DictationAsrFailure), hang, delayed(String, seconds: Double)
+        case dropped(DictationAsrDropReason)
+    }
 
     struct State {
         var startReply = StartReply.succeed
@@ -193,6 +203,9 @@ final class FakeWorker: DictationWorker, @unchecked Sendable {
         var language: String?
         /// The language each transcription was sent with, in order.
         var transcribeLanguages: [String?] = []
+        /// Whether each transcription was a Recover Last Dictation decode
+        /// (`transcribeForRecovery`), in order.
+        var recoveries: [Bool] = []
         /// Live-preview traffic, plus an ordered event log shared with
         /// transcription, so a test can assert "preview cancelled before the
         /// final decode".
@@ -232,36 +245,53 @@ final class FakeWorker: DictationWorker, @unchecked Sendable {
     }
 
     func transcribe(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome {
-        guard isReady else { return .failed(.notInitialized) }
+        await answer(samples, recovery: false).outcome
+    }
+
+    func transcribeForRecovery(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome {
+        await answer(samples, recovery: true).outcome
+    }
+
+    func transcribeDetailed(samples: [Float], sampleRate: Int,
+                            compareBaseline: Bool) async -> DictationAsrDetailedOutcome {
+        let answered = await answer(samples, recovery: false)
+        switch answered.outcome {
+        case .text(let text):
+            return .result(DictationAsrDetail(text: text, avgLogprob: nil, decodeStats: state.get.decodeStats,
+                                              dropReason: answered.dropped))
+        case .failed(let failure):
+            return .failed(failure)
+        }
+    }
+
+    /// The next scripted reply, and the drop reason a `dropped` one carries.
+    private func answer(_ samples: [Float], recovery: Bool)
+    async -> (outcome: DictationAsrOutcome, dropped: DictationAsrDropReason?) {
+        guard isReady else { return (.failed(.notInitialized), nil) }
         let reply = state.mutate { s -> Reply in
             s.transcribes += 1
             s.transcribeSampleCounts.append(samples.count)
             s.transcribeLanguages.append(s.language)
+            s.recoveries.append(recovery)
             s.events.append("transcribe")
             // Lower case on purpose: the app formats it, so every insertion
             // test also shows the formatter is on ("Hello world").
             return s.replies.isEmpty ? .text("hello world") : s.replies.removeFirst()
         }
         switch reply {
-        case .text(let text): return .text(text)
+        case .text(let text): return (.text(text), nil)
+        case .dropped(let reason): return (.text(""), reason)
         case .failure(let failure):
             if case .ioError = failure { state.mutate { $0.initialized = false; $0.alive = false } }
-            return .failed(failure)
+            return (.failed(failure), nil)
         case .hang:
-            return await withCheckedContinuation { c in state.mutate { $0.parkedTranscribes.append(c) } }
+            let parked: DictationAsrOutcome = await withCheckedContinuation { c in
+                state.mutate { $0.parkedTranscribes.append(c) }
+            }
+            return (parked, nil)
         case .delayed(let text, let seconds):
             try? await Task.sleep(for: .seconds(seconds))
-            return .text(text)
-        }
-    }
-
-    func transcribeDetailed(samples: [Float], sampleRate: Int,
-                            compareBaseline: Bool) async -> DictationAsrDetailedOutcome {
-        switch await transcribe(samples: samples, sampleRate: sampleRate) {
-        case .text(let text):
-            return .result(DictationAsrDetail(text: text, avgLogprob: nil, decodeStats: state.get.decodeStats))
-        case .failed(let failure):
-            return .failed(failure)
+            return (.text(text), nil)
         }
     }
 
@@ -743,6 +773,9 @@ struct Harness {
     /// Every permission call, in order: "mic?", "mic", "mic-pane", "ax?",
     /// "ax!", "ax-pane", "im?", "im!".
     let permissionCalls = Locked([String]())
+    /// What System Settings calls the Accessibility pane: macOS 26's name
+    /// unless a test sets another, so no sentence depends on the test Mac.
+    var accessibilitySettingsName = DictationPermissionStep.accessibilitySettingsName(majorVersion: 26)
     let clipboardSettles = Locked(0)
     /// Short bounds, so a deadline test takes a fraction of a second.
     var timing: DictationTiming = {
@@ -846,7 +879,7 @@ struct Harness {
         let workers = workers, trigger = trigger, detector = detector, usesDetector = usesDetector
         let mouse = mouse
         let resources = resources, grants = grants
-        let calls = permissionCalls, settles = clipboardSettles
+        let calls = permissionCalls, settles = clipboardSettles, paneName = accessibilitySettingsName
         let privacy = privacy, privacyChecks = privacyChecks
         let clipboard = clipboard, clipboardWorks = clipboardWorks
         let target = targetApplication, opens = logFolderOpens, openWorks = logFolderOpenWorks
@@ -866,7 +899,8 @@ struct Harness {
                 inputMonitoringGranted: { calls.mutate { $0.append("im?") }; return grants.get.inputMonitoring },
                 requestInputMonitoring: { calls.mutate { $0.append("im!") } },
                 openMicrophoneSettings: { calls.mutate { $0.append("mic-pane") } },
-                openAccessibilitySettings: { calls.mutate { $0.append("ax-pane") } }),
+                openAccessibilitySettings: { calls.mutate { $0.append("ax-pane") } },
+                accessibilitySettingsName: paneName),
             resolveResources: { resources },
             makeWorker: { workers.make($0) },
             makeTrigger: { key -> any DictationHoldTrigger in

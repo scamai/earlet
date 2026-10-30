@@ -1029,3 +1029,74 @@ def test_mlx_reports_whether_the_engine_had_decoded_since_it_loaded(tmp_path, mo
     assert "engine_warm" not in silent["stats"]  # nothing was decoded
     assert first["stats"]["engine_warm"] is False
     assert second["stats"]["engine_warm"] is True
+
+
+# --- a Recover Last Dictation decode skips the speech checks ----------------
+#
+# A take the speech gate, the no-speech segment drop or the junk filter
+# emptied is kept for Recover Last Dictation; its recovery passes
+# `recovery=True` so the same checks cannot empty it again. The silence
+# pre-check still applies. Fake mlx module and probe: wiring, not accuracy.
+
+LOOPED = "the the the the the the the"
+
+
+def _mlx_engine(monkeypatch, tmp_path, segments, readings=None):
+    import sys
+    import types
+
+    from transcription_worker import whisper_mac
+
+    fake = types.ModuleType("mlx_whisper")
+
+    def transcribe(_audio, **kwargs):
+        return {"segments": [dict(s) for s in segments], "language": kwargs.get("language") or "en"}
+
+    fake.transcribe = transcribe
+    monkeypatch.setitem(sys.modules, "mlx_whisper", fake)
+    if readings is not None:
+        monkeypatch.setattr(whisper_mac, "_mlx_sot_probe",
+                            lambda _repo: types.SimpleNamespace(read=lambda _chunk: readings))
+    return whisper_mac.WhisperMac(model_dir=_local_mlx_repo(tmp_path))
+
+
+def test_a_recovery_keeps_what_the_junk_filter_drops(monkeypatch, tmp_path, no_user_aliases):
+    engine = _mlx_engine(monkeypatch, tmp_path, [{"text": LOOPED, "avg_logprob": -0.3}])
+
+    normal = engine.transcribe(AUDIBLE)
+    recovered = engine.transcribe(AUDIBLE, recovery=True)
+
+    assert normal["text"] == "" and normal["dropped_reason"] == "junk-filter"
+    assert recovered["text"] == LOOPED and recovered["dropped_reason"] is None
+
+
+def test_a_recovery_keeps_a_segment_whisper_marks_as_no_speech(monkeypatch, tmp_path, no_user_aliases):
+    segment = {"text": "send the report today", "no_speech_prob": 0.9, "avg_logprob": -1.4}
+    engine = _mlx_engine(monkeypatch, tmp_path, [segment])
+
+    assert engine.transcribe(AUDIBLE)["text"] == ""
+    assert engine.transcribe(AUDIBLE, recovery=True)["text"] == "send the report today"
+
+
+def test_a_recovery_keeps_a_chunk_the_enforced_language_gate_drops(monkeypatch, tmp_path, no_user_aliases):
+    from transcription_worker import whisper_mac
+
+    monkeypatch.setattr(whisper_mac, "SPEECH_GATE_ENFORCE", True)
+    engine = _mlx_engine(monkeypatch, tmp_path, [{"text": "send the report today", "avg_logprob": -0.3}],
+                         readings=("ko", 0.05, None))
+
+    normal = engine.transcribe(AUDIBLE)
+    recovered = engine.transcribe(AUDIBLE, recovery=True)
+
+    assert normal["text"] == "" and normal["dropped_reason"] == "language-prob-gate"
+    assert recovered["text"] == "send the report today"
+    # The verdict is still counted, so the recovery's log says the gate fired.
+    assert recovered["stats"]["gated_chunks"] == 1
+
+
+def test_a_recovery_of_silence_is_still_silence(monkeypatch, tmp_path, no_user_aliases):
+    engine = _mlx_engine(monkeypatch, tmp_path, [{"text": "thank you", "avg_logprob": -0.3}])
+
+    result = engine.transcribe(np.zeros(1600, dtype=np.float32), recovery=True)
+
+    assert result["text"] == "" and result["dropped_reason"] == "silence-precheck"

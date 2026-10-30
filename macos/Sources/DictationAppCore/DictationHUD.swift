@@ -74,18 +74,31 @@ public struct DictationHUDOutcome: Equatable, Sendable {
         case keptOnClipboard
         /// The paste was refused and the clipboard could not take the words.
         case notInserted
-        /// Typing needs Accessibility, and the words could not be kept.
+        /// Typing needs Accessibility (named as this Mac's System Settings
+        /// names it), and the words could not be kept.
         case accessibilityNeeded
         /// A password field, at the press or at the paste.
         case passwordField
         /// Secure Input is on, at the press or at the paste.
         case secureInput
         /// The silence gate refused the clip: nothing audible was said.
-        case nothingHeard
-        /// Audible audio decoded to no words.
+        /// `speakUp` when the hold was long enough for speech and the input
+        /// sent a signal (`DictationCopy.asksToSpeakUp`): the speech was too
+        /// quiet. Otherwise a tap, told to hold the key.
+        case nothingHeard(speakUp: Bool)
+        /// Audible audio decoded to no words, and nothing explains it
+        /// (`DictationNoWordsReason.unexplained`).
         case noWords
-        /// The microphone delivered no audio at all.
-        case microphoneSilent
+        /// The worker found the take too quiet to decode.
+        case tooQuiet
+        /// The language gate dropped the take; it is kept for recovery.
+        case languageUnclear
+        /// A loud take the worker emptied; it is kept for recovery.
+        case wordsUnclear
+        /// The microphone delivered no audio, or none above
+        /// `DictationSession.silentInputPeak` for a whole hold. `deviceName`
+        /// is the input's name as the capture reported it, nil when unknown.
+        case microphoneSilent(deviceName: String?)
         /// Microphone access is off.
         case microphoneBlocked
         /// Escape or Cancel.
@@ -119,6 +132,43 @@ public struct DictationHUDOutcome: Equatable, Sendable {
         self.tone = tone
         self.dwell = dwell
     }
+}
+
+/// Why audible audio came back with no words, from the worker's reason
+/// (`DictationAsrDropReason`) and the take's peak, and so whether the take
+/// is kept for Recover Last Dictation (DESIGN.md, rule zero). A take a
+/// recognition gate emptied is kept, and its recovery skips those gates; a
+/// quiet one, or one nothing explains, is not.
+public enum DictationNoWordsReason: Equatable, Sendable {
+    /// The worker's silence pre-check: nothing loud enough to decode.
+    case tooQuiet
+    /// The language-probability gate. Kept: with the language chosen in
+    /// Settings, the recovery's decode runs no language gate at all.
+    case languageUnclear
+    /// The junk filter or another filter emptied a take at least as loud
+    /// as `loudPeak`. Kept.
+    case wordsUnclear
+    /// A quieter take the junk filter or another filter emptied, or no
+    /// reason given (an older worker). Not kept.
+    case unexplained
+
+    /// The take's peak from which an emptied take is kept as speech rather
+    /// than noise. Ordinary speech's chunk peaks run about 0.05–0.09 (the
+    /// waveform's note below), so a take that never reaches this was quiet
+    /// throughout.
+    public static let loudPeak: Float = 0.1
+
+    public init(dropReason: DictationAsrDropReason?, capturePeak: Float?) {
+        switch dropReason {
+        case .quiet: self = .tooQuiet
+        case .language: self = .languageUnclear
+        case .junk, .other: self = (capturePeak ?? 0) >= Self.loudPeak ? .wordsUnclear : .unexplained
+        case nil: self = .unexplained
+        }
+    }
+
+    /// Whether the take is kept for Recover Last Dictation.
+    public var keepsTake: Bool { self == .languageUnclear || self == .wordsUnclear }
 }
 
 /// The state → content mapping. No timers, no AppKit: the mic-changed
@@ -207,6 +257,17 @@ public enum DictationHUDContent {
         return "\(whole / 60):" + (whole % 60 < 10 ? "0" : "") + "\(whole % 60)"
     }
 
+    // ─── Escape's question ───
+
+    /// The title while Escape's question stands on a long take: how much
+    /// of the hold a second Escape throws away, on the hold's own clock.
+    public static func discardQuestion(seconds: TimeInterval) -> String {
+        "Discard \(clock(seconds)) of speech?"
+    }
+
+    /// The question's hint: what each answer is.
+    public static let discardQuestionHint = "Press Esc again to discard. Keep talking to continue."
+
     // ─── Outcomes ───
 
     /// The HUD's words for each ending. Use concise status copy: say
@@ -214,9 +275,11 @@ public enum DictationHUDContent {
     /// one that matters most — a user who believes the words are gone
     /// dictates them again, so it says where they are and names the key.
     /// Dwell times are product policy; a receipt is brief, a refusal stays long
-    /// enough to read and act on.
+    /// enough to read and act on. `accessibilitySettingsName` is what System
+    /// Settings calls the Accessibility pane on this Mac.
     public static func outcome(
-        for kind: DictationHUDOutcome.Kind, holdKeyName: String
+        for kind: DictationHUDOutcome.Kind, holdKeyName: String,
+        accessibilitySettingsName: String = DictationPermissionStep.accessibilitySettingsName
     ) -> DictationHUDOutcome {
         typealias Outcome = DictationHUDOutcome
         switch kind {
@@ -224,7 +287,7 @@ public enum DictationHUDContent {
             return Outcome(title: "Inserted", detail: nil, tone: .neutral, dwell: 0.6)
         case .textRecoverable:
             return Outcome(title: "Your words are still here",
-                           detail: "Open the Earlet menu → Copy last text.", tone: .caution, dwell: 5)
+                           detail: "Click Earlet's menu bar icon → Copy last text.", tone: .caution, dwell: 5)
         case .resultCopied:
             return Outcome(title: "Copied", detail: "Press ⌘V in a text field.", tone: .neutral, dwell: 2)
         case .resultCopyFailed:
@@ -232,7 +295,7 @@ public enum DictationHUDContent {
                            tone: .caution, dwell: 4)
         case .vocabularyLearned:
             return Outcome(title: "Remembered your correction",
-                           detail: "Review or undo in the Earlet menu.", tone: .neutral, dwell: 3)
+                           detail: "Review or undo from Earlet's menu bar icon.", tone: .neutral, dwell: 3)
         case .stoppedAtLimit(let seconds):
             return Outcome(title: "Stopped at \(clock(seconds))",
                            detail: "Your words went in. Hold \(holdKeyName) again to keep going.",
@@ -247,7 +310,7 @@ public enum DictationHUDContent {
                            tone: .caution, dwell: 4)
         case .accessibilityNeeded:
             return Outcome(title: "Earlet can't type yet",
-                           detail: "Allow Accessibility in System Settings, then try again.",
+                           detail: "Allow Earlet in Privacy & Security → \(accessibilitySettingsName), then try again.",
                            tone: .caution, dwell: 4.5)
         case .passwordField:
             return Outcome(title: "That's a password field",
@@ -257,18 +320,32 @@ public enum DictationHUDContent {
             return Outcome(title: "Another app is blocking the keyboard",
                            detail: "A password field usually causes this — click a normal text field.",
                            tone: .caution, dwell: 4.5)
-        case .nothingHeard:
-            // Not an error: the softest copy, and no caution accent.
+        case .nothingHeard(let speakUp):
+            // Not an error: the softest copy, and no caution accent. A tap
+            // is told to hold the key; a hold long enough for speech heard
+            // none loud enough to pass the gate.
             return Outcome(title: "Nothing heard",
-                           detail: "Hold \(holdKeyName) while you speak.",
+                           detail: speakUp ? "Speak up, or move closer to the microphone."
+                               : "Hold \(holdKeyName) while you speak.",
                            tone: .neutral, dwell: 1.6)
         case .noWords:
-            return Outcome(title: "No words recognized",
-                           detail: "Try again, or say a shorter phrase.",
+            return Outcome(title: "No words recognized", detail: "Try again.",
                            tone: .neutral, dwell: 1.6)
-        case .microphoneSilent:
-            return Outcome(title: "No sound from the microphone",
-                           detail: "Check the input in System Settings → Sound.",
+        case .tooQuiet:
+            return Outcome(title: "Too quiet to make out",
+                           detail: "Speak up, or move closer to the microphone.",
+                           tone: .neutral, dwell: 2.5)
+        case .languageUnclear:
+            return Outcome(title: "Couldn't tell the language",
+                           detail: "Recording kept. Choose your language in Settings, then recover it.",
+                           tone: .caution, dwell: 4.5)
+        case .wordsUnclear:
+            return Outcome(title: "Couldn't make out the words",
+                           detail: "Recording kept. Recover it from Earlet's menu bar icon.",
+                           tone: .caution, dwell: 4)
+        case .microphoneSilent(let deviceName):
+            return Outcome(title: "No sound from \(DictationCopy.inputName(deviceName) ?? "the microphone")",
+                           detail: "Check it isn't muted, or pick another input in Sound settings.",
                            tone: .caution, dwell: 3.5)
         case .microphoneBlocked:
             return Outcome(title: "Microphone access is off",
@@ -299,18 +376,36 @@ public enum DictationHUDContent {
     }
 
     /// The ending a failed dictation reports. Mirrors `DictationCopy.failure`,
-    /// which says the same at length.
+    /// which says the same at length. `heldSeconds` is how long the capture
+    /// recorded, `peak` its loudest sample, and `deviceName` the input it
+    /// recorded from.
     public static func ending(
-        for failure: DictationSession.SessionFailure, stage: DictationSession.Stage
+        for failure: DictationSession.SessionFailure, stage: DictationSession.Stage,
+        heldSeconds: TimeInterval = 0, peak: Float? = nil, deviceName: String? = nil
     ) -> DictationHUDOutcome.Kind {
         switch failure {
         case .micPermissionDenied: return .microphoneBlocked
-        case .emptyCapture: return .microphoneSilent
-        case .emptyTranscript: return stage == .capture ? .nothingHeard : .noWords
+        case .emptyCapture: return .microphoneSilent(deviceName: deviceName)
+        case .emptyTranscript:
+            return stage == .capture
+                ? .nothingHeard(speakUp: DictationCopy.asksToSpeakUp(heldSeconds: heldSeconds, peak: peak))
+                : .noWords
         case .asr(.engineError): return .engineError
         case .asr(.ioError), .asr(.notInitialized), .asr(.workerUnavailable): return .engineRestarting
         case .insert(let failure): return ending(forRefusedPaste: failure, keptOnClipboard: false)
         case .invalidSequencing: return .stillFinishing
+        }
+    }
+
+    /// The ending for audible audio that came back with no words. The two
+    /// that promise a kept recording fall back to `noWords` when it could
+    /// not be kept.
+    public static func ending(forNoWords reason: DictationNoWordsReason, kept: Bool) -> DictationHUDOutcome.Kind {
+        switch reason {
+        case .tooQuiet: return .tooQuiet
+        case .languageUnclear: return kept ? .languageUnclear : .noWords
+        case .wordsUnclear: return kept ? .wordsUnclear : .noWords
+        case .unexplained: return .noWords
         }
     }
 

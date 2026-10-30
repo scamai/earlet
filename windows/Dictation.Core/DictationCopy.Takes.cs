@@ -172,7 +172,8 @@ public static partial class DictationCopy
     /// speech: the design's Windows words (LIMIT-DESIGN §5, Copy, "Discard
     /// 3:42 of speech? Press Esc again"), split at the indicator's " — " as
     /// every Windows notice is, so it draws as a headline and what to do; the
-    /// Mac's title and hint say "Press Esc again to discard."</summary>
+    /// Mac's indicator titles it "Discard 3:42 of speech?" over "Press Esc
+    /// again to discard. Keep talking to continue."</summary>
     public static string HudAskToDiscard(TimeSpan length) =>
         $"Discard {HudClock(length.TotalSeconds)} of speech? — press Esc again";
 }

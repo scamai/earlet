@@ -24,7 +24,8 @@ struct VocabularyTests {
         #expect(Copy.learnSwitch == "Learn from my corrections")
         #expect(Copy.disclosure == "In supported text fields, Earlet checks your corrections for up to 90 seconds. Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences.")
         #expect(Copy.wordPlaceholder == "Word or name")
-        #expect(Copy.soundsLikePlaceholder == "Sounds like (optional)")
+        #expect(Copy.soundsLikePlaceholder == "Often misheard as (optional)")
+        #expect(Copy.soundsLikeHelp == "Optional: how Earlet writes it now, like “get hub” for GitHub. Earlet will write the word instead.")
         #expect(Copy.add == "Add")
         #expect(Copy.empty == "No words yet. Fix a word Earlet got wrong, or add one above.")
         #expect(Copy.learnedFromFix == "Learned from your fix")
@@ -42,7 +43,7 @@ struct VocabularyTests {
         #expect(DictationVocabularyCopy.refusal(.ok) == nil)
         #expect(DictationVocabularyCopy.refusal(.empty) == "Type a word first.")
         #expect(DictationVocabularyCopy.refusal(.tooLong) == "That is too long. Use up to 60 characters.")
-        #expect(DictationVocabularyCopy.refusal(.selfContaining) == "“Sounds like” cannot be part of the word itself.")
+        #expect(DictationVocabularyCopy.refusal(.selfContaining) == "The misheard form can't be part of the word itself.")
         #expect(DictationVocabularyCopy.refusal(.full) == "The list is full. Remove a word first.")
     }
 
@@ -70,7 +71,7 @@ struct VocabularyTests {
         #expect(vocabulary.rows.map(\.detail) == [nil, "Learned from your fix"])
     }
 
-    @Test("teaching a word and how it sounds lists both, marked as added by you")
+    @Test("teaching a word and what it is misheard as lists both, marked as added by you")
     func teachWordAndAlias() async {
         let (harness, vocabulary) = vocabulary()
         #expect(await vocabulary.teach(written: "SkyDock", soundsLike: "sky dock"))
@@ -81,7 +82,7 @@ struct VocabularyTests {
         #expect(harness.learningFile?.aliases.map(\.origin) == [.taught])
     }
 
-    @Test("a blank sounds-like field means no sounds-like, not one that is too short")
+    @Test("a blank misheard-as field means no rewrite, not one that is too short")
     func blankSoundsLike() async {
         let (harness, vocabulary) = vocabulary()
         #expect(await vocabulary.teach(written: "Trovioo", soundsLike: "   "))
@@ -95,7 +96,7 @@ struct VocabularyTests {
         let cases: [(String, String, String)] = [
             ("   ", "", "Type a word first."),
             (String(repeating: "x", count: 61), "", "That is too long. Use up to 60 characters."),
-            ("Fable Notes", "notes", "“Sounds like” cannot be part of the word itself."),
+            ("Fable Notes", "notes", "The misheard form can't be part of the word itself."),
         ]
         for (written, soundsLike, sentence) in cases {
             #expect(await vocabulary.teach(written: written, soundsLike: soundsLike) == false, "\(written)")

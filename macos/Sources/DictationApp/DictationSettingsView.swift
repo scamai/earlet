@@ -96,7 +96,7 @@ struct DictationSettingsPane: View {
                     }
                     if model.mouseButtonRefused, let button = model.mouseButton {
                         DictationNotice(symbol: "exclamationmark.triangle.fill", tone: .caution,
-                                        text: "macOS did not let Earlet listen to \(button.name). Check Accessibility and Input Monitoring, then restart Earlet. \(model.holdKey.name) still works.")
+                                        text: "macOS did not let Earlet listen to \(button.name). In Privacy & Security, allow Earlet under Input Monitoring and under \(DictationPermissionStep.accessibilitySettingsName), then restart Earlet. \(model.holdKey.name) still works.")
                             .padding(.vertical, 12)
                         DictationDivider()
                     } else if let caution = model.mouseButtonCaution {

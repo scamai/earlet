@@ -38,7 +38,7 @@ public static class LearningLimits
     public const int MaxAliases = 200;
     public const int MaxTombstones = 1000;
 
-    /// <summary>Longest written or sounds-like form the user may teach (§4.3).</summary>
+    /// <summary>Longest written or misheard form the user may teach (§4.3).</summary>
     public const int MaxTaughtChars = 60;
 
     public const int MaxTaughtLatinTokens = 6;

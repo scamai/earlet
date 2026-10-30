@@ -62,6 +62,59 @@ struct DictationCopyTests {
         #expect(empty != silence)
     }
 
+    @Test("silence after a hold long enough to speak asks for a louder voice, as the HUD does")
+    func silenceAfterALongHold() {
+        let tap = DictationCopy.failure(.emptyTranscript, stage: .capture, holdKey: .standard, heldSeconds: 0.3)
+        let hold = DictationCopy.failure(.emptyTranscript, stage: .capture, holdKey: .standard,
+                                         heldSeconds: DictationCopy.speakUpAfterSeconds)
+        #expect(tap == "Nothing was heard. Hold Right Command while you speak, then release.")
+        #expect(hold == "Nothing was heard. Speak up, or move closer to the microphone.")
+        // No signal at all is not a quiet voice: the hold hint stays.
+        #expect(DictationCopy.failure(.emptyTranscript, stage: .capture, holdKey: .standard, heldSeconds: 0.8,
+                                      peak: DictationSession.silentInputPeak / 5) == tap)
+        #expect(DictationCopy.failure(.emptyTranscript, stage: .capture, holdKey: .standard, heldSeconds: 0.8,
+                                      peak: 0.001) == hold)
+        #expect(Self.looksInternal(hold) == nil, "\(hold)")
+        // An empty decode is not about the hold's length.
+        #expect(DictationCopy.failure(.emptyTranscript, stage: .asr, holdKey: .standard, heldSeconds: 5)
+            == DictationCopy.failure(.emptyTranscript, stage: .asr, holdKey: .standard))
+    }
+
+    @Test("an input is named only by a real name, never a placeholder or a raw device id")
+    func inputNames() {
+        #expect(DictationCopy.inputName("AirPods Pro") == "AirPods Pro")
+        #expect(DictationCopy.inputName(" AirPods Pro\n") == "AirPods Pro")
+        #expect(DictationCopy.inputName("device 2 mic") == "device 2 mic", "only the bare id form is raw")
+        for raw in [nil, "", " ", "device 117", "(unbound)", "(unknown)"] as [String?] {
+            #expect(DictationCopy.inputName(raw) == nil, "\(raw ?? "nil")")
+        }
+        #expect(DictationCopy.silentInputDuringHold(deviceName: "AirPods Pro")
+            == "No sound from AirPods Pro — check the microphone.")
+        #expect(DictationCopy.silentInputDuringHold(deviceName: "device 117")
+            == "No sound from the microphone — check it isn't muted.")
+    }
+
+    @Test("an empty decode's sentence says why, and promises a recording only when one was kept")
+    func noWordsSentences() {
+        let generic = DictationCopy.failure(.emptyTranscript, stage: .asr, holdKey: .standard)
+        #expect(generic == "No words were recognized. Try again.")
+        let reasons: [DictationNoWordsReason] = [.tooQuiet, .languageUnclear, .wordsUnclear, .unexplained]
+        for reason in reasons {
+            for kept in [true, false] {
+                let sentence = DictationCopy.noWords(reason, kept: kept)
+                #expect(Self.looksInternal(sentence) == nil, "\(reason) → \(sentence)")
+                #expect(!sentence.contains("shorter phrase"), "\(reason)")
+                #expect(sentence.contains(DictationCopy.takeSavedWhere) == (kept && reason.keepsTake),
+                        "\(reason) kept=\(kept) → \(sentence)")
+            }
+        }
+        #expect(DictationCopy.noWords(.unexplained, kept: false) == generic)
+        #expect(DictationCopy.noWords(.wordsUnclear, kept: false) == generic)
+        #expect(DictationCopy.noWords(.tooQuiet, kept: false).contains("move closer to the microphone"))
+        #expect(DictationCopy.noWords(.languageUnclear, kept: false)
+            .hasSuffix("Choose your language in Settings, then try again."))
+    }
+
     @Test("a press refused while the last dictation finishes says so and what to do")
     func stillFinishingIsUserFacing() {
         let sentence = DictationCopy.stillFinishing(holdKey: .standard)
@@ -85,6 +138,31 @@ struct DictationCopyTests {
     func clipboardPromiseIsHonest() {
         for failure in Self.insertFailures {
             #expect(!DictationCopy.insert(failure, keptOnClipboard: false).contains("⌘V"), "\(failure)")
+        }
+    }
+
+    @Test("a missing grant names the pane as System Settings does on macOS 26 and on 27", arguments: [26, 27])
+    func missingGrantNamesThePane(macOS: Int) {
+        let pane = DictationPermissionStep.accessibilitySettingsName(majorVersion: macOS)
+        #expect(DictationCopy.insert(.accessibilityPermissionMissing, keptOnClipboard: true,
+                                     accessibilitySettingsName: pane)
+            == "Earlet needs \(pane) permission to type. Your text is on the clipboard; press ⌘V to paste it.")
+        #expect(DictationCopy.insert(.accessibilityPermissionMissing, keptOnClipboard: false,
+                                     accessibilitySettingsName: pane)
+            == "Earlet needs \(pane) permission to type. Allow it in System Settings → Privacy & Security → \(pane).")
+    }
+
+    @Test("every saved-recording line sends the user to the menu bar icon or Home, where Recover is")
+    func savedRecordingLinesPointAtTheMenuBarIcon() {
+        let saved = [DictationCopy.takeSaved, DictationCopy.takeSavedWorkerRestarting,
+                     DictationCopy.takeSavedEngineNotStarted, DictationCopy.takeSavedEngineStartTimedOut,
+                     DictationCopy.takeSavedEngineNotResponding]
+        for line in saved {
+            #expect(line.hasSuffix("The recording is saved. Recover it from Earlet's menu bar icon or on Home."),
+                    "\(line)")
+        }
+        for line in saved + [DictationCopy.savedTakeOfferedAtLaunch] {
+            #expect(!line.contains("Earlet menu"), "the app menu has no Recover Last Dictation: \(line)")
         }
     }
 }

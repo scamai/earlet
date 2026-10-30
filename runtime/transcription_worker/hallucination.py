@@ -76,7 +76,7 @@ def strip_trailing(text: str) -> str:
     return text
 
 
-def loop_junk(text: str) -> bool:
+def loop_junk(text: str, hallucination_guard: bool = True) -> bool:
     """Repetition-loop hallucination verdict — the ENGINE's looks_like_junk
     (compression-ratio + n-gram loop rules), fail-soft to False when no
     engine module is importable (pure-logic tests). Lives here so EVERY
@@ -86,7 +86,7 @@ def loop_junk(text: str) -> bool:
         from .whisper_mac import looks_like_junk
     except Exception:  # preserve fail-soft behavior when an optional engine cannot load
         return False
-    return looks_like_junk(text)
+    return looks_like_junk(text, hallucination_guard=hallucination_guard)
 
 
 _PHRASE_LOOP = re.compile(

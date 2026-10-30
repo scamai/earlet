@@ -9,7 +9,11 @@ public enum DictationVocabularyCopy {
     public static let learnSwitch = "Learn from my corrections"
     public static let disclosure = "In supported text fields, Earlet checks your corrections for up to 90 seconds. Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences."
     public static let wordPlaceholder = "Word or name"
-    public static let soundsLikePlaceholder = "Sounds like (optional)"
+    /// The second field: the text Earlet writes now, which it then
+    /// rewrites to the word (a "heard → meant" row).
+    public static let soundsLikePlaceholder = "Often misheard as (optional)"
+    /// Under the teach row: what goes in that field.
+    public static let soundsLikeHelp = "Optional: how Earlet writes it now, like “get hub” for GitHub. Earlet will write the word instead."
     public static let add = "Add"
     public static let empty = "No words yet. Fix a word Earlet got wrong, or add one above."
     public static let learnedFromFix = "Learned from your fix"
@@ -28,7 +32,7 @@ public enum DictationVocabularyCopy {
         case .ok: return nil
         case .empty: return "Type a word first."
         case .tooLong: return "That is too long. Use up to 60 characters."
-        case .selfContaining: return "“Sounds like” cannot be part of the word itself."
+        case .selfContaining: return "The misheard form can't be part of the word itself."
         case .full: return "The list is full. Remove a word first."
         }
     }
@@ -249,12 +253,12 @@ public final class DictationVocabularyModel: ObservableObject {
         log("learning: undo \(saved.map { "\($0)" } ?? "expired")")
     }
 
-    /// Teaches `written` and, when `soundsLike` is not blank, how it sounds.
+    /// Teaches `written` and, when `soundsLike` is not blank, what it is misheard as.
     /// `true` when it was taught; the view then clears its fields. A refusal
     /// is explained in `teachMessage`.
     ///
-    /// The sounds-like field is passed as typed: the learning rules strip it
-    /// first, so a field left blank means "no sounds-like", never one that is
+    /// The misheard field is passed as typed: the learning rules strip it
+    /// first, so a field left blank means "no misheard form", never one that is
     /// too short (LEARNING.md §4.3, as `tests/learning_reference.py` does).
     @discardableResult
     public func teach(written: String, soundsLike: String) async -> Bool {

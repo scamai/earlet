@@ -164,6 +164,45 @@ extension DictationHUDPanelTests {
             }
         }
 
+        /// A recorded shortcut's name can be much shorter than a preset's.
+        nonisolated static let shortHoldKeyNames = holdKeyNames + ["F13", "⌥Space"]
+
+        @Test("Escape's question fits the one text column, whatever the hold key is called",
+              arguments: shortHoldKeyNames)
+        func escapeQuestionFits(holdKeyName: String) {
+            for limit: TimeInterval in [120, 600, 900] {
+                let column = Metrics.textColumnWidth(holdKeyName: holdKeyName, maximumHoldSeconds: limit)
+                #expect(Metrics.width(of: Content.discardQuestionHint, font: Metrics.hintFont) <= column)
+                for second in [31, Int(limit)] {
+                    let title = Content.discardQuestion(seconds: TimeInterval(second))
+                    #expect(Metrics.width(of: title, font: Metrics.titleFont) <= column, "\(title)")
+                }
+            }
+        }
+
+        @Test("the silent-input notice fits the one line whole, the name dropped when it is too long",
+              arguments: holdKeyNames)
+        func silentInputNoticeFits(holdKeyName: String) {
+            let unnamed = DictationCopy.silentInputDuringHold(deviceName: nil)
+            for limit: TimeInterval in [120, 900] {
+                let column = Metrics.textColumnWidth(holdKeyName: holdKeyName, maximumHoldSeconds: limit)
+                #expect(Metrics.width(of: unnamed, font: Metrics.hintFont) <= column)
+                for name in ["AirPods Pro", "MacBook Pro Microphone",
+                             "USB Audio Interface Front Panel Microphone Input 1-2"] {
+                    let notice = Metrics.silentInputNotice(
+                        deviceName: name, holdKeyName: holdKeyName, maximumHoldSeconds: limit)
+                    #expect(Metrics.width(of: notice, font: Metrics.hintFont) <= column, "\(notice)")
+                    #expect(notice == DictationCopy.silentInputDuringHold(deviceName: name) || notice == unnamed)
+                }
+                #expect(Metrics.silentInputNotice(
+                    deviceName: "USB Audio Interface Front Panel Microphone Input 1-2",
+                    holdKeyName: holdKeyName, maximumHoldSeconds: limit) == unnamed)
+            }
+            #expect(Metrics.silentInputNotice(deviceName: "AirPods Pro", holdKeyName: "Right Command",
+                                              maximumHoldSeconds: 120)
+                == "No sound from AirPods Pro — check the microphone.")
+        }
+
         @Test("held, hands-free and transcribing share one capsule width")
         func oneWidthForEveryBusyState() {
             let width = Metrics.capsuleWidth(holdKeyName: "Right Command", maximumHoldSeconds: 120)

@@ -5,13 +5,13 @@ public enum TeachResult
 {
     Ok,
 
-    /// <summary>Blank, or a sounds-like form shorter than 2 characters.</summary>
+    /// <summary>Blank, or a misheard form shorter than 2 characters.</summary>
     Empty,
 
     /// <summary>More than 60 characters, 6 non-CJK tokens or 12 CJK characters.</summary>
     TooLong,
 
-    /// <summary>The written form contains the sounds-like form.</summary>
+    /// <summary>The written form contains the misheard form.</summary>
     SelfContaining,
 
     /// <summary>500 taught words, or 200 aliases none of which is learned.</summary>
@@ -86,8 +86,9 @@ public sealed class LearningBook
     }
 
     /// <summary>
-    /// Teach a written form and, optionally, how it sounds. The word is taught
-    /// at once and a sounds-like form sets a taught alias at once.
+    /// Teach a written form and, optionally, what Earlet writes for it now (the
+    /// misheard form). The word is taught at once and a misheard form sets a
+    /// taught alias at once.
     /// </summary>
     public TeachResult Teach(string written, string? soundsLike, long at)
     {

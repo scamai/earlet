@@ -69,6 +69,10 @@ final class DictationHUDController {
         model.$holdNotice
             .sink { [weak self] notice in self?.holdNotice = notice; self?.redraw() }
             .store(in: &cancellables)
+        // Escape's question on a long take takes the title while it stands.
+        model.$discardQuestion
+            .sink { [weak self] question in self?.discardQuestion = question; self?.redraw() }
+            .store(in: &cancellables)
         model.$holdStartedAt
             .sink { [weak self] start in self?.holdClockChanged(start) }
             .store(in: &cancellables)
@@ -87,6 +91,7 @@ final class DictationHUDController {
     private var level: Float = 0
     private var liveText = ""
     private var holdNotice: String?
+    private var discardQuestion: String?
     private var holdKeyName = ""
     private var holdStartedAt: Date?
     private let maximumHoldSeconds: TimeInterval
@@ -217,7 +222,7 @@ final class DictationHUDController {
     private func view(for state: DictationHUDState, holdKeyName: String) -> DictationHUDView {
         DictationHUDView(
             state: state, holdKeyName: holdKeyName, level: level, liveText: liveText, holdNotice: holdNotice,
-            elapsed: holdStartedAt.map { Date().timeIntervalSince($0) },
+            discardQuestion: discardQuestion, elapsed: holdStartedAt.map { Date().timeIntervalSince($0) },
             maximumHoldSeconds: maximumHoldSeconds)
     }
 
@@ -345,6 +350,8 @@ struct DictationHUDView: View {
     var level: Float = 0
     var liveText: String = ""
     var holdNotice: String? = nil
+    /// Escape's question on a long take, in place of the title.
+    var discardQuestion: String? = nil
     /// How long the recording hold has run, or nil before its clock starts.
     var elapsed: TimeInterval? = nil
     var maximumHoldSeconds = DictationHoldPolicy.stage1.maximumHoldSeconds
@@ -378,7 +385,7 @@ struct DictationHUDView: View {
         return HStack(spacing: Metrics.iconSpacing) {
             icon.frame(width: Metrics.iconWidth)
             VStack(alignment: .leading, spacing: Metrics.lineSpacing) {
-                if let title = DictationHUDContent.title(for: state, livePreviewText: liveText) {
+                if let title = discardQuestion ?? DictationHUDContent.title(for: state, livePreviewText: liveText) {
                     let line = Text(title)
                         .font(.system(size: Metrics.titleSize, weight: .semibold))
                         .foregroundStyle(DictationBrand.title)
@@ -505,21 +512,32 @@ enum DictationHUDRenderMode {
     static func run(to directory: URL) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let states: [(name: String, state: DictationHUDState, level: Float, liveText: String,
-                      elapsed: TimeInterval?)] = [
-            ("recording", .recording(latched: false), 0, "", nil),
-            ("recording-latched", .recording(latched: true), 0, "", nil),
+                      elapsed: TimeInterval?, holdNotice: String?)] = [
+            ("recording", .recording(latched: false), 0, "", nil, nil),
+            ("recording-latched", .recording(latched: true), 0, "", nil, nil),
             // A hands-free hold 1:05 in, and a held key 10 s from the ceiling.
-            ("recording-latched-elapsed", .recording(latched: true), 0, "", 65),
+            ("recording-latched-elapsed", .recording(latched: true), 0, "", 65, nil),
             ("recording-countdown", .recording(latched: false), 0, "",
-             DictationHoldPolicy.stage1.maximumHoldSeconds - 10),
+             DictationHoldPolicy.stage1.maximumHoldSeconds - 10, nil),
             // 0.08 peak ≈ -22 dB: ordinary speech, visibly raised bars.
-            ("recording-level", .recording(latched: false), 0.08, "", nil),
-            ("recording-live-text", .recording(latched: false), 0.08, "this is a live preview of my voice", nil),
-            ("transcribing", .transcribing, 0, "", nil),
-            ("mic-changed", .micChanged("Mic changed to AirPods Pro — could you say that again?"), 0, "", nil),
+            ("recording-level", .recording(latched: false), 0.08, "", nil, nil),
+            ("recording-live-text", .recording(latched: false), 0.08, "this is a live preview of my voice", nil, nil),
+            // An input that has sent nothing for 2.5 s: the hint says so,
+            // named while the name fits the one line, else unnamed.
+            ("recording-silent-input", .recording(latched: false), 0, "", nil, silentInput("AirPods Pro")),
+            ("recording-silent-input-long-name", .recording(latched: false), 0, "", nil,
+             silentInput("MacBook Pro Microphone")),
+            ("recording-silent-input-unnamed", .recording(latched: false), 0, "", nil,
+             silentInput("USB Audio Interface Front Panel Microphone Input 1-2")),
+            ("transcribing", .transcribing, 0, "", nil, nil),
+            ("mic-changed", .micChanged("Mic changed to AirPods Pro — could you say that again?"), 0, "", nil, nil),
+            // The Accessibility pane under both of its names, whatever this
+            // Mac runs (macOS 27 calls it Device Control and Data Access).
+            ("outcome-accessibility-needed-macos26", accessibilityNeeded(majorVersion: 26), 0, "", nil, nil),
+            ("outcome-accessibility-needed-macos27", accessibilityNeeded(majorVersion: 27), 0, "", nil, nil),
         ] + outcomes.map { name, kind in
             ("outcome-\(name)", .outcome(DictationHUDContent.outcome(for: kind, holdKeyName: "Right Command")),
-             0, "", nil)
+             0, "", nil, nil)
         }
         // The stability sequence: one recording with growing live text and
         // a varying level (speech-realistic peaks, ~0.03–0.12). Every frame
@@ -534,17 +552,30 @@ enum DictationHUDRenderMode {
         ]
         let frames = states + sequence.enumerated().map { index, frame in
             ("sequence-\(index)", DictationHUDState.recording(latched: false), frame.level, frame.liveText,
-             TimeInterval?.none)
+             TimeInterval?.none, String?.none)
         }
+
+        // Escape's question on a long take, 3:42 in, held and hands-free:
+        // it takes the live words' title and the clock's hint.
+        let questions = [false, true].map { latched in
+            (name: latched ? "recording-latched-discard-question" : "recording-discard-question",
+             view: DictationHUDView(
+                state: .recording(latched: latched), holdKeyName: "Right Command", level: 0.08,
+                liveText: "this is a live preview of my voice",
+                holdNotice: DictationHUDContent.discardQuestionHint,
+                discardQuestion: DictationHUDContent.discardQuestion(seconds: 222), elapsed: 222))
+        }
+        let views: [(name: String, view: DictationHUDView)] = frames.map { name, state, level, liveText, elapsed, holdNotice in
+            (name: name, view: DictationHUDView(
+                state: state, holdKeyName: "Right Command", level: level, liveText: liveText,
+                holdNotice: holdNotice, elapsed: elapsed))
+        } + questions
 
         var rendered: [DictationHUDRenderCheck.Rendered] = []
         var problems: [String] = []
-        for (name, state, level, liveText, elapsed) in frames {
-            let view = DictationHUDView(
-                state: state, holdKeyName: "Right Command", level: level, liveText: liveText,
-                elapsed: elapsed)
+        for (name, view) in views {
             let url = directory.appendingPathComponent("hud-\(name).png")
-            if let image = render(view, to: url, name: name, isBusy: DictationHUDMetrics.isBusy(state)) {
+            if let image = render(view, to: url, name: name, isBusy: DictationHUDMetrics.isBusy(view.state)) {
                 rendered.append(image)
                 report("\(url.path) written \(image.width)x\(image.height)")
             } else {
@@ -553,6 +584,7 @@ enum DictationHUDRenderMode {
             }
         }
         problems += DictationHUDRenderCheck.problems(rendered)
+        problems += renderMenuIcons(to: directory)
         guard problems.isEmpty else {
             for problem in problems { report("check FAILED: \(problem)") }
             exit(1)
@@ -563,6 +595,66 @@ enum DictationHUDRenderMode {
 
     private static func report(_ line: String) {
         FileHandle.standardError.write(Data("[hud-render] \(line)\n".utf8))
+    }
+
+    /// The Accessibility-needed ending as a Mac on `majorVersion` words it.
+    private static func accessibilityNeeded(majorVersion: Int) -> DictationHUDState {
+        .outcome(DictationHUDContent.outcome(
+            for: .accessibilityNeeded, holdKeyName: "Right Command",
+            accessibilitySettingsName: DictationPermissionStep.accessibilitySettingsName(majorVersion: majorVersion)))
+    }
+
+    /// The menu bar icon with its waiting badge (`DictationMenuBadgeImage`),
+    /// the one menu bar picture Earlet draws rather than the system tints:
+    /// on a light and a dark stand-in for the menu bar, at 4x. Returns what
+    /// was not written.
+    @MainActor
+    private static func renderMenuIcons(to directory: URL) -> [String] {
+        var problems: [String] = []
+        for glyph in [DictationMenuGlyph.ready, .needsPermission] {
+            for dark in [false, true] {
+                let name = "menu-icon-\(glyph)-waiting-\(dark ? "dark" : "light")"
+                let url = directory.appendingPathComponent("hud-\(name).png")
+                if let image = DictationMenuBadgeImage.image(for: glyph), writeMenuIcon(image, dark: dark, to: url) {
+                    report("\(url.path) written")
+                } else {
+                    problems.append("\(name): not written")
+                    report("\(url.path) FAILED")
+                }
+            }
+        }
+        return problems
+    }
+
+    @MainActor
+    private static func writeMenuIcon(_ image: NSImage, dark: Bool, to url: URL) -> Bool {
+        let scale: CGFloat = 4
+        guard let appearance = NSAppearance(named: dark ? .darkAqua : .aqua),
+              let rep = NSBitmapImageRep(
+                  bitmapDataPlanes: nil,
+                  pixelsWide: Int(image.size.width * scale), pixelsHigh: Int(image.size.height * scale),
+                  bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                  colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return false }
+        rep.size = image.size
+        let bounds = NSRect(origin: .zero, size: image.size)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        appearance.performAsCurrentDrawingAppearance {
+            (dark ? NSColor(white: 0.17, alpha: 1) : NSColor(white: 0.94, alpha: 1)).setFill()
+            bounds.fill()
+            image.draw(in: bounds)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        guard let png = rep.representation(using: .png, properties: [:]) else { return false }
+        return (try? png.write(to: url)) != nil
+    }
+
+    /// The silent-input notice the model would show for `deviceName`.
+    private static func silentInput(_ deviceName: String) -> String {
+        DictationHUDMetrics.silentInputNotice(
+            deviceName: deviceName, holdKeyName: "Right Command",
+            maximumHoldSeconds: DictationHoldPolicy.stage1.maximumHoldSeconds)
     }
 
     /// Every ending the HUD can report.
@@ -578,9 +670,14 @@ enum DictationHUDRenderMode {
         ("accessibility-needed", .accessibilityNeeded),
         ("password-field", .passwordField),
         ("secure-input", .secureInput),
-        ("nothing-heard", .nothingHeard),
+        ("nothing-heard", .nothingHeard(speakUp: false)),
+        ("nothing-heard-speak-up", .nothingHeard(speakUp: true)),
         ("no-words", .noWords),
-        ("microphone-silent", .microphoneSilent),
+        ("too-quiet", .tooQuiet),
+        ("language-unclear", .languageUnclear),
+        ("words-unclear", .wordsUnclear),
+        ("microphone-silent", .microphoneSilent(deviceName: nil)),
+        ("microphone-silent-named", .microphoneSilent(deviceName: "AirPods Pro")),
         ("microphone-blocked", .microphoneBlocked),
         ("cancelled", .cancelled),
         ("engine-restarting", .engineRestarting),

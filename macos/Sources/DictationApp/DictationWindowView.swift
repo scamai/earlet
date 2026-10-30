@@ -68,13 +68,6 @@ struct DictationWindow: View {
             model.refreshLaunchAtLogin()
         }
         .task { await model.vocabulary.refresh() }
-        // Whichever pane is shown: Escape on a long take asks from here.
-        .confirmationDialog("Discard this recording?", isPresented: Binding(
-            get: { model.confirmingDiscard },
-            set: { if !$0 { model.keepRecording() } }), titleVisibility: .visible) {
-                Button("Discard recording", role: .destructive) { Task { await model.confirmDiscard() } }
-                Button("Keep recording", role: .cancel) { model.keepRecording() }
-        }
     }
 }
 

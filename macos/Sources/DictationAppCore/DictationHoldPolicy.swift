@@ -1,3 +1,4 @@
+import DictationKit
 import Foundation
 
 /// The user-facing hands-free silence choices.  The detector itself remains
@@ -70,6 +71,9 @@ public struct DictationHoldSnapshot: Equatable, Sendable {
     public let speechDetected: Bool
     public let silenceSeconds: TimeInterval?
     public let decision: DictationHoldDecision
+    /// The run of audio, up to now, in which no sample reached
+    /// `DictationSession.silentInputPeak`: the input is sending nothing.
+    public let silentInputSeconds: TimeInterval
 
     public var neverSpoke: Bool { !speechDetected }
 }
@@ -80,6 +84,10 @@ public struct DictationHoldSnapshot: Equatable, Sendable {
 public final class DictationHoldTracker: @unchecked Sendable {
     public static let sampleRate = 16_000
     public static let frameSamples = 480 // 30 ms at 16 kHz
+    /// How long a hold hears nothing from the input before the hint says so:
+    /// past a Bluetooth headset's wake-up, which `MicCapture` also waits out
+    /// for this long.
+    public static let silentInputNoticeSeconds: TimeInterval = 2.5
 
     private let lock = NSLock()
     private let policy: DictationHoldPolicy
@@ -89,6 +97,7 @@ public final class DictationHoldTracker: @unchecked Sendable {
     private var confirmedSpeech = false
     private var consecutiveSpeechFrames = 0
     private var lastSpeechAudioSeconds: TimeInterval?
+    private var silentInputFrames = 0
 
     public init(policy: DictationHoldPolicy = .stage1) {
         self.policy = policy
@@ -116,6 +125,7 @@ public final class DictationHoldTracker: @unchecked Sendable {
         confirmedSpeech = false
         consecutiveSpeechFrames = 0
         lastSpeechAudioSeconds = nil
+        silentInputFrames = 0
         lock.unlock()
     }
 
@@ -156,15 +166,19 @@ public final class DictationHoldTracker: @unchecked Sendable {
         return DictationHoldSnapshot(audioSeconds: audioSeconds,
                                      speechDetected: confirmedSpeech,
                                      silenceSeconds: silence,
-                                     decision: decision)
+                                     decision: decision,
+                                     silentInputSeconds: Double(silentInputFrames) * 0.03)
     }
 
     private func process(_ frame: [Float]) {
         var sum: Float = 0
+        var peak: Float = 0
         for sample in frame {
             let value = sample.isFinite ? sample : 0
             sum += value * value
+            peak = max(peak, abs(value))
         }
+        silentInputFrames = peak < DictationSession.silentInputPeak ? silentInputFrames + 1 : 0
         let rms = sqrt(sum / Float(frame.count))
         frameLevels.append(rms)
         let maxFrames = Int(10 / 0.03) + 1

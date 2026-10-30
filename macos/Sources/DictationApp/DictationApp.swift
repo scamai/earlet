@@ -42,7 +42,7 @@ struct DictationApp: App {
         MenuBarExtra {
             DictationMenu(model: delegate.model, hud: delegate.hud)
         } label: {
-            DictationMenuIcon(model: delegate.model, delegate: delegate)
+            DictationMenuIcon(model: delegate.model, result: delegate.model.recentResult, delegate: delegate)
         }
     }
 }
@@ -275,19 +275,21 @@ enum DictationMainWindow {
 }
 
 /// The menu bar icon: one glyph per state (`DictationMenuGlyph`), a
-/// template symbol the menu bar tints itself, and its state in words for
-/// VoiceOver. It is also the process's `openWindow`: it exists for as long
-/// as the app runs, unlike the window, so the delegate's requests to show
-/// the window come here.
+/// template symbol the menu bar tints itself, the waiting badge while
+/// words or a recording wait in its menu (`DictationMenuIconState`), and
+/// its state in words for VoiceOver. It is also the process's
+/// `openWindow`: it exists for as long as the app runs, unlike the window,
+/// so the delegate's requests to show the window come here.
 private struct DictationMenuIcon: View {
     @ObservedObject var model: DictationModel
+    /// Observed for the badge: words waiting after a refused paste live here.
+    @ObservedObject var result: DictationRecentResult
     let delegate: DictationAppDelegate
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        let glyph = model.menuGlyph
-        Image(systemName: glyph.symbolName)
-            .accessibilityLabel(glyph.accessibilityLabel)
+        picture
+            .accessibilityLabel(model.menuIcon.accessibilityLabel)
             // A request made before this view existed (at launch).
             .task { serveWindowRequest() }
             .onReceive(NotificationCenter.default.publisher(for: DictationMainWindow.showRequest)) { _ in
@@ -295,8 +297,84 @@ private struct DictationMenuIcon: View {
             }
     }
 
+    /// One `Image` either way: a menu bar label draws an image, not a
+    /// composed view, so the badge is drawn into the picture.
+    private var picture: Image {
+        let icon = model.menuIcon
+        if icon.badged, let badged = DictationMenuBadgeImage.image(for: icon.glyph) {
+            return Image(nsImage: badged).renderingMode(.original)
+        }
+        return Image(systemName: icon.glyph.symbolName)
+    }
+
     private func serveWindowRequest() {
         if delegate.takeWindowRequest() { DictationMainWindow.show(using: openWindow) }
+    }
+}
+
+/// The menu bar icon with the waiting badge: the state's symbol in the menu
+/// bar's ink, and a dot in the caution colour at its top trailing corner
+/// inside a clear ring that keeps it apart from the symbol. A template image
+/// cannot carry a colour, so this one is drawn, and the drawing runs in the
+/// appearance the menu bar draws it in: the ink and the dot are chosen for
+/// a light or dark menu bar, and Increase Contrast, each time it is drawn.
+/// The symbol keeps its default size, the one `Image(systemName:)` draws
+/// without the badge, so the icon does not move when the dot comes and goes.
+enum DictationMenuBadgeImage {
+    /// The dot's diameter and the clear ring around it, in points.
+    static let dotDiameter: CGFloat = 6
+    static let ringWidth: CGFloat = 1.5
+
+    @MainActor private static var made: [DictationMenuGlyph: NSImage] = [:]
+
+    /// One image per glyph, made once: it redraws itself for each appearance.
+    @MainActor
+    static func image(for glyph: DictationMenuGlyph) -> NSImage? {
+        if let image = made[glyph] { return image }
+        let name = glyph.symbolName
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return nil }
+        // Sendable, so nonisolated: AppKit may call it wherever the image is drawn.
+        let image = NSImage(size: symbol.size, flipped: false) { @Sendable rect in
+            DictationMenuBadgeImage.draw(symbolNamed: name, in: rect)
+        }
+        image.isTemplate = false
+        // Drawn every time, never from a copy made in another appearance.
+        image.cacheMode = .never
+        made[glyph] = image
+        return image
+    }
+
+    private static func draw(symbolNamed name: String, in rect: NSRect) -> Bool {
+        guard let context = NSGraphicsContext.current?.cgContext,
+              let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        else { return false }
+        let look = NSAppearance.currentDrawing().bestMatch(from: [
+            .aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua,
+        ])
+        let appearance = DictationAppearance(
+            dark: look == .darkAqua || look == .accessibilityHighContrastDarkAqua,
+            increasedContrast: look == .accessibilityHighContrastAqua || look == .accessibilityHighContrastDarkAqua)
+        // A layer of its own, so the tint and the clear ring act on this
+        // drawing only, never on the menu bar it is drawn over.
+        context.saveGState()
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        // The template symbol, then the menu bar's ink over its pixels only.
+        context.setBlendMode(.normal)
+        symbol.draw(in: rect)
+        context.setBlendMode(.sourceAtop)
+        NSColor.labelColor.withAlphaComponent(1).setFill()
+        context.fill(rect)
+        let dot = CGRect(x: rect.maxX - dotDiameter, y: rect.maxY - dotDiameter,
+                         width: dotDiameter, height: dotDiameter)
+        context.setBlendMode(.clear)
+        context.fillEllipse(in: dot.insetBy(dx: -ringWidth, dy: -ringWidth))
+        context.setBlendMode(.normal)
+        let caution = DictationPalette.rgb(.caution, in: appearance)
+        context.setFillColor(red: caution.red, green: caution.green, blue: caution.blue, alpha: 1)
+        context.fillEllipse(in: dot)
+        context.endTransparencyLayer()
+        context.restoreGState()
+        return true
     }
 }
 

@@ -126,6 +126,9 @@ public protocol DictationCaptureDevice: DictationAudioSource {
     var isInputStaleWhileWarm: Bool { get }
     /// The just-finished press's D15 interruption, or nil.
     var lastCaptureInterruption: DictationCaptureInterruption? { get }
+    /// The bound input's name, or a placeholder when it has none
+    /// (`DictationCopy.inputName`). Reads Core Audio: off the main actor.
+    var boundInputName: String { get }
     /// Per-chunk peak amplitude (0…1) while the engine runs, about 12 Hz.
     /// Set when a hold starts recording, cleared when it ends.
     var onAudioLevel: (@Sendable (Float) -> Void)? { get set }
@@ -216,6 +219,11 @@ final class WorkerSlot: DictationAsrTransport, @unchecked Sendable {
         guard let worker else { return .failed(.workerUnavailable) }
         return await worker.transcribeDetailed(
             samples: samples, sampleRate: sampleRate, compareBaseline: compareBaseline)
+    }
+
+    func transcribeForRecovery(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome {
+        guard let worker else { return .failed(.workerUnavailable) }
+        return await worker.transcribeForRecovery(samples: samples, sampleRate: sampleRate)
     }
 
     func setVocabularyScene(_ scene: String?) {
@@ -330,6 +338,10 @@ public struct DictationPermissions {
     public var openMicrophoneSettings: @MainActor () -> Void
     /// Shows the Accessibility pane, for the same reason.
     public var openAccessibilitySettings: @MainActor () -> Void
+    /// What System Settings calls that pane on this Mac, for every sentence
+    /// that names it (`DictationPermissionStep.accessibilitySettingsName`).
+    /// A value here, so a test can read the macOS 26 and macOS 27 wording.
+    public var accessibilitySettingsName: String
 
     public init(
         requestMicrophone: @escaping @MainActor () async -> Bool,
@@ -338,7 +350,8 @@ public struct DictationPermissions {
         inputMonitoringGranted: @escaping @MainActor () -> Bool,
         requestInputMonitoring: @escaping @MainActor () -> Void,
         openMicrophoneSettings: @escaping @MainActor () -> Void,
-        openAccessibilitySettings: @escaping @MainActor () -> Void
+        openAccessibilitySettings: @escaping @MainActor () -> Void,
+        accessibilitySettingsName: String = DictationPermissionStep.accessibilitySettingsName
     ) {
         self.requestMicrophone = requestMicrophone
         self.microphoneAuthorized = microphoneAuthorized
@@ -347,6 +360,7 @@ public struct DictationPermissions {
         self.requestInputMonitoring = requestInputMonitoring
         self.openMicrophoneSettings = openMicrophoneSettings
         self.openAccessibilitySettings = openAccessibilitySettings
+        self.accessibilitySettingsName = accessibilitySettingsName
     }
 }
 
@@ -794,6 +808,12 @@ final class LiveWorker: DictationWorker, @unchecked Sendable {
                             compareBaseline: Bool) async -> DictationAsrDetailedOutcome {
         await transport.transcribeDetailed(
             samples: samples, sampleRate: sampleRate, compareBaseline: compareBaseline)
+    }
+
+    /// Forwarded, or the protocol's default would decode a recovery under
+    /// the usual checks.
+    func transcribeForRecovery(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome {
+        await transport.transcribeForRecovery(samples: samples, sampleRate: sampleRate)
     }
 
     func setLanguageCode(_ code: String?) { transport.setLanguageCode(code) }

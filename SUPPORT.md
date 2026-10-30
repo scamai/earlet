@@ -12,8 +12,8 @@ source has not been exercised on Windows hardware.
 |---|---|
 | You are looking for an installer | Download the Mac disk image from [Releases](https://github.com/scamai/earlet/releases/latest) (Apple Silicon, macOS 14 or later), open it and drag Earlet to Applications. There is no Windows or Intel Mac download; [building from source](README.md#quick-start) needs the toolchain, Python dependencies and a local model. |
 | The app opens but cannot recognize speech | An app-only package contains no speech runtime or model. Check the [complete-package requirements](docs/development.md#packaging) and [model format](docs/development.md#model-formats). |
-| Holding the key does nothing on the Mac | Check Microphone, Accessibility and Input Monitoring in System Settings. Quit and reopen the app after granting Input Monitoring. Check the hold key shown in Home. |
-| Text is recognized but does not appear in the other app | Focus an editable text field and check Accessibility access. Use **Copy last text** to paste manually. Password fields and Secure Input are intentionally protected. |
+| Holding the key does nothing on the Mac | Check Microphone, Accessibility (Device Control and Data Access on macOS 27 and later) and Input Monitoring in System Settings. Quit and reopen the app after granting Input Monitoring. Check the hold key shown in Home. |
+| Text is recognized but does not appear in the other app | Focus an editable text field and check Accessibility (Device Control and Data Access on macOS 27 and later). Use **Copy last text** to paste manually. Password fields and Secure Input are intentionally protected. |
 | A rebuilt Mac app stopped responding to the key | Rebuilding with ad-hoc signing can invalidate permission grants. See [Signing](docs/development.md#packaging); note the build and the permissions shown when reporting it. |
 
 If the check does not help, use the channels below. A report should say which

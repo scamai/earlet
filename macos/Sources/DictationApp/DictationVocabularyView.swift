@@ -75,7 +75,7 @@ struct DictationVocabularySection: View {
         }
     }
 
-    /// Teach a word: what it is written as, and what it sounds like.
+    /// Teach a word: what it is written as, and what Earlet writes for it now.
     private var teaching: some View {
         DictationSection("Add a word") {
             ViewThatFits(in: .horizontal) {
@@ -87,6 +87,7 @@ struct DictationVocabularySection: View {
                 }
             }
             .onSubmit { teach() }
+            DictationFootnote(Copy.soundsLikeHelp)
             if let message = vocabulary.teachMessage {
                 DictationFootnote(message)
             }
@@ -119,6 +120,7 @@ struct DictationVocabularySection: View {
     private var soundsLikeField: some View {
         TextField(Copy.soundsLikePlaceholder, text: $soundsLike, prompt: Text(Copy.soundsLikePlaceholder))
             .labelsHidden()
+            .accessibilityHint(Text(Copy.soundsLikeHelp))
             .focused($focus, equals: .soundsLike)
             .dictationField(focused: focus == .soundsLike)
             .frame(minWidth: 140)

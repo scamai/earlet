@@ -207,6 +207,8 @@ struct HUDSequenceTests {
         #expect(recorder.outcomes.map(\.title) == ["Your words are still here"])
         #expect(model.recentResult.entry?.needsRecovery == true)
         #expect(recorder.outcomes.first?.detail?.contains("⌘V") == false)
+        #expect(recorder.outcomes.first?.detail == "Click Earlet's menu bar icon → Copy last text.",
+                "where Copy last text is: the menu bar icon, not the app menu")
     }
 
     @Test("a silent hold shows Nothing heard, calmly")
@@ -214,12 +216,16 @@ struct HUDSequenceTests {
         let harness = Harness()
         // Quiet room tone is nonzero; the digital-zero input fault is separate.
         harness.capture.samples.mutate { $0 = [Float](repeating: 0.0001, count: 16_000) }
+        // A tap, as the capture measured it: the time since the press would
+        // count the double-tap wait, and a busy suite can make that a hold.
+        harness.capture.state.mutate { $0.forensics = DictationCaptureForensics(holdSeconds: 0.3, peak: 0.0001) }
         let model = await enabled(harness)
         let recorder = HUDStateRecorder(model)
 
         await dictate(harness, model, recorder)
 
-        #expect(recorder.outcomes == [DictationHUDContent.outcome(for: .nothingHeard, holdKeyName: "Right Command")])
+        #expect(recorder.outcomes == [DictationHUDContent.outcome(for: .nothingHeard(speakUp: false),
+                                                                  holdKeyName: "Right Command")])
         #expect(recorder.outcomes.first?.tone == .neutral)
     }
 

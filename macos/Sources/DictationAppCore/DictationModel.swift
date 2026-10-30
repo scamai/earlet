@@ -135,7 +135,9 @@ public final class DictationModel: ObservableObject {
     var changingSavedTake = false
     @Published public internal(set) var silenceSetting: DictationSilenceSetting
     @Published public internal(set) var holdNotice: String?
-    @Published public internal(set) var confirmingDiscard = false
+    /// Escape's question on a long take ("Discard 0:42 of speech?"), the
+    /// HUD's title while it stands (`escapePressed`); `holdNotice` says what to do.
+    @Published public internal(set) var discardQuestion: String?
     var holdMonitor: Task<Void, Never>?
     var holdHealth: Task<Void, Never>?
     var recoveryExpiry: Task<Void, Never>?
@@ -180,7 +182,8 @@ public final class DictationModel: ObservableObject {
                                              writeClipboard: environment.clipboardFallback, log: environment.log)
         self.keyCheck = DictationKeyCheckModel(settings: environment.settings,
             makeTrigger: environment.makeTrigger, snapshot: environment.keySnapshot,
-            isFrontmost: environment.isDictationFrontmost)
+            isFrontmost: environment.isDictationFrontmost,
+            accessibilitySettingsName: environment.permissions.accessibilitySettingsName)
         keyCheck.onRuntimeNotice = { [weak self] _ in
             guard let self, !self.recording, !self.busy,
                   let notice = self.keyCheck.takeRuntimeNotice() else { return }
@@ -488,7 +491,7 @@ public final class DictationModel: ObservableObject {
         guard env.permissions.accessibilityTrusted(true) else {
             enablePending = true
             refreshPermissions()
-            status = "Allow Earlet in System Settings → Privacy & Security → Accessibility, then enable dictation again."
+            status = "Allow Earlet in System Settings → Privacy & Security → \(env.permissions.accessibilitySettingsName), then enable dictation again."
             return
         }
         // Before the worker: a multi-gigabyte model load is wasted if the
@@ -590,7 +593,7 @@ public final class DictationModel: ObservableObject {
         refreshPermissions()
         windowAttention += 1
         guard !busy else { return }
-        status = "Earlet lost Accessibility or Input Monitoring access. Re-grant it below to continue."
+        status = "Earlet lost its access under \(env.permissions.accessibilitySettingsName) or Input Monitoring. Grant it again below to continue."
     }
 
     /// How long the HUD shows the mic-changed sentence. Internal: a test
@@ -628,7 +631,8 @@ public final class DictationModel: ObservableObject {
     /// way the mic-changed notice is shown.
     func showOutcome(_ kind: DictationHUDOutcome.Kind) {
         hudOutcomeTask?.cancel()
-        let outcome = DictationHUDContent.outcome(for: kind, holdKeyName: holdKey.name)
+        let outcome = DictationHUDContent.outcome(for: kind, holdKeyName: holdKey.name,
+                                                  accessibilitySettingsName: env.permissions.accessibilitySettingsName)
         hudOutcome = outcome
         let seconds = hudOutcomeSecondsOverride ?? outcome.dwell
         hudOutcomeTask = Task { [weak self] in
@@ -1190,7 +1194,7 @@ public final class DictationModel: ObservableObject {
         chordGuard.end()
         env.keyWatch.begin { [weak self] code in
             guard code == HoldChordGuard.escapeKeyCode else { return }
-            Task { await self?.cancelHold(.user) }
+            Task { await self?.escapePressed() }
         }
     }
 
@@ -1346,7 +1350,7 @@ public final class DictationModel: ObservableObject {
 
     func keyDown(_ keyCode: UInt16) {
         switch chordGuard.keyDown(keyCode) {
-        case .escape: Task { await cancelHold(.user) }
+        case .escape: Task { await escapePressed() }
         case .chord: Task { await cancelHold(.shortcut) }
         case .none: break
         }
@@ -1369,7 +1373,7 @@ public final class DictationModel: ObservableObject {
         holdMonitor?.cancel(); holdMonitor = nil
         holdHealth?.cancel(); holdHealth = nil
         holdNotice = nil
-        confirmingDiscard = false
+        discardQuestion = nil
         holdStartedAt = nil
         tapSettle?.cancel(); tapSettle = nil
     }
@@ -1505,7 +1509,7 @@ public final class DictationModel: ObservableObject {
     // ─── Cancel ───
 
     /// The Cancel button and menu item: drops a recording, or the words of a
-    /// release that are still on their way.
+    /// release that are still on their way. It never asks, as Escape may.
     public func cancel() async {
         if attempt != nil {
             await cancelHold(.user)
@@ -1516,13 +1520,6 @@ public final class DictationModel: ObservableObject {
 
     func cancelHold(_ reason: CancelReason) async {
         guard let attempt, !busy else { return }
-        if reason == .user, let start = holdStartedAt,
-           Date().timeIntervalSince(start) > 30, !confirmingDiscard {
-            confirmingDiscard = true
-            holdNotice = "Discard this recording? Press Escape again to confirm."
-            windowAttention += 1
-            return
-        }
         guard attempt.captureStarted else {
             // Honoured by `beginCapture` once the capture it is starting is up.
             attempt.cancelReason = reason

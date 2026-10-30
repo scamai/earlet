@@ -191,7 +191,8 @@ public sealed partial class VocabularyModel : IDisposable
         _view.Render(Shown);
     }
 
-    /// <summary>Add <paramref name="written"/>, and optionally how it sounds.
+    /// <summary>Add <paramref name="written"/>, and optionally what Earlet
+    /// writes for it now (the misheard form).
     /// The line under the teach row says why it was refused, or that it is
     /// saved; an Add that is not on disk says nothing of its own (the
     /// warning beside Save again does).</summary>

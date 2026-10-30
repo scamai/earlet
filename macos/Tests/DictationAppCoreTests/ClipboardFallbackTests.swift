@@ -57,7 +57,18 @@ struct ClipboardFallbackTests {
         harness.clipboardWorks.mutate { $0 = false }
         let model = await dictate(failing: .focusedElementNotEditable, harness)
         #expect(!model.status.contains("⌘V"))
-        #expect(model.status.contains("could not be typed"))
+        #expect(model.status == "The text could not be typed here. Your words are still available below, "
+                + "or from Earlet's menu bar icon → Copy last text.")
+    }
+
+    @Test("missing Accessibility with a clipboard that refuses too points at Copy last text where it is")
+    func accessibilityMissingWithoutClipboardPointsAtCopy() async {
+        let harness = Harness()
+        harness.clipboardWorks.mutate { $0 = false }
+        let model = await dictate(failing: .accessibilityPermissionMissing, harness)
+        #expect(model.recentResult.entry?.needsRecovery == true)
+        #expect(model.status == "Allow \(harness.accessibilitySettingsName) to type here. "
+                + "Your words are kept: use Copy last text on Home or from Earlet's menu bar icon.")
     }
 
     @Test("the live fallback writes the text and the concealed marker to the pasteboard it is given")

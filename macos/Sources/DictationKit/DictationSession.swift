@@ -53,6 +53,13 @@ public final class DictationSession: @unchecked Sendable {
         public var recognizedTextShape: DictationTextShape?
         public var insertionTextShape: DictationTextShape?
         public var formattingChanged: Bool?
+        /// Why the worker returned no words, when it said
+        /// (`DictationAsrDetail.dropReason`).
+        public var dropReason: DictationAsrDropReason?
+        /// The clip's peak amplitude (0…1), measured only when audible
+        /// audio came back with no words: how loud the take was decides
+        /// whether it is kept for Recover Last Dictation.
+        public var capturePeak: Float?
         /// `TextInserter.insertMeasured(_:)`'s full breakdown — see
         /// `TextInserter.InsertTiming`'s field docs. `waitForAskMs` inside
         /// this is the specific number the task calls "the one unmeasured
@@ -90,7 +97,9 @@ public final class DictationSession: @unchecked Sendable {
 
     public enum SessionFailure: Error, Sendable, Equatable, CustomStringConvertible {
         case micPermissionDenied
-        /// No samples, or only exact digital zeros from the input device.
+        /// No samples, only exact digital zeros from the input device, or a
+        /// hold of `silentInputMinimumHoldSeconds` or more whose audio never
+        /// reached `silentInputPeak` (`isSilentInput`).
         case emptyCapture
         case asr(DictationAsrFailure)
         case emptyTranscript
@@ -332,6 +341,23 @@ public final class DictationSession: @unchecked Sendable {
         return false
     }
 
+    /// About -80 dBFS: a hold whose loudest sample stays under this heard no
+    /// signal at all. A chosen floor, not one calibrated against working
+    /// microphones in quiet rooms.
+    public static let silentInputPeak: Float = 1e-4
+    /// A shorter hold under the floor stays "Nothing heard", told to hold the
+    /// key (`DictationCopy.asksToSpeakUp`): a headset can still be waking.
+    public static let silentInputMinimumHoldSeconds: Double = 1.0
+
+    /// A hold that the silence gate refused and that never reached
+    /// `silentInputPeak`: an input that is connected but sends nothing,
+    /// reported as no sound from the microphone rather than as a user who
+    /// said nothing. Such a stream need not be exact zeros: headset holds
+    /// have logged no zero sample and a peak of 0.0000.
+    public static func isSilentInput(_ samples: [Float], heldSeconds: Double) -> Bool {
+        heldSeconds >= Self.silentInputMinimumHoldSeconds && !samples.contains { abs($0) >= Self.silentInputPeak }
+    }
+
     /// ASR text -> the text that will actually be inserted.
     ///
     /// Pure and `static` so the decision can be asserted directly. It is also
@@ -563,7 +589,8 @@ public final class DictationSession: @unchecked Sendable {
         // is exactly zero when the input device produced no signal. Treat it
         // like an empty capture so the caller tears down the dead warm
         // engine; quiet, nonzero room tone still goes through the normal
-        // silence gate below.
+        // silence gate below, which reports a whole hold under
+        // `silentInputPeak` the same way.
         guard result.samples.contains(where: { $0 != 0 }) else {
             _ = transition(.captureFinished)
             _ = transition(.reset)
@@ -606,7 +633,12 @@ public final class DictationSession: @unchecked Sendable {
             // the transport call count, not the machine's state afterwards.
             _ = transition(.captureFinished)
             _ = transition(.reset)
-            return .failed(stage: .capture, failure: .emptyTranscript, timings: timings)
+            // The capture's own hold (trigger-down to stop) when it measured
+            // one; a scripted source has only this session's clock.
+            let heldSeconds = result.forensics?.holdSeconds ?? (timings.armMs ?? 0) / 1000
+            let failure: SessionFailure = Self.isSilentInput(result.samples, heldSeconds: heldSeconds)
+                ? .emptyCapture : .emptyTranscript
+            return .failed(stage: .capture, failure: failure, timings: timings)
         }
 
         _ = transition(.captureFinished)
@@ -660,6 +692,7 @@ public final class DictationSession: @unchecked Sendable {
             text = detail.text
             detectedLanguage = detail.detectedLanguage
             timings.decodeStats = detail.decodeStats
+            timings.dropReason = detail.dropReason
         }
         timings.recognizedTextShape = DictationTextShape(text)
         let recognizedText = text
@@ -682,6 +715,7 @@ public final class DictationSession: @unchecked Sendable {
         timings.formattingChanged = !text.utf16.elementsEqual(recognizedText.utf16)
 
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            timings.capturePeak = result.samples.reduce(Float(0)) { max($0, abs($1)) }
             _ = transition(.asrFailed)
             _ = transition(.reset)
             return .failed(stage: .asr, failure: .emptyTranscript, timings: timings)

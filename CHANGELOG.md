@@ -8,6 +8,67 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-29
+
+A copy of 0.2.0 or 0.2.1 updates itself to this one. It is a signed, notarized
+disk image on [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0.2.2).
+
+### Fixed
+
+- **The live preview keeps dictated sign-offs.** Phrases such as "Thank you."
+  could disappear from the preview even though the final transcription kept
+  them. The preview now follows the same dictation rule while still rejecting
+  decoder loops and non-speech annotations.
+
+- **macOS 27: every message names Device Control and Data Access.** The
+  setup checklist already used the pane's new name, but the floating
+  indicator, the status line, the key test and the mouse-button notice still
+  said Accessibility, the pane's name before macOS 27. Earlier macOS
+  versions still read Accessibility.
+
+- **macOS: messages point to where Copy last text and Recover Last Dictation
+  are.** They said "the Earlet menu", which reads as the app menu beside the
+  Apple menu; both are in the menu of Earlet's menu bar icon, and on Home.
+  While words or a recording wait there, the menu bar icon now carries an
+  orange dot.
+
+- **macOS: Escape on a long dictation asks on the indicator and keeps your
+  place.** After more than 30 seconds, the first Escape used to bring
+  Earlet's window forward with a question, taking the keyboard from the app
+  you were dictating into, and pressing Escape in that question kept the
+  recording. Now the indicator asks "Discard 0:42 of speech?", a second Escape
+  within 5 seconds discards, and otherwise the dictation carries on and its
+  words go where you were typing. Cancel in the window or the menu bar
+  discards without asking.
+
+- **macOS: a microphone that sends no sound is named.** A hold of a second
+  or more that hears nothing from the input, as when AirPods are connected
+  but silent, now ends with "No sound from AirPods Pro" and how to check it,
+  instead of "Nothing heard — Hold Right Command while you speak", and a hold
+  says so after 2.5 s without sound. "Nothing heard" after a longer hold
+  that picked up only faint sound asks you to speak up or move closer
+  instead of to hold the key.
+
+- **macOS: a dictation that comes back with no words says why, and keeps a
+  clearly spoken take.** Instead of "No words recognized" every time, the
+  indicator says when the recording was too quiet to make out, when Earlet
+  couldn't tell its language, and when it couldn't make out the words of a
+  clearly spoken one. The last two keep the recording, and Recover Last
+  Dictation now transcribes it without the checks that set it aside, in the
+  language chosen in Settings.
+
+### Changed
+
+- **macOS: a smaller download.** The bundled Python no longer carries
+  PyTorch, pip or the Tk toolkit, which Earlet never used. Measured on a
+  package built from 0.2.1's own Python and model, the disk image drops
+  from 851 MB to 580 MB and the installed app from 1.9 GB to 1.1 GB.
+  Dictation itself is unchanged.
+- **Vocabulary: the field after the word now reads "Often misheard as".** It
+  used to read "Sounds like", but it never took a pronunciation: it takes the
+  text Earlet writes for the word now, and Earlet writes the word instead
+  whenever it would write that text. A line under the field now says so.
+
 ## [0.2.1] - 2026-10-26
 
 A copy of 0.2.0 updates itself to this one. It is a signed, notarized disk

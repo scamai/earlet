@@ -9,6 +9,7 @@ red: a guard test that cannot fail is not evidence. The offline guards'
 mutations are below; the learned-vocabulary ones are WORKER_ROWS in
 test_guards_can_fire.py. Fake providers record what reached them.
 """
+import base64
 import json
 import re
 import sys
@@ -184,6 +185,10 @@ def test_the_macos_transcribe_frame_is_the_one_DictationAsrTransport_sends():
         assert field in request, field
     assert 'private static let channel = "dictation"' in transport
     assert '"client"' not in request and '"text_passes"' not in request
+    # Recover Last Dictation's decode adds `recovery: true` to this frame,
+    # and no other decode does (test_the_junk_filter_drops_a_hold_and_its_recovery_keeps_it).
+    assert 'if recovery { fields["recovery"] = .bool(true) }' in request
+    assert 'compareBaseline: compareBaseline, recovery: false)' in transport
     config = read("macos/Sources/DictationAudioCapture/AsrModelConfig.swift")
     dictation = re.search(r"static let dictation = AsrModelConfig\((.*?)\)", config, re.S)
     assert dictation and "hallucinationGuard: false" in dictation.group(1)
@@ -267,7 +272,46 @@ def test_a_caller_that_asks_for_the_guard_still_loses_a_stock_sign_off(tmp_path)
     assert reply["dropped_reason"] == "junk-filter"
 
 
-VOCABULARY = ("SkyDock", "Trovioo", "sky dock", "trovio")
+# ─── An empty hold says why; its recovery keeps the words ────────────────────
+#
+# The Mac's ending reads the reply's `dropped` word, keeps a take a gate
+# emptied, and recovers it with `recovery: true`, which skips the speech
+# checks that emptied it. Mutations: test_guards_can_fire.py.
+
+LOOPED = "the the the the the the the"
+
+
+def test_the_junk_filter_drops_a_hold_and_its_recovery_keeps_it(tmp_path):
+    (tmp_path / "hold").mkdir()
+    (tmp_path / "recovery").mkdir()
+    held, _, _ = dictate(tmp_path / "hold", "macos", " " + LOOPED)
+    recovered, _, _ = dictate(tmp_path / "recovery", "macos", " " + LOOPED, fields={"recovery": True})
+
+    assert held["text"] == "" and held["dropped"] == "junk"
+    assert recovered["text"] == LOOPED and "dropped" not in recovered
+
+
+def test_a_hold_with_words_carries_no_drop_word(tmp_path):
+    reply, _, _ = dictate(tmp_path, "macos", " send the report today")
+
+    assert reply["text"] == "send the report today" and "dropped" not in reply
+
+
+@pytest.mark.parametrize("recovery", [False, True], ids=["hold", "recovery"])
+def test_a_silent_hold_is_dropped_as_quiet_before_the_provider(tmp_path, recovery):
+    providers = write_providers(tmp_path / "providers", mlx_whisper=FAKE_MLX)
+    silence = {**mac_transcribe(), "pcm_b64": base64.b64encode(bytes(32000)).decode("ascii"),
+               **({"recovery": True} if recovery else {})}
+    replies, events, stderr = run_worker(staged_runtime(tmp_path), [mac_init(mlx_model(tmp_path / "model")),
+                                                                    silence, {"op": "shutdown"}],
+                                         "mlx", providers, tmp_path)
+
+    assert [reply.get("ok") for reply in replies] == [True, True, True], stderr[-800:]
+    assert replies[1]["text"] == "" and replies[1]["dropped"] == "quiet"
+    assert not [event for event in events if event[0] == "transcribe"]
+
+
+VOCABULARY =("SkyDock", "Trovioo", "sky dock", "trovio")
 
 
 @pytest.mark.parametrize("host", HOSTS)

@@ -9,12 +9,12 @@ import Foundation
 /// Why teaching was refused, or `ok`. Raw values are the reference's strings.
 public enum TeachResult: String, Sendable {
     case ok
-    /// Blank, a written form with no word in it ("!!!"), or a sounds-like form
+    /// Blank, a written form with no word in it ("!!!"), or a misheard form
     /// shorter than 2 characters.
     case empty
     /// More than 60 characters, 6 non-CJK tokens or 12 CJK characters.
     case tooLong = "too_long"
-    /// The written form contains the sounds-like form.
+    /// The written form contains the misheard form.
     case selfContaining = "self_containing"
     /// 500 taught words, or 200 aliases none of which is learned.
     case full
@@ -150,7 +150,8 @@ extension LearningState {
         return LearningEvidence.revise(&self, id: dictationID, candidates: candidates, at: at, lexicon: lexicon, scene: scene)
     }
 
-    /// Teaches a written form and, optionally, how it sounds (LEARNING.md §4.3).
+    /// Teaches a written form and, optionally, what Earlet writes for it now
+    /// (the misheard form; LEARNING.md §4.3).
     public mutating func teach(written rawWritten: String, soundsLike rawSoundsLike: String?, at: Int64) -> TeachResult {
         let written = LearningText.strip(rawWritten)
         let soundsLike = LearningText.strip(rawSoundsLike ?? "")

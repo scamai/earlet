@@ -553,12 +553,12 @@ def _get_engine():
     return None
 
 
-def _loop_junk(text: str) -> bool:
+def _loop_junk(text: str, hallucination_guard: bool = True) -> bool:
     """Repetition-loop hallucination check (fail-soft when the engine
     module is unavailable in tests). Shared: hallucination.loop_junk, so
     the rolling stable transcript applies the identical verdict."""
     from . import hallucination
-    return hallucination.loop_junk(text)
+    return hallucination.loop_junk(text, hallucination_guard=hallucination_guard)
 
 
 def _join_text(left: str, right: str) -> str:
@@ -601,6 +601,9 @@ class _CommitLog:
         self.vocab_phrases: list = []
         self.vocab_phonetic = None  # zh pinyin term recovery (hot words)
         self.vocab_phonetic_en = None  # EN phoneme term recovery (the L3 layer)
+        # Meeting captions filter stock sign-offs; Dictation preview must
+        # match final transcription, which passes hallucination_guard=False.
+        self.hallucination_guard = True
         # Structured commit events for the partner feed (Pokee): every
         # committed line, in order, with a consume cursor. Append-only —
         # a consumer may already have emitted a line, so relabel() does
@@ -758,13 +761,13 @@ class _CommitLog:
         if text and os.environ.get("DICTATION_NOTES_GATE_TRACE") == "1":
             _dbg(f"GATE_RAW\t{channel}\t{text}")   # what whisper PRODUCED, pre-gate
         from . import hallucination
-        if text and hallucination.is_junk_utterance(text):
+        if text and self.hallucination_guard and hallucination.is_junk_utterance(text):
             _dbg(f"drop-audit: junk_utterance [{speaker}] {text[:60]!r}")
             return ""
         if text and self.is_vocab_echo(text):
             _dbg(f"drop-audit: vocab-echo [{speaker}] {text[:60]!r}")
             return ""
-        if text and _loop_junk(text):
+        if text and _loop_junk(text, hallucination_guard=self.hallucination_guard):
             _dbg(f"drop-audit: loop-junk [{speaker}] {text[:60]!r}")
             return ""
         if self.vocab_phrases:
@@ -784,12 +787,13 @@ class _CommitLog:
         # ("...明天发 Thank you." — field, recurring). Strip at every
         # commit; a caption stream losing a rare genuine trailing
         # "thank you" costs less than fabricated ones appearing nightly.
-        stripped = hallucination.strip_trailing(text)
-        if stripped != text:
-            _dbg(f"drop-audit: trailing-strip [{speaker}] {text[-40:]!r} -> {stripped[-40:]!r}")
-        text = stripped
-        if not text:
-            return ""
+        if self.hallucination_guard:
+            stripped = hallucination.strip_trailing(text)
+            if stripped != text:
+                _dbg(f"drop-audit: trailing-strip [{speaker}] {text[-40:]!r} -> {stripped[-40:]!r}")
+            text = stripped
+            if not text:
+                return ""
         if channel == "sys":
             self.note_sys_text(text)
         elif os.environ.get("DICTATION_NOTES_ECHO_EXCISE", "0") == "1":
@@ -968,7 +972,8 @@ class _ChannelStream:
                  language: str | None = None,
                  clip_filter=None, channel_tag: str = "mic",
                  initial_prompt: str | None = None,
-                 bias_phrases=None, beam_size: int = 1):
+                 bias_phrases=None, beam_size: int = 1,
+                 hallucination_guard: bool = True):
         self.engine = engine
         self.initial_prompt = initial_prompt
         self.bias_phrases = bias_phrases
@@ -979,6 +984,7 @@ class _ChannelStream:
         self.language = language
         self.clip_filter = clip_filter  # (clip, start_s) -> filtered clip
         self.channel_tag = channel_tag
+        self.hallucination_guard = hallucination_guard
         self.lock = threading.Lock()
         self._chunks: list[np.ndarray] = []   # appended per push, drained
         # by the `history` fold into the preallocated buffer below.
@@ -2048,7 +2054,8 @@ class _ChannelStream:
                 from . import hallucination as _hall
                 _disp_text, _supp = self.partial_gate.decide(
                     self.partial, text, _win_quiet,
-                    is_junk=_hall.is_junk_utterance)
+                    is_junk=(lambda value: self.hallucination_guard
+                             and _hall.is_junk_utterance(value)))
                 if _supp is not None:
                     _now = time.monotonic()
                     if _now - self._partial_supp_log_at >= 2.0:
@@ -2162,9 +2169,10 @@ class _ChannelStream:
     def partial_line(self) -> str:
         from . import hallucination
         with self.lock:
-            if (not self.partial or hallucination.is_junk_utterance(self.partial)
+            if (not self.partial
+                    or (self.hallucination_guard and hallucination.is_junk_utterance(self.partial))
                     or self.commits.is_vocab_echo(self.partial)
-                    or _loop_junk(self.partial)):
+                    or _loop_junk(self.partial, hallucination_guard=self.hallucination_guard)):
                 # A silence/leak decode's pleasantry must not even FLASH on
                 # screen (field: "我这边不说话就有 thank you" — partials
                 # bypassed the commit-time blocklist; same for vocabulary
@@ -2270,7 +2278,8 @@ class _ChannelStream:
                 # appends "Thank you." — audio evidence says the trailing
                 # pleasantry is not real speech.
                 from . import hallucination
-                text = hallucination.strip_trailing(text)
+                if self.hallucination_guard:
+                    text = hallucination.strip_trailing(text)
             self._commit_guarded(speaker, clip, text, lang,
                                  span=(tail_start,
                                        tail_start + len(clip) / SAMPLE_RATE))
@@ -2287,7 +2296,8 @@ class _Session:
                  stable_hop_seconds: float = 12.0,
                  stable_lookahead_seconds: float = 6.0,
                  stable_beam_size: int = 4,
-                 live_beam: int | None = None):
+                 live_beam: int | None = None,
+                 client: str = "notes"):
         # Known participant count from the meeting roster / Zoom, if the host
         # passed it. Drives the periodic GLOBAL re-cluster's k — the single
         # lever that turns the streaming diarizer from 57% DER (greedy-only,
@@ -2313,7 +2323,9 @@ class _Session:
         # regurgitation guard below keep the FULL list.
         prompt = _vocab_prompt(bias_phrases)
         self.initial_prompt = prompt
+        self.client = client
         self.commits = _CommitLog()
+        self.commits.hallucination_guard = client != "dictation"
         # SINGLE-EMISSION MODE (DICTATION_NOTES_SINGLE_EMISSION=1, plan
         # 2026-09-01-single-emission-diar): a caption line leaves ONCE —
         # complete text + speaker after the D=H hold — and is immutable.
@@ -2472,13 +2484,15 @@ class _Session:
                                   language_vote=vote, channel_tag="sys",
                                   language=language_pin,
                                   initial_prompt=prompt,
-                                  bias_phrases=bias_phrases, beam_size=_live_beam)
+                                  bias_phrases=bias_phrases, beam_size=_live_beam,
+                                  hallucination_guard=client != "dictation")
 
         self.mic = _ChannelStream(engine, self.commits, None,
                                   fixed_label="You", language_vote=vote,
                                   language=language_pin,
                                   channel_tag="mic", initial_prompt=prompt,
-                                  bias_phrases=bias_phrases, beam_size=_live_beam)
+                                  bias_phrases=bias_phrases, beam_size=_live_beam,
+                                  hallucination_guard=client != "dictation")
         # Commit-time sourcing state (see _beam_text_for/_settled_label_for):
         # the last re-cluster's settled turns, and the beam-vs-greedy /
         # settled-vs-registry split counters the replay report reads.
@@ -4123,7 +4137,9 @@ class _Session:
             parts.append(sys_line)
         with self.mic.lock:
             raw = self.mic.partial
-        if raw:
+        # Check before repetition cleanup can turn a decoder loop into an
+        # apparently valid short phrase. Match the channel's partial gate.
+        if raw and not _loop_junk(raw, hallucination_guard=self.mic.hallucination_guard):
             cleaned = (self.commits.excise_echo(raw)
                        if os.environ.get("DICTATION_NOTES_ECHO_EXCISE", "0") == "1" else raw)
             if cleaned:
@@ -4133,7 +4149,8 @@ class _Session:
                     cleaned = stream_repetition.clean(cleaned)
                 except Exception:  # noqa: BLE001
                     pass
-                if cleaned and not hallucination.is_junk_utterance(cleaned):
+                if cleaned and (not self.mic.hallucination_guard
+                                or not hallucination.is_junk_utterance(cleaned)):
                     with self.mic.lock:
                         spk = self.mic.seg_speaker or self.mic.fixed_label or "…"
                     parts.append(f"[{spk}] {cleaned}")
@@ -4206,7 +4223,8 @@ def start(req: dict, stream_id: str | None = None) -> dict:
                        stable_hop_seconds=req.get("stable_hop_seconds", 12),
                        stable_lookahead_seconds=req.get("stable_lookahead_seconds", 6),
                        stable_beam_size=req.get("stable_beam_size", 4),
-                       live_beam=req.get("live_beam"))
+                       live_beam=req.get("live_beam"),
+                       client=req.get("client") or "notes")
     if _pres is not None:
         # AFTER construction: restores the regurgitation-guard sets to
         # caller-only vocab and installs the commit-time snap hook.
@@ -4215,7 +4233,6 @@ def start(req: dict, stream_id: str | None = None) -> dict:
         _seq[0] += 1
         stream_id = f"w{int(time.time() * 1000)}-{_seq[0]}"
     session.stream_id = stream_id
-    session.client = req.get("client") or "notes"
     session.configure_preview_pacing()
     _sessions[stream_id] = session
     # FR-007-B (2026-09-11): there is only ONE live notes stream per meeting. A

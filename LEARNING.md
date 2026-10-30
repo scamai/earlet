@@ -225,14 +225,16 @@ never learned again, and neither is any alias that writes a removed word.
 Pending pairs expire 30 days after they were last seen.
 
 ### 4.3 Teaching
-The user types a written form and, optionally, how it sounds. The word is taught
-at once (origin `taught`, never evicted by learned words, never re-cased); a
-sounds-like form sets a taught alias at once. Teaching clears the tombstone of
-what it teaches. It is refused with `empty` (blank or without a single word
-character, or a sounds-like shorter than 2 characters), `too_long` (more than 60
-characters, 6 non-CJK tokens or 12 CJK characters), `self_containing` (the
-written form contains the sounds-like form) or `full` (500 taught words, or 200
-aliases none of which is learned).
+The user types a written form and, optionally, the text Earlet writes for it
+now: the misheard form, entered in the "Often misheard as" field. It is not a
+pronunciation. The word is taught at once (origin `taught`, never evicted by
+learned words, never re-cased); a misheard form sets the taught alias
+misheard → written at once. Teaching clears the tombstone of what it teaches.
+It is refused with `empty` (blank or without a single word character, or a
+misheard form shorter than 2 characters), `too_long` (more than 60 characters,
+6 non-CJK tokens or 12 CJK characters), `self_containing` (the written form
+contains the misheard form) or `full` (500 taught words, or 200 aliases none of
+which is learned).
 
 ### 4.4 Removing
 Removing a word removes it, every alias that writes it, and every pending pair

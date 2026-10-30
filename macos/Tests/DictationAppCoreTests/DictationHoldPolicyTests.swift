@@ -1,3 +1,4 @@
+import DictationKit
 import Foundation
 import Testing
 @testable import DictationAppCore
@@ -117,6 +118,25 @@ struct DictationHoldPolicyTests {
         let snapshot = tracker.snapshot()
         #expect(snapshot.speechDetected)
         #expect(abs(snapshot.audioSeconds - 1.29) < 0.001)
+    }
+
+    @Test("a run of input under the silent-input floor is measured, and any louder sample ends it")
+    func silentInputRun() {
+        let tracker = DictationHoldTracker()
+        // Not exact zeros: a stalled headset sends a few millionths.
+        feed(tracker, 2.4, level: 0.00002)
+        #expect(tracker.snapshot().silentInputSeconds < DictationHoldTracker.silentInputNoticeSeconds)
+        feed(tracker, 0.15, level: 0)
+        #expect(tracker.snapshot().silentInputSeconds >= DictationHoldTracker.silentInputNoticeSeconds)
+        // Quiet room tone at the floor is a signal, not a dead input.
+        feed(tracker, 0.03, level: DictationSession.silentInputPeak)
+        #expect(tracker.snapshot().silentInputSeconds == 0)
+        feed(tracker, 3, level: 0.001)
+        #expect(tracker.snapshot().silentInputSeconds == 0)
+        tracker.append([Float](repeating: 0, count: DictationHoldTracker.frameSamples))
+        #expect(abs(tracker.snapshot().silentInputSeconds - 0.03) < 0.001)
+        tracker.reset()
+        #expect(tracker.snapshot().silentInputSeconds == 0)
     }
 
     @Test("policy and tracker expose a ten minute ceiling without sleeping")

@@ -189,7 +189,8 @@ public actor DictationLearning {
         return persist()
     }
 
-    /// Teaches a word and, optionally, how it sounds.
+    /// Teaches a word and, optionally, what Earlet writes for it now (the
+    /// misheard form).
     @discardableResult
     public func teach(written: String, soundsLike: String?, at date: Date = Date()) -> TeachResult {
         // A refusal can still have pruned expired pending pairs, so it is

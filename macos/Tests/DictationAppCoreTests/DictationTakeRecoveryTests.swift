@@ -75,6 +75,7 @@ struct DictationTakeRecoveryTests {
         await finish(harness, model)
         #expect(model.savedTake != nil)
         #expect(harness.takeSpoolFiles() == [DictationTakeSpool.keptFileName])
+        #expect(model.status.hasSuffix("The recording is saved. Recover it from Earlet's menu bar icon or on Home."))
     }
 
     @Test("recovery transcribes, copies, and then deletes the kept take")
@@ -209,7 +210,9 @@ struct DictationTakeRecoveryTests {
         let model = harness.model()
         await model.launch()
         #expect(model.savedTake != nil)
-        #expect(model.status.contains("recording is saved"))
+        #expect(model.status == "Earlet closed before a dictation was transcribed. "
+                + "The recording is saved: recover it from Earlet's menu bar icon or on Home.")
+        #expect(model.menuIcon.waiting == .recording)
         #expect(harness.takeSpoolFiles() == [DictationTakeSpool.keptFileName])
     }
 

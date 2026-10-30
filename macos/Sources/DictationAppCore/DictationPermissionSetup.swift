@@ -36,7 +36,7 @@ public enum DictationPermissionStep: Equatable, Sendable {
         case .microphone:
             "Earlet needs your microphone to turn speech into text on this Mac. Allow access when macOS asks, or enable Earlet in Microphone settings if you denied it earlier."
         case .accessibility:
-            "In System Settings → \(Self.accessibilitySettingsName), enable Earlet, then return here. This lets Earlet insert text in the app you are using."
+            "In System Settings → Privacy & Security → \(Self.accessibilitySettingsName), enable Earlet, then return here. This lets Earlet insert text in the app you are using."
         case .inputMonitoring:
             "In System Settings → Input Monitoring, enable Earlet, then return here. This lets your shortcut work in other apps. If macOS offers Quit & Reopen, choose it."
         case .restart:

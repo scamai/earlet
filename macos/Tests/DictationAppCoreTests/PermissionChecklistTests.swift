@@ -416,4 +416,96 @@ struct WindowAttentionTests {
         #expect(model.status.contains("Accessibility or Input Monitoring"))
     }
 }
+
+@MainActor
+@Suite("Every sentence names the Accessibility pane as this Mac's System Settings does")
+struct AccessibilityPaneNameTests {
+    // macOS 26 and earlier say Accessibility; macOS 27 says Device Control
+    // and Data Access. Each test runs under both names, so a sentence that
+    // spells the old name, or reads the test Mac's own, fails on any Mac.
+
+    private func makeHarness(onMacOS macOS: Int) -> Harness {
+        var harness = Harness()
+        harness.accessibilitySettingsName = DictationPermissionStep.accessibilitySettingsName(majorVersion: macOS)
+        return harness
+    }
+
+    private func dictate(_ harness: Harness, _ model: DictationModel) async {
+        harness.inserts.outcome.mutate { $0 = .failed(.accessibilityPermissionMissing) }
+        harness.trigger.press()
+        #expect(await eventually { model.recording })
+        harness.trigger.release()
+        #expect(await eventually { !model.busy && !model.recording })
+    }
+
+    @Test("enabling without the grant says where to allow it", arguments: [26, 27])
+    func enableNamesThePane(macOS: Int) async {
+        var harness = makeHarness(onMacOS: macOS)
+        harness.accessibilityGranted = false
+        let pane = harness.accessibilitySettingsName
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.status
+            == "Allow Earlet in System Settings → Privacy & Security → \(pane), then enable dictation again.")
+    }
+
+    @Test("a lost grant names the pane", arguments: [26, 27])
+    func degradeNamesThePane(macOS: Int) async {
+        let harness = makeHarness(onMacOS: macOS)
+        let pane = harness.accessibilitySettingsName
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.enabled)
+        harness.trigger.degrade(.missingAccessibility)
+        #expect(model.status == "Earlet lost its access under \(pane) or Input Monitoring. Grant it again below to continue.")
+    }
+
+    @Test("a refused paste kept on the clipboard names the pane", arguments: [26, 27])
+    func clipboardFallbackNamesThePane(macOS: Int) async {
+        let harness = makeHarness(onMacOS: macOS)
+        let pane = harness.accessibilitySettingsName
+        let model = harness.model()
+        await model.toggle()
+        await dictate(harness, model)
+        #expect(harness.clipboard.get == ["Hello world"])
+        #expect(model.status
+            == "Earlet needs \(pane) permission to type. Your text is on the clipboard; press ⌘V to paste it.")
+    }
+
+    @Test("a refused paste the clipboard could not take names the pane", arguments: [26, 27])
+    func recoverableTextNamesThePane(macOS: Int) async {
+        let harness = makeHarness(onMacOS: macOS)
+        harness.clipboardWorks.mutate { $0 = false }
+        let pane = harness.accessibilitySettingsName
+        let model = harness.model()
+        await model.toggle()
+        await dictate(harness, model)
+        #expect(model.status == "Allow \(pane) to type here. "
+            + "Your words are kept: use Copy last text on Home or from Earlet's menu bar icon.")
+    }
+
+    @Test("the floating indicator is handed the pane's name", arguments: [26, 27])
+    func indicatorNamesThePane(macOS: Int) {
+        let harness = makeHarness(onMacOS: macOS)
+        let pane = harness.accessibilitySettingsName
+        let model = harness.model()
+        model.showOutcome(.accessibilityNeeded)
+        #expect(model.hudOutcome?.title == "Earlet can't type yet")
+        #expect(model.hudOutcome?.detail == "Allow Earlet in Privacy & Security → \(pane), then try again.")
+    }
+
+    @Test("a key test whose listener loses its grant names the pane", arguments: [26, 27])
+    func keyTestNamesThePane(macOS: Int) {
+        let harness = makeHarness(onMacOS: macOS)
+        let pane = harness.accessibilitySettingsName
+        var environment = harness.environment()
+        environment.isDictationFrontmost = { true }
+        let model = DictationModel(environment: environment)
+        model.keyCheck.startTest()
+        #expect(model.keyCheck.isTesting)
+        harness.trigger.degrade(.missingAccessibility)
+        #expect(model.keyCheck.message == "In Privacy & Security, allow Earlet under Input Monitoring and under \(pane), then restart Earlet to test this key.")
+        model.keyCheck.stopTest()
+    }
+}
 #endif

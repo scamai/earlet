@@ -1400,7 +1400,8 @@ class WhisperMac:
                    case_only_phrases=None,
                    vocabulary_search: bool = False,
                    phrase_deltas=None,
-                   temperature: float | None = None) -> dict:
+                   temperature: float | None = None,
+                   recovery: bool = False) -> dict:
         # x86 lane fix (2026-08-29): the live caption path
         # (a live caption caller) passes initial_prompt on every
         # decode; the stub already accepts it (see its comment, agent H
@@ -1467,7 +1468,18 @@ class WhisperMac:
         quiet or low-confidence audio the ladder re-decodes the window up to
         five more times while the final transcription of the same hold
         waits for the engine. Final decodes keep the ladder; see
-        MLX_SCRIPT_SEED for why their prompt depends on it."""
+        MLX_SCRIPT_SEED for why their prompt depends on it.
+
+        recovery (default False): a Recover Last Dictation decode, of a take
+        an earlier decode may have emptied. The checks that judge whether
+        the audio was speech are skipped: an enforced speech-gate verdict
+        keeps its chunk, and neither `drop_no_speech_segments` nor
+        `looks_like_junk` runs, so a take kept because one of them emptied
+        it is not emptied, and deleted, again. The silence pre-check, the
+        caller's language and the phrase blocklist (`hallucination_guard`)
+        still apply, and so does faster-whisper's own no-speech threshold,
+        which no recovering host reaches. Safe only because the host shows
+        and copies a recovered result and never types it into a field."""
         t0 = time.monotonic()
         audio = np.asarray(audio, dtype=np.float32)
         words: list[dict] = []
@@ -1621,6 +1633,8 @@ class WhisperMac:
             # no answer to gate on — the same reason the greedy path
             # passes `language_prob=None` when its language slot is forced.
             probe = _mlx_sot_probe(self._mlx_repo_resolved) if language is None else None
+            # A recovery keeps every chunk; its verdicts are still logged.
+            enforce = SPEECH_GATE_ENFORCE and not recovery
             chunk_language_probs: list[float] = []
             gate_reason = None
             for start, end in (auto_language_decode_spans(audio) or [(0, len(audio))]):
@@ -1723,7 +1737,8 @@ class WhisperMac:
                         # "dropped" cannot tell them apart after the fact.
                         print(
                             f"whisper_mac: {verdict} "
-                            + ("dropped" if SPEECH_GATE_ENFORCE
+                            + ("dropped" if enforce
+                               else "kept for a recovery" if recovery
                                else "WOULD HAVE DROPPED (shadow)")
                             + f" {start / SAMPLE_RATE:.1f}-{end / SAMPLE_RATE:.1f}s "
                             f"— P(lang={reading[0]})={reading[1]:.4f}, "
@@ -1737,7 +1752,7 @@ class WhisperMac:
                         # actually said. Recording the verdict is what earns
                         # the right to enforce it later; until then the chunk
                         # falls through and is transcribed exactly as before.
-                        if SPEECH_GATE_ENFORCE:
+                        if enforce:
                             # Its segments AND its language never join the
                             # utterance. Letting the language through would
                             # put "ko" in stats["language"] for a hold that
@@ -1774,7 +1789,8 @@ class WhisperMac:
             # is low; either alone is not enough (quiet-but-real speech has
             # high no_speech_prob with GOOD logprob, and hard accents have
             # low logprob with LOW no_speech_prob).
-            out["segments"] = drop_no_speech_segments(out.get("segments") or [])
+            if not recovery:
+                out["segments"] = drop_no_speech_segments(out.get("segments") or [])
             text = " ".join(
                 t for t in ((seg.get("text") or "").strip() for seg in out["segments"]) if t
             )
@@ -2186,8 +2202,8 @@ class WhisperMac:
         # follows the caller's hallucination_guard, as the blocklist below
         # does: a dictated "See you next week, Casey." is a message.
         long_form = len(audio) > LONG_FORM_AUDIO_S * SAMPLE_RATE
-        if text and looks_like_junk(text, long_form=long_form,
-                                    hallucination_guard=hallucination_guard):
+        if text and not recovery and looks_like_junk(text, long_form=long_form,
+                                                     hallucination_guard=hallucination_guard):
             text = ""
             words = []
             dropped_reason = "junk-filter"

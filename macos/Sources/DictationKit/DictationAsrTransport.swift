@@ -24,6 +24,12 @@ public protocol DictationAsrTransport: Sendable {
     /// "unknown", never as a detection.
     func transcribeDetailed(samples: [Float], sampleRate: Int,
                             compareBaseline: Bool) async -> DictationAsrDetailedOutcome
+    /// Recover Last Dictation's round trip: the same decode, asking the
+    /// worker to skip the checks that judge whether the audio was speech
+    /// (`recovery` in `asr_server.py`), since one of them may be why the take
+    /// was kept. Its words are shown and copied, never typed. Defaulted below
+    /// to the plain `transcribe`, the usual checks included.
+    func transcribeForRecovery(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome
     /// Pins recognition to a BCP-47-ish language code for subsequent
     /// requests. Nil restores Whisper auto-detection. Implementations without
     /// language control inherit the no-op default below.
@@ -38,6 +44,10 @@ public protocol DictationAsrTransport: Sendable {
 extension DictationAsrTransport {
     public func setLanguageCode(_ code: String?) {}
     public func setVocabularyScene(_ scene: String?) {}
+
+    public func transcribeForRecovery(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome {
+        await transcribe(samples: samples, sampleRate: sampleRate)
+    }
 
     /// `compareBaseline` is accepted and ignored here on purpose. A transport
     /// with no metadata to offer has no unassisted pass either, and the result
@@ -60,6 +70,21 @@ extension DictationAsrTransport {
 public enum DictationAsrOutcome: Sendable, Equatable {
     case text(String)
     case failed(DictationAsrFailure)
+}
+
+/// Why the worker returned no words for audible audio: the transcribe
+/// reply's `dropped` word. `quiet` is its silence pre-check, `language` its
+/// language-probability gate, `junk` its junk filter and `other` anything
+/// else, including a word this build does not know. Never any of the words.
+public enum DictationAsrDropReason: String, Sendable, Equatable {
+    case quiet, language, junk, other
+
+    /// From the reply's `dropped` field; nil when it has none (a decode with
+    /// words, or a worker older than the field).
+    public init?(wire: String?) {
+        guard let wire, !wire.isEmpty else { return nil }
+        self = DictationAsrDropReason(rawValue: wire) ?? .other
+    }
 }
 
 /// The transcript PLUS the worker's decode-confidence signal — used by the
@@ -104,15 +129,20 @@ public struct DictationAsrDetail: Sendable, Equatable {
     /// transport that reports nothing.
     public let decodeStats: DictationDecodeStats?
 
+    /// Why `text` is empty, when the worker said; `nil` with words, or from a
+    /// transport or worker that does not say.
+    public let dropReason: DictationAsrDropReason?
+
     public init(text: String, avgLogprob: Double?, detectedLanguage: String? = nil,
                 baselineText: String? = nil, baselineRan: Bool = false,
-                decodeStats: DictationDecodeStats? = nil) {
+                decodeStats: DictationDecodeStats? = nil, dropReason: DictationAsrDropReason? = nil) {
         self.text = text
         self.avgLogprob = avgLogprob
         self.detectedLanguage = detectedLanguage
         self.baselineText = baselineText
         self.baselineRan = baselineRan
         self.decodeStats = decodeStats
+        self.dropReason = dropReason
     }
 }
 
@@ -754,6 +784,19 @@ public final class PythonAsrTransport: DictationAsrTransport, DictationPreviewTr
     /// guarantees the harness exercises the exact deployed ASR hop.
     public func transcribeDetailed(samples: [Float], sampleRate: Int,
                                    compareBaseline: Bool = false) async -> DictationAsrDetailedOutcome {
+        await decode(samples: samples, sampleRate: sampleRate, compareBaseline: compareBaseline, recovery: false)
+    }
+
+    /// The same round trip with `recovery: true` (the protocol's doc).
+    public func transcribeForRecovery(samples: [Float], sampleRate: Int) async -> DictationAsrOutcome {
+        switch await decode(samples: samples, sampleRate: sampleRate, compareBaseline: false, recovery: true) {
+        case .result(let detail): return .text(detail.text)
+        case .failed(let failure): return .failed(failure)
+        }
+    }
+
+    private func decode(samples: [Float], sampleRate: Int, compareBaseline: Bool,
+                        recovery: Bool) async -> DictationAsrDetailedOutcome {
         let scene = vocabularyScene
         guard readInitialized() else { return .failed(.notInitialized) }
 
@@ -796,6 +839,7 @@ public final class PythonAsrTransport: DictationAsrTransport, DictationPreviewTr
         // Demo stage only. Roughly doubles decode time, so it is opt-in
         // per request rather than a mode the dictation path can inherit.
         if compareBaseline { fields["compare_baseline"] = .bool(true) }
+        if recovery { fields["recovery"] = .bool(true) }
         if let scene { fields["vocabulary_scene"] = .string(scene) }
         if let languageCode {
             fields["language"] = .string(languageCode)
@@ -840,7 +884,8 @@ public final class PythonAsrTransport: DictationAsrTransport, DictationPreviewTr
                 detectedLanguage: resp["stats"]?["language"]?.stringValue,
                 baselineText: resp["baseline_text"]?.stringValue,
                 baselineRan: resp["baseline_ran"]?.boolValue ?? false,
-                decodeStats: DictationDecodeStats(stats: resp["stats"])))
+                decodeStats: DictationDecodeStats(stats: resp["stats"]),
+                dropReason: DictationAsrDropReason(wire: resp["dropped"]?.stringValue)))
         } catch {
             // A dead pipe means every subsequent call will fail the same
             // way until a fresh `start()` — mark uninitialized so the

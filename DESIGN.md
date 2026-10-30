@@ -340,13 +340,15 @@ nothing this run. Built and tested on Linux, never run on Windows.
 
 In both apps Escape or Cancel discards a dictation while it is recording or
 being transcribed, and nothing is inserted; once the paste has begun it can no
-longer be cancelled. On Windows, Escape on a take that holds more than 30
-seconds of speech asks first ("Discard 3:42 of speech? — press Esc again" on
-the indicator), and only a second press of Escape within 5 seconds discards
-(holding the first one down repeats it, which is no second press); the
-window's and the menu's Cancel never ask
-([Long takes, faults and lost recordings](#long-takes-faults-and-lost-recordings);
-the Mac's question follows in its own stage 1). Pause is disabled while a dictation records, is
+longer be cancelled. In both apps, Escape on a take longer than 30 seconds
+asks first, on the indicator ("Discard 3:42 of speech? — press Esc again" on
+Windows; "Discard 3:42 of speech?" over "Press Esc again to discard. Keep
+talking to continue." on the Mac), and only a second press of Escape within 5
+seconds discards (holding the first one down repeats it, which is no second
+press); neither app brings its window forward to ask, so the field being
+dictated into keeps the keyboard, and the window's and the menu's Cancel never
+ask ([Long takes, faults and lost recordings](#long-takes-faults-and-lost-recordings);
+[Recording, silence and recovery](docs/design-macos.md#recording-silence-and-recovery)). Pause is disabled while a dictation records, is
 transcribed or is typed, in the window and the menu of both apps: Cancel is
 what ends one, a slip onto Pause beside it would discard the recording, and
 clipboard restoration can finish.
@@ -445,9 +447,10 @@ on Windows).
 When the target app refuses the paste for any other reason, the words go on the
 clipboard, and the status line and the indicator say how to paste them. Both
 apps also keep the words in Earlet's memory, so if the clipboard cannot take
-them either, the status line points to Copy last text (Earlet → Copy last
-text on the Mac; the window's section or the notification-area icon's menu on
-Windows) and the indicator says "Your words are still here"
+them either, the status line points to Copy last text (on Home or from
+Earlet's menu bar icon on the Mac, which carries a waiting badge while they
+are held; the window's section or the notification-area
+icon's menu on Windows) and the indicator says "Your words are still here"
 ([Recent result and Copy last text](docs/design-macos.md#recent-result-and-copy-last-text);
 [Windows](docs/design-windows.md#windows-window-and-tray)).
 
@@ -468,7 +471,16 @@ keeps the recording for Recover last dictation; only Escape and Cancel
 discard. Windows has the first stage of it (built and tested on Linux, never
 run on Windows), and the Mac has its own stage 1. A microphone fault ends a
 Mac hold after retaining its captured prefix, and a failed decode keeps the
-take for recovery.
+take for recovery. On the Mac a decode that comes back empty is the next step
+toward the rule: when one of the worker's recognition gates emptied it (its
+language-probability gate, or its junk filter or another filter on a take
+whose peak reaches 0.1), the ending says so and the take is kept; Recover last
+dictation then decodes it without those gates, in the current language, and
+its words are copied, never typed. A take too quiet for the worker's silence
+check, a quieter one a filter emptied, or one emptied with no reason given
+still keeps nothing ([Recording, silence and
+recovery](docs/design-macos.md#recording-silence-and-recovery)). Windows still
+deletes a take that held nothing worth typing.
 The Mac now follows the same stage 1 recovery contract; Windows retains its
 platform-specific implementation below. On Windows ([Long takes are never
 lost](docs/design-windows.md#long-takes-are-never-lost)):
@@ -546,9 +558,15 @@ In order:
    watch went, in the disclosure's secondary style and never with a dictated
    word
    ([Correction notices, save receipts and Save again](docs/design-macos.md#correction-notices-save-receipts-and-save-again)).
-4. The teach row: a word, an optional "Sounds like" and Add, with a refusal
-   sentence under it when the word is empty or too long, contains its own
-   sounds-like form, or the list is full.
+4. The teach row: a word, an optional "Often misheard as" and Add. The
+   second field takes the text Earlet writes for the word now, which it
+   rewrites to the word from then on (a "heard → meant" row), not a
+   pronunciation; the line under the row says so in the disclosure's
+   secondary style: "Optional: how Earlet writes it now, like “get hub” for
+   GitHub. Earlet will write the word instead." A refusal sentence follows
+   when the word is empty or too long, the misheard form is part of the word
+   itself ("The misheard form can't be part of the word itself."), or the
+   list is full.
 5. While anything is not on disk, the notice "Your vocabulary isn't saved yet.
    Earlet keeps using it and will try again."
    ([LEARNING.md §5](LEARNING.md#5-the-file-dictationlearning1)), or the
@@ -597,6 +615,12 @@ words. They appear only in the indicator's live preview while recording (on
 the Mac unless `DICTATION_PREVIEW=0`, on Windows only with
 `DICTATION_PREVIEW=1`), in each app's recent-result section, collapsed
 until the user opens it, and in the Mac's History pane.
+
+The live preview keeps dictated greetings and sign-offs such as "Thank you."
+under the same rule as the final transcription. Meeting-style suppression of
+stock phrases does not apply to explicit dictation; decoder-loop and
+non-speech-annotation guards still do. Preview words remain temporary until
+the full dictation has been transcribed.
 
 The Mac keeps a history of delivered dictations, their words and, for a time
 the user chooses, their recordings, sealed on the Mac under a key in the login

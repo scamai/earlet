@@ -9,7 +9,7 @@ public interface IVocabularyTeachRow
     /// <summary>The word field's text now.</summary>
     string Written { get; }
 
-    /// <summary>The "Sounds like" field's text now.</summary>
+    /// <summary>The "Often misheard as" field's text now.</summary>
     string SoundsLike { get; }
 
     /// <summary>Empty both fields.</summary>

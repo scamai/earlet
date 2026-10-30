@@ -258,7 +258,10 @@ for compatibility. Pure stream utilities remain source-only and are not app
 features.
 Tests, benchmarks, corpora, model weights, and user recordings are not bundled
 by an app-only package. A complete preview package adds its selected local model
-and Python runtime; the public source repository includes the tests.
+and Python runtime; the public source repository includes the tests. On macOS
+the packager first removes from that Python what no shipped module imports,
+torch, pip and Tcl/Tk among it
+([Packaging](development.md#packaging)).
 
 <a id="extraction-provenance"></a>
 ## Source provenance and maintenance

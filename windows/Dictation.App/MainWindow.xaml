@@ -181,16 +181,19 @@
      </Grid.ColumnDefinitions>
      <Grid Grid.Column="0" Margin="0,0,8,0">
       <TextBox x:Name="TeachWord" Padding="4" MaxLength="200" TextChanged="TeachTextChanged" KeyDown="TeachKeyDown" />
-      <TextBlock x:Name="TeachWordHint" Margin="7,5,0,0" IsHitTestVisible="False"
+      <TextBlock x:Name="TeachWordHint" Margin="7,5,7,0" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
         Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
      </Grid>
      <Grid Grid.Column="1" Margin="0,0,8,0">
       <TextBox x:Name="TeachSoundsLike" Padding="4" MaxLength="200" TextChanged="TeachTextChanged" KeyDown="TeachKeyDown" />
-      <TextBlock x:Name="TeachSoundsLikeHint" Margin="7,5,0,0" IsHitTestVisible="False"
+      <TextBlock x:Name="TeachSoundsLikeHint" Margin="7,5,7,0" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
         Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
      </Grid>
      <Button x:Name="TeachButton" Grid.Column="2" Padding="16,4" Click="TeachClick" />
     </Grid>
+    <!-- What the second field takes, in the disclosure's secondary style. -->
+    <TextBlock x:Name="TeachSoundsLikeHelp" Margin="0,4,0,0" TextWrapping="Wrap"
+      Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
     <TextBlock x:Name="TeachMessage" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
       AutomationProperties.LiveSetting="Polite" />
     <!-- Save outcomes: the latest Remove, Forget all or Save again receipt

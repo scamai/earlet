@@ -399,6 +399,18 @@ public struct DictationCaptureForensics: Sendable, Codable, Equatable {
                 + "arrived was audible. Hold the key a little longer."
         }
 
+        // 4a. No signal at all, with no exact zeros: what headset holds logged
+        //    as `peak=0.0000`. The rule the session reports as no sound from
+        //    the microphone (`DictationSession.isSilentInput`), so the log
+        //    agrees with the indicator rather than asking for more gain.
+        if peak < DictationSession.silentInputPeak, holdSeconds >= DictationSession.silentInputMinimumHoldSeconds,
+           sampleCount > 0 {
+            return "\(deviceName) sent no signal: peak " + String(format: "%.5f", peak)
+                + " across a " + String(format: "%.2f", holdSeconds) + "s hold, under the "
+                + String(format: "%.4f", DictationSession.silentInputPeak)
+                + " floor for any signal. Check the input is not muted, or choose another input."
+        }
+
         // 4. Genuinely too quiet. Real duration, no zero lead-in to blame,
         //    and the peak still under the floor — the one shape where the
         //    honest answer is about level, not about the device waking.

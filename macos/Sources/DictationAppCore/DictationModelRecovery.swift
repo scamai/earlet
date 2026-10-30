@@ -170,11 +170,16 @@ extension DictationModel {
             status = DictationCopy.savedTakeEngineUnavailable
             return
         }
+        // The current Language setting, and none of the checks that judge
+        // whether the audio was speech: one of them may be why the take was
+        // kept, and these words are copied, never typed.
         slot.setLanguageCode(language.code)
         let seconds = env.timing.transcribeDeadline(audioSeconds: kept.length)
         let outcome = await DictationDeadline.run(
             seconds: seconds,
-            work: { [slot] in await slot.transcribe(samples: samples, sampleRate: DictationTakeSpool.sampleRate) },
+            work: { [slot] in
+                await slot.transcribeForRecovery(samples: samples, sampleRate: DictationTakeSpool.sampleRate)
+            },
             onAbandon: { worker.forceTerminate() })
         guard !isQuitting else { return }
         markWorkerUsed()

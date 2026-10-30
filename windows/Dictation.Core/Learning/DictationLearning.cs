@@ -217,7 +217,8 @@ public sealed class DictationLearning
         return outcome;
     }
 
-    /// <summary>Teach a word and, optionally, how it sounds (LEARNING.md §4.3).</summary>
+    /// <summary>Teach a word and, optionally, what Earlet writes for it now (the
+    /// misheard form; LEARNING.md §4.3).</summary>
     /// <param name="at">When; the clock's now when omitted.</param>
     public TeachResult Teach(string written, string? soundsLike = null, DateTimeOffset? at = null)
     {

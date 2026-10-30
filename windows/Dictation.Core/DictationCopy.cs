@@ -538,12 +538,20 @@ public static partial class DictationCopy
         + "Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences.";
 
     public const string TeachWordPlaceholder = "Word or name";
-    public const string TeachSoundsLikePlaceholder = "Sounds like (optional)";
+
+    /// <summary>The second field: the text Earlet writes now, which it
+    /// then rewrites to the word (a "heard → meant" row).</summary>
+    public const string TeachSoundsLikePlaceholder = "Often misheard as (optional)";
+
+    /// <summary>Under the teach row: what goes in that field.</summary>
+    public const string TeachSoundsLikeHelp =
+        "Optional: how Earlet writes it now, like “get hub” for GitHub. Earlet will write the word instead.";
+
     public const string TeachAdd = "Add";
 
     public const string TeachEmpty = "Type a word first.";
     public const string TeachTooLong = "That is too long. Use up to 60 characters.";
-    public const string TeachSelfContaining = "“Sounds like” cannot be part of the word itself.";
+    public const string TeachSelfContaining = "The misheard form can't be part of the word itself.";
     public const string TeachFull = "The list is full. Remove a word first.";
 
     public const string VocabularyEmpty = "No words yet. Fix a word Earlet got wrong, or add one above.";

@@ -64,11 +64,11 @@ extension DictationModel {
     /// could not be removed. The rail marks Home while it is true, so it
     /// is seen from Vocabulary or Settings too. Paused by the user is not on
     /// the list, and neither is a learning receipt: neither needs anything
-    /// done.
+    /// done. The words and the recording (`menuWaiting`) also badge the
+    /// menu bar icon.
     public var homeNeedsAttention: Bool {
         permissionStep != .ready
-            || savedTake != nil
+            || menuWaiting != nil
             || pendingRecordingCleanup
-            || recentResult.entry?.needsRecovery == true
     }
 }

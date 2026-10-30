@@ -42,10 +42,14 @@ together is in [architecture.md](architecture.md).
   faster-whisper) and `runtime/requirements-macos.txt` (CPython 3.11, arm64,
   macOS 14: numpy and mlx-whisper). Each file pins the full resolved closure
   with `==`, and `tests/test_package.py` fails on an unpinned line. They carry
-  no hashes, the Python distribution itself is not pinned, and `onnxruntime`
-  (Windows) and `torch` (macOS) are pinned only as transitive dependencies the
-  worker never imports. Each file's header gives the `uv pip compile` command
-  that regenerates it. Windows ARM64 has no provider.
+  no hashes, and the Python distribution itself is not pinned. `onnxruntime`
+  (Windows) is pinned only as a transitive dependency the worker never
+  imports. mlx-whisper declares `torch` but imports it only in its checkpoint
+  converter, so the macOS file leaves out torch and the packages only it
+  pulls in: install it with `pip install --no-deps -r`, and the packager
+  prunes them from any Python it is given anyway
+  ([Packaging](#packaging)). Each file's header gives the `uv pip compile`
+  command that regenerates it. Windows ARM64 has no provider.
 
 Packaging never downloads a model for the user and does not call any external
 model-update service.
@@ -119,6 +123,13 @@ exist yet. `--app-only` cannot be combined with `--python-runtime` or
 `--model-dir`, and a complete package needs both. A complete `win-arm64`
 package is refused: faster-whisper needs ctranslate2, which publishes no
 win_arm64 wheel. A macOS package must be built and signed on a Mac.
+With the Swift 6.4 toolchain of the Xcode 27 beta, the first
+`swift build -c release` of a fresh checkout fails with "unable to resolve
+module dependency: 'Sparkle'" and leaves Sparkle's xcframework without its
+`Info.plist`, so every later build fails too. Delete `macos/.build`, build
+once with `swift build --package-path macos --build-system native -c release
+--product Dictation` (the `swift` test suite also uses the native build
+system), then package (seen on 2026-10-26 on one Mac).
 
 The input Python must be relocatable, not a virtualenv tied to the build
 machine's paths (a `pyvenv.cfg` is refused), and the model folder must hold
@@ -139,6 +150,20 @@ the files its platform needs. The packager:
   and for a complete package copies the Python and the model, appends the
   runtime to the Python's `._pth` files, and, on a host that can run that
   Python, imports the staged worker and compiles its bytecode;
+- on macOS, removes from its copy of the Python what no shipped module
+  imports (`MAC_PRUNED_DISTRIBUTIONS` and `MAC_PRUNED_PATHS`): torch and the
+  packages only it needs (sympy, mpmath, networkx, jinja2, MarkupSafe,
+  setuptools), pip and its bootstrapper, Tcl/Tk with tkinter, IDLE and turtle,
+  and the two extra copies of the interpreter. Each distribution goes by its
+  `RECORD`. Before deleting anything it refuses a distribution a kept one
+  requires outside its extras (mlx-whisper's declared torch is the one
+  exception), a missing `RECORD`, and a `RECORD` row naming a directory or a
+  file outside the Python. Only flat dependency conditions requiring a
+  nonempty extra in every alternative are excluded from that dependency
+  check; other conditions are treated conservatively as requirements.
+  The import smoke then fails if the staged
+  interpreter can still find any top-level name it removed
+  (`MAC_PRUNED_IMPORTS`);
 - writes `package-mode.json` (mode, provider, no audio retention, no network
   inference), deletes debug symbols, and fails if anything it built names the
   builder's checkout, home directory, commit or private repository;
@@ -161,8 +186,9 @@ unset for verification runs.
 **What `build-receipt.json` proves.** The packager writes it beside the
 package: the `product.json` fields, platform, the `build` stamp, mode,
 `"validation": "build-and-layout-only"`, the `._pth` files it changed,
-whether the import smoke ran, the symbol files it deleted and a SHA-256 of
-every file. It shows that the build ran and how the files are laid out. It
+on macOS what it pruned from the Python (`pruned`: the distributions, the
+paths and the bytes), whether the import smoke ran, the symbol files it
+deleted and a SHA-256 of every file. It shows that the build ran and how the files are laid out. It
 is not recognition, installation, signing or release acceptance. A complete
 package still has to be accepted on another machine of the same architecture
 with no build caches.
@@ -316,7 +342,7 @@ the development build.
 | `DICTATION_HOLD_KEY` | Windows only: `DictationHotkeys.ResolveHold`, named in `DictationEnvironment.cs` | The hold key as a virtual-key code, decimal or `0x` hex, from the picker's list. It wins over the saved choice; the window says so and locks the picker. An unknown value falls back to Right Ctrl and logs a warning |
 | `DICTATION_PREVIEW` | Mac `DictationModel.swift`; Windows `DictationEnvironment.cs` | The live preview of the words on the indicator. Mac: `0` turns it off; any other value, or none, leaves it on. Windows: `1` turns it on; any other value, or none, leaves it off until its cost is measured on Windows hardware with the shipped model. Read once a run |
 | `DICTATION_CAPTURE_WATCHDOG` | Windows `DictationEnvironment.cs`, `DictationController.Takes.cs` | The in-hold watchdog that ends a take whose microphone stopped delivering audio (0.3 s with no buffer, after its graces), keeping what was captured: `0` turns it off; any other value, or none, leaves it on. The field switch for a device whose buffering the gap misreads, as the Mac's `dictation.capture.watchdog` defaults flag is ([long takes](design-windows.md#long-takes-are-never-lost)). Read once a run |
-| `DICTATION_HUD_RENDER_DIR` | Mac `DictationApp.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders every indicator state to PNGs in that directory, then exits, non-zero when a shadow is cut at the image's edge or two busy states differ in size. Honoured by every build, release included. Windows draws each state at 100, 150 and 200% in light, dark and high contrast (the pill in the theme's colours), also fails when the shadow ring or the one busy width fails on the layout, and writes `render-report.txt` beside them; built and tested on Linux, never run ([render modes](design-windows.md#render-modes-on-windows)) |
+| `DICTATION_HUD_RENDER_DIR` | Mac `DictationApp.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders every indicator state to PNGs in that directory (on the Mac also the menu bar icon's waiting badge, `hud-menu-icon-*.png`), then exits, non-zero when a shadow is cut at the image's edge or two busy states differ in size. Honoured by every build, release included. Windows draws each state at 100, 150 and 200% in light, dark and high contrast (the pill in the theme's colours), also fails when the shadow ring or the one busy width fails on the layout, and writes `render-report.txt` beside them; built and tested on Linux, never run ([render modes](design-windows.md#render-modes-on-windows)) |
 | `DICTATION_WINDOW_RENDER_DIR` | Mac `DictationApp.swift`, `DictationWindowRender.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders the window to PNGs (each scenario, width and appearance), then exits. Honoured by every build, release included. The Mac exits 0 whatever it wrote; Windows also draws 100, 150 and 200% and high contrast, every header state and the notification-area icon's pictures, and exits non-zero when a scenario or an image failed. With both variables set, the Mac renders only the indicator and Windows renders both |
 | `DICTATION_UPDATE_FEED_URL` | Mac `DictationUpdateFeed.swift` | The update feed for one launch instead of Info.plist's `SUFeedURL`: HTTPS, or HTTP to 127.0.0.1 or localhost to try an update against a local feed. Any other value turns updates off for that launch ([Updates](design-macos.md#updates)) |
 | `DICTATION_CAPTURE_TRACE` | Mac `DictationCaptureForensics.swift` | `1` logs every audio chunk of each hold |

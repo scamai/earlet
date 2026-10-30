@@ -27,6 +27,12 @@ public struct DictationTiming: Sendable {
         get { holdPolicy.maximumHoldSeconds }
         set { holdPolicy.maximumHoldSeconds = newValue }
     }
+    /// A take longer than this asks at the first Escape, in the HUD, and
+    /// discards at the second; a shorter one is cancelled at once. 30 s, as
+    /// on Windows.
+    public var escapeAsksAfterSeconds: Double = 30
+    /// How long Escape's question stands, as on Windows.
+    public var escapeQuestionSeconds: Double = 5
     /// Idle time after which the loaded model (several GB) is given back.
     /// The next press starts the
     /// worker again while the user speaks.
@@ -281,6 +287,9 @@ extension DictationModel {
         /// The ceiling finished this hold, not the user: the status and the
         /// HUD say so.
         var reachedMaximumHold = false
+        /// The hint for an input that has sent nothing, worded once per
+        /// silent run: naming the input reads Core Audio.
+        var silentInputNotice: String?
         /// The app the words were pasted into, once the release asked; the
         /// history names it.
         var target: PasteTarget?
