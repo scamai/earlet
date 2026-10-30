@@ -73,7 +73,7 @@ public enum DictationHistoryCopy {
     public static let offTitle = "History is off"
     public static let offDetail = "New dictations aren't saved. The ones already saved stay until you delete them or their time is up."
     public static let lockedTitle = "History is locked"
-    public static let lockedDetail = "Earlet couldn't open its key in your Keychain, so saved dictations can't be shown and new ones aren't saved. Earlet itself still works."
+    public static let lockedDetail = "Earlet couldn't open its key in your login keychain, so saved dictations can't be shown and new ones aren't saved. If the keychain is locked, unlock it in Keychain Access, then click Try Again. Dictation itself still works."
     public static let storage = "Saved encrypted on this Mac, under a key kept in your login keychain. A password field, Secure Input or a spoken command is never saved."
     public static let deleteAllQuestion = "Delete all history?"
     public static let deleteAllDetail = "Every saved dictation and recording is deleted from this Mac, and the key that opens them is destroyed. This can't be undone."

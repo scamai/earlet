@@ -69,7 +69,7 @@ struct DictationModelBasicsTests {
         await model.toggle()
         #expect(!model.enabled)
         #expect(harness.workers.made.isEmpty)
-        #expect(model.status.contains("Speech resources are missing"))
+        #expect(model.status.contains("missing its speech files"))
     }
 
     @Test("one hold types the transcript through the insertion seam")

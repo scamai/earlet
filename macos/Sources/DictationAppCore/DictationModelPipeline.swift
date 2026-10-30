@@ -85,13 +85,13 @@ extension DictationModel {
                 : (readiness == .timedOut
                     ? DictationCopy.takeSavedEngineStartTimedOut
                     : DictationCopy.takeSavedEngineNotStarted)
-            showOutcome(.engineUnavailable)
+            showOutcome(.engineUnavailable, recordingKept: kept)
             return
         }
 
         // Windows' sentence: in a hands-free latch the user may still be
         // talking, and what they say from here is not recorded.
-        status = atCeiling ? DictationCopy.maximumHoldReached : "Transcribing on this device…"
+        status = atCeiling ? DictationCopy.maximumHoldReached : "Transcribing on this Mac…"
         // Preview has already been cancelled before this authoritative decode
         // uses the worker's one-request/one-reply pipe.
         let gate = release.gate
@@ -134,7 +134,7 @@ extension DictationModel {
             status = kept
                 ? DictationCopy.takeSavedEngineNotResponding
                 : "The speech engine stopped responding, so nothing was inserted. It is restarting; try again in a moment."
-            showOutcome(.engineRestarting)
+            showOutcome(.engineRestarting, recordingKept: kept)
             Task { await restartWorker() }
             return
         }
@@ -198,13 +198,13 @@ extension DictationModel {
                 // press, so the user is not left holding a key that records and
                 // then fails again.
                 status = kept ? DictationCopy.takeSavedWorkerRestarting : DictationCopy.workerStopped
-                showOutcome(.engineRestarting)
+                showOutcome(.engineRestarting, recordingKept: kept)
                 Task { await restartWorker() }
             } else {
                 status = kept
                     ? DictationCopy.takeSaved
                     : DictationCopy.failure(.asr(failure), stage: .asr, holdKey: holdKey)
-                showOutcome(DictationHUDContent.ending(for: .asr(failure), stage: .asr))
+                showOutcome(DictationHUDContent.ending(for: .asr(failure), stage: .asr), recordingKept: kept)
             }
         case .failed(_, .insert(let failure), _):
             // The words are on the clipboard or in Copy last text: the spool

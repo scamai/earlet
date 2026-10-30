@@ -25,10 +25,18 @@ struct DictationVocabularyPane: View {
         }
     }
 
-    /// "3 words", or nothing while the list is empty (the list says so).
+    /// "3 words · 2 misheard forms", or nothing while the list is empty (the
+    /// list says so). A misheard form is a rewrite, not a word, so it is not
+    /// counted as one.
     private var count: String? {
-        let rows = vocabulary.rows.count
-        return rows == 0 ? nil : "\(rows.formatted()) \(rows == 1 ? "word" : "words")"
+        var words = 0, forms = 0
+        for row in vocabulary.rows {
+            if case .alias = row.entry { forms += 1 } else { words += 1 }
+        }
+        var parts: [String] = []
+        if words > 0 { parts.append("\(words.formatted()) \(words == 1 ? "word" : "words")") }
+        if forms > 0 { parts.append("\(forms.formatted()) misheard \(forms == 1 ? "form" : "forms")") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
@@ -60,6 +68,8 @@ struct DictationVocabularySection: View {
                 Text(Copy.learnSwitch)
                     .font(DictationType.bodyEmphasis)
                     .foregroundStyle(.brandInk)
+                    // The switch carries the same name; read it once.
+                    .accessibilityHidden(true)
                 Spacer(minLength: 8)
                 Toggle(Copy.learnSwitch, isOn: Binding(
                     get: { model.learningEnabled },
@@ -73,6 +83,17 @@ struct DictationVocabularySection: View {
                 DictationNotice(symbol: "text.badge.checkmark", tone: .wheatStrong, text: notice)
             }
         }
+        // Notices, refusals and receipts change text on a pane VoiceOver is
+        // not reading; say them as they arrive.
+        .onChange(of: vocabulary.observationNotice) { _, notice in announce(notice) }
+        .onChange(of: vocabulary.teachMessage) { _, message in announce(message) }
+        .onChange(of: vocabulary.managementNotice) { _, message in announce(message) }
+        .onChange(of: vocabulary.learningNotice) { _, receipt in announce(receipt) }
+    }
+
+    private func announce(_ text: String?) {
+        guard let text, !text.isEmpty else { return }
+        AccessibilityNotification.Announcement(text).post()
     }
 
     /// Teach a word: what it is written as, and what Earlet writes for it now.

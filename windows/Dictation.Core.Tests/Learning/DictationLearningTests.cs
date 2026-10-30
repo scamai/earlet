@@ -135,9 +135,9 @@ public sealed class DictationLearningTests
 
         Assert.Equal(
             [
-                new LearnedWordEntry("Jarvis", LearningOrigin.Correction, 1, T.AddSeconds(3), "Tentative"),
+                new LearnedWordEntry("Jarvis", LearningOrigin.Correction, 1, T.AddSeconds(3), "Learned from one fix, not yet confirmed"),
                 new LearnedWordEntry("SkyDock", LearningOrigin.Taught, 0, T.AddSeconds(2)),
-                new LearnedWordEntry("Trovioo", LearningOrigin.Correction, 2, T.AddSeconds(1), "Confirmed"),
+                new LearnedWordEntry("Trovioo", LearningOrigin.Correction, 2, T.AddSeconds(1), "Confirmed by 2 or 3 of your fixes"),
             ],
             snapshot.Words);
         Assert.Equal(

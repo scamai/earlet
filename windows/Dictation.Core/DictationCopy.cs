@@ -534,8 +534,8 @@ public static partial class DictationCopy
 
     /// <summary>Under the switch: what is watched, for how long, and what is kept.</summary>
     public const string LearnFromCorrectionsDisclosure =
-        "In supported text fields, Earlet checks your corrections for up to 90 seconds. "
-        + "Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences.";
+        "If you fix a word within 90 seconds of dictating it, Earlet may learn it, but only in apps whose text it can read, "
+        + "so that happens rarely. Adding the word below always works. Learning keeps words on this computer, never whole sentences.";
 
     public const string TeachWordPlaceholder = "Word or name";
 
@@ -550,7 +550,7 @@ public static partial class DictationCopy
     public const string TeachAdd = "Add";
 
     public const string TeachEmpty = "Type a word first.";
-    public const string TeachTooLong = "That is too long. Use up to 60 characters.";
+    public const string TeachTooLong = "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all.";
     public const string TeachSelfContaining = "The misheard form can't be part of the word itself.";
     public const string TeachFull = "The list is full. Remove a word first.";
 
@@ -565,7 +565,7 @@ public static partial class DictationCopy
         "Your vocabulary isn't saved yet. Earlet keeps using it and will try again.";
 
     public const string ForgetAll = "Forget all";
-    public const string ForgetAllQuestion = "Forget every learned and added word? Earlet will stop using them.";
+    public const string ForgetAllQuestion = "Forget every word you added and every word Earlet learned, with their misheard forms and the corrections it is still checking? Earlet stops using them, and this can't be undone.";
     public const string ForgetAllCancel = "Cancel";
 
     // Save receipts and Save again: the Mac's words, with "on this PC" where
@@ -590,20 +590,11 @@ public static partial class DictationCopy
     // row, never naming a word (CorrectionNotices picks one).
 
     public const string CorrectionChecking = "Checking this field for corrections…";
-    public const string CorrectionFieldUnread =
-        "The field could not be read. You can add the word manually below.";
-    public const string CorrectionTextMoved =
-        "The dictated text moved before it could be checked. You can add the word manually below.";
-    public const string CorrectionFieldNotChecked =
-        "This field was not checked. You can add the word manually below.";
-    public const string CorrectionFieldUncheckable =
-        "This field could not be checked. You can add the word manually below.";
     public const string CorrectionPending =
         "Correction checked. Another matching correction is needed before it is used.";
     public const string CorrectionAlreadyKnown = "This correction is already in your vocabulary.";
     public const string CorrectionNothingLearned =
         "No vocabulary change was learned. You can add the word manually below.";
-    public const string CorrectionNotDetected = "No correction detected.";
 
     // The learning receipt: the Mac's "Learning from you" section, word for
     // word. Never names what was learned.
@@ -686,9 +677,11 @@ public static partial class DictationCopy
     /// <summary>Under the practice field.</summary>
     public const string PracticeNotSaved = "This practice text is not saved.";
 
-    /// <summary>Above the practice field, naming the hold key.</summary>
+    /// <summary>Above the practice field: the Mac's sentence, naming the hold
+    /// key where the Mac says "your dictation key", because no Windows card
+    /// above it shows the key.</summary>
     public static string PracticeInstructions(HotkeyBinding key) =>
-        $"Click below. Hold {key.KeyName}, say a sentence, then release. Your words should appear here.";
+        $"Click in the field, hold {key.KeyName} and say a sentence, then let go. Your words appear here.";
 
     /// <summary>What the window says while a session is in this state.</summary>
     /// <param name="state">The session's state.</param>

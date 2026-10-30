@@ -15,7 +15,7 @@ welcome and handled first.
 
 ## Supported versions
 
-Only the latest 0.x release gets security fixes. The latest, 0.2.2, is a
+Only the latest 0.x release gets security fixes. The latest, 0.2.3, is a
 notarized download for Apple Silicon Macs that updates itself from then on;
 a copy of 0.1.0 has to be replaced by hand once. The Windows app is source only:
 it has been built and tested on Linux and has never run on Windows hardware.

@@ -329,10 +329,12 @@ public struct DictationPermissions {
     public var accessibilityTrusted: @MainActor (_ prompt: Bool) -> Bool
     /// Whether the key listener is allowed (Input Monitoring). Never prompts.
     public var inputMonitoringGranted: @MainActor () -> Bool
-    /// Registers Dictation in the Input Monitoring list and shows it. Only on
-    /// a deliberate user action: without it the user has to find the app
-    /// with "+" in System Settings.
+    /// Registers Dictation in the Input Monitoring list; the first time,
+    /// macOS also shows its own dialog. Only on a deliberate user action:
+    /// without it the user has to find the app with "+" in System Settings.
     public var requestInputMonitoring: @MainActor () -> Void
+    /// Shows the Input Monitoring pane.
+    public var openInputMonitoringSettings: @MainActor () -> Void
     /// Shows the Microphone pane, for when a request already came back
     /// denied and macOS will not prompt again.
     public var openMicrophoneSettings: @MainActor () -> Void
@@ -342,6 +344,11 @@ public struct DictationPermissions {
     /// that names it (`DictationPermissionStep.accessibilitySettingsName`).
     /// A value here, so a test can read the macOS 26 and macOS 27 wording.
     public var accessibilitySettingsName: String
+    /// Asked right after a request: whether macOS put up its own dialog for
+    /// it. That dialog has a button for the settings pane, so the pane opens
+    /// only when no dialog came up (the question was answered before);
+    /// opening both put the pane behind a dialog offering to open it.
+    public var systemDialogAppeared: @MainActor () async -> Bool
 
     public init(
         requestMicrophone: @escaping @MainActor () async -> Bool,
@@ -351,7 +358,9 @@ public struct DictationPermissions {
         requestInputMonitoring: @escaping @MainActor () -> Void,
         openMicrophoneSettings: @escaping @MainActor () -> Void,
         openAccessibilitySettings: @escaping @MainActor () -> Void,
-        accessibilitySettingsName: String = DictationPermissionStep.accessibilitySettingsName
+        openInputMonitoringSettings: @escaping @MainActor () -> Void = {},
+        accessibilitySettingsName: String = DictationPermissionStep.accessibilitySettingsName,
+        systemDialogAppeared: @escaping @MainActor () async -> Bool = { false }
     ) {
         self.requestMicrophone = requestMicrophone
         self.microphoneAuthorized = microphoneAuthorized
@@ -360,7 +369,9 @@ public struct DictationPermissions {
         self.requestInputMonitoring = requestInputMonitoring
         self.openMicrophoneSettings = openMicrophoneSettings
         self.openAccessibilitySettings = openAccessibilitySettings
+        self.openInputMonitoringSettings = openInputMonitoringSettings
         self.accessibilitySettingsName = accessibilitySettingsName
+        self.systemDialogAppeared = systemDialogAppeared
     }
 }
 
@@ -889,12 +900,7 @@ extension DictationPermissions {
             return AXIsProcessTrustedWithOptions(options)
         },
         inputMonitoringGranted: { CGPreflightListenEventAccess() },
-        requestInputMonitoring: {
-            _ = CGRequestListenEventAccess()
-            if let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-                NSWorkspace.shared.open(pane)
-            }
-        },
+        requestInputMonitoring: { _ = CGRequestListenEventAccess() },
         openMicrophoneSettings: {
             if let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
                 NSWorkspace.shared.open(pane)
@@ -904,6 +910,17 @@ extension DictationPermissions {
             if let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                 NSWorkspace.shared.open(pane)
             }
+        },
+        openInputMonitoringSettings: {
+            if let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                NSWorkspace.shared.open(pane)
+            }
+        },
+        systemDialogAppeared: {
+            // The dialog belongs to another process, so one on screen takes
+            // Earlet out of the front; the click that asked left it there.
+            try? await Task.sleep(for: .milliseconds(700))
+            return !NSApp.isActive
         })
     }
 }

@@ -260,7 +260,7 @@ public sealed class LearningReceiptTests
         var id = s.Begin();
         s.Observe("we use it", "we use it", id, "same");
 
-        Assert.Equal("No correction detected.", s.Notice);
+        Assert.Null(s.Notice);
         Assert.True(s.View.Last.CanUndoLearning);
         Assert.Equal(receipt, s.Receipt);
     }

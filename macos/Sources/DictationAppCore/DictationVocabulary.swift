@@ -7,7 +7,10 @@ import DictationKit
 public enum DictationVocabularyCopy {
     public static let heading = "Vocabulary"
     public static let learnSwitch = "Learn from my corrections"
-    public static let disclosure = "In supported text fields, Earlet checks your corrections for up to 90 seconds. Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences."
+    /// What learning promises, conditionally: measured on one Mac, it learned
+    /// one word in 370 inserted dictations (2026-10-06 to 10-27), because most
+    /// fields cannot be read back.
+    public static let disclosure = "If you fix a word within 90 seconds of dictating it, Earlet may learn it, but only in apps whose text it can read, so that happens rarely. Adding the word below always works. Learning keeps words on this computer, never whole sentences."
     public static let wordPlaceholder = "Word or name"
     /// The second field: the text Earlet writes now, which it then
     /// rewrites to the word (a "heard → meant" row).
@@ -20,7 +23,7 @@ public enum DictationVocabularyCopy {
     public static let addedByYou = "Added by you"
     public static let remove = "Remove"
     public static let forgetAll = "Forget all"
-    public static let forgetAllQuestion = "Forget every learned and added word? Earlet will stop using them."
+    public static let forgetAllQuestion = "Forget every word you added and every word Earlet learned, with their misheard forms and the corrections it is still checking? Earlet stops using them, and this can't be undone."
     public static let cancel = "Cancel"
     /// Shown while the list is not all in `learning.json`: a save failed, or
     /// the file could not be read (LEARNING.md §5).
@@ -31,7 +34,7 @@ public enum DictationVocabularyCopy {
         switch result {
         case .ok: return nil
         case .empty: return "Type a word first."
-        case .tooLong: return "That is too long. Use up to 60 characters."
+        case .tooLong: return "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all."
         case .selfContaining: return "The misheard form can't be part of the word itself."
         case .full: return "The list is full. Remove a word first."
         }
@@ -158,7 +161,8 @@ public final class DictationVocabularyModel: ObservableObject {
                 dismissLearningNotice(keepingObservation: keepObserving)
                 observationNotice = "No vocabulary change was learned. You can add the word manually below."
             } else {
-                observationNotice = "No correction detected."
+                // Nothing was edited: nothing to report.
+                observationNotice = nil
             }
         }
         return result
@@ -174,16 +178,19 @@ public final class DictationVocabularyModel: ObservableObject {
     /// Ends feedback for a correction-watch session. The mapping is the
     /// shared one (docs/design-macos.md, "Correction notices, save receipts
     /// and Save again"), the same one Windows' `CorrectionNotices` applies
-    /// to its observer's endings:
+    /// to its observer's endings. A notice reports something that happened;
+    /// a watch that saw no edit, or could not read the field, ends quietly,
+    /// because those are most dictations and the disclosure under the switch
+    /// already says learning works only where Earlet can read the text:
     /// - ended from outside (`abandoned`, `next_take`): no
     ///   notice, whatever the watch saw or taught;
     /// - the span was still located and read when the watch ended
     ///   (`spanObservedToEnd`): after a revision, that revision's own notice
-    ///   is the news and stands; otherwise "No correction detected." when
-    ///   the span never changed, or "No vocabulary change was learned…"
-    ///   when it changed but nothing settled into a correction (`sawChange`);
-    /// - any other end: a revision's notice goes with the watch; without a
-    ///   revision the outcome stays generic and suggests manual entry.
+    ///   is the news and stands; otherwise "No vocabulary change was
+    ///   learned…" when the span changed but nothing settled into a
+    ///   correction (`sawChange`), and no notice when it never changed;
+    /// - any other end: a revision's notice goes with the watch, and without
+    ///   a revision there is no notice.
     ///
     /// `revised` says the watch handed at least one settled revision to
     /// `observe`. When it holds, the watch's id is kept so a settled
@@ -205,20 +212,11 @@ public final class DictationVocabularyModel: ObservableObject {
                     currentObservationID = nil
                     observationNotice = sawChange
                         ? "No vocabulary change was learned. You can add the word manually below."
-                        : "No correction detected."
+                        : nil
                 }
             } else if !revised {
                 currentObservationID = nil
-                switch condition {
-                case .noFocusedField, .spanMissing:
-                    observationNotice = "The field could not be read. You can add the word manually below."
-                case .spanContextLost:
-                    observationNotice = "The dictated text moved before it could be checked. You can add the word manually below."
-                case .secureField, .otherApplication:
-                    observationNotice = "This field was not checked. You can add the word manually below."
-                default:
-                    observationNotice = "This field could not be checked. You can add the word manually below."
-                }
+                observationNotice = nil
             } else {
                 observationNotice = nil
             }

@@ -8,6 +8,85 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-30
+
+A copy of 0.2.0, 0.2.1 or 0.2.2 updates itself to this one. It is a signed,
+notarized disk image on [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0.2.3).
+
+### Changed
+
+- **macOS: the installed app is about 60 MB smaller, and nothing in it names
+  the machine that built it.** The bundled Python no longer carries its C headers, its
+  packages' own test suites or its unused command-line scripts, and its
+  compiled files no longer record the folder they were built in.
+- **macOS: a first run turns itself on.** Once you have allowed the
+  microphone, Accessibility (Device Control and Data Access on macOS 27) and
+  Input Monitoring, Earlet turns dictation on and says "You're set up."
+  There is no separate Enable click any more. An Earlet you have paused stays
+  paused; one that has the permissions but was never turned on turns on after
+  this update.
+- **macOS: setup says what Earlet is and reads as next steps, not errors.**
+  The first screen now opens with one sentence on what Earlet does and that
+  it needs three permissions. Steps you haven't reached read "Not yet" and
+  the one to do now reads "Next", in gold, instead of three red "Not
+  allowed". Each step says what the permission is for, including that
+  between dictations Earlet sees only keys like Shift, Option and Command,
+  and that learning rereads the words it just typed for up to 90 seconds.
+  A missing permission after Earlet has been on is still shown as a problem.
+- **macOS: one click opens one thing.** Allowing Accessibility or Input
+  Monitoring used to bring up macOS's dialog and System Settings at the same
+  time. Now the dialog comes up alone the first time, and System Settings
+  opens when there is no dialog. Once you turn Earlet on in System Settings,
+  Earlet comes back to the front instead of staying behind.
+- **macOS: clearer dead ends.** A copy outside Applications says so above
+  the permissions instead of inside a closed section. A copy without its
+  speech files offers Download Earlet… instead of an Enable that fails the
+  same way every time, and a failed start offers Try Again. The restart step
+  shows only Restart Earlet. While dictation is off, the hold key card says
+  so instead of promising the gesture. macOS's microphone prompt now reads
+  "Earlet listens while you dictate and turns your speech into text on this
+  Mac."
+- **macOS: VoiceOver hears setup move on,** and what Check Again found.
+- **macOS: one word for each thing.** Earlet is either on or off: the
+  buttons are Turn On and Turn Off (Turn Earlet On and Turn Earlet Off in the
+  menu bar), replacing Enable, Pause, Enabled and Paused. Double-tapping the
+  key is "hands-free" everywhere, and the key card says how to finish:
+  press the key again to insert. Settings calls the key the "Dictation key".
+- **macOS: Home says things once.** Once you have dictated, the status line
+  no longer repeats the key the card below already shows, and the card names
+  your mouse button too. Anything waiting for you comes before the card. The
+  "Last available text" card appears only when its words need you, not after
+  every dictation; Copy last text stays in the menu bar. The status dot no
+  longer glows green beside a sentence saying the text could not be typed.
+- **Vocabulary: learning promises only what it does.** The line under "Learn
+  from my corrections" now says that Earlet may learn a word you fix within 90
+  seconds, but only in apps whose text it can read, so rarely, and that adding
+  the word yourself always works. After a dictation you didn't correct, or in
+  a field Earlet couldn't read, the pane no longer shows a notice; it speaks
+  up only when a correction needs a second match, is already known, or taught
+  nothing. A learned word's label says how often your fixes confirmed it
+  instead of "Tentative", "Confirmed" or "Established". The too-long message
+  states the real limit (6 words, or 12 Chinese, Japanese or Korean
+  characters, and 60 characters), and Forget all says what it clears and that
+  it can't be undone.
+- **macOS: Vocabulary counts words and misheard forms apart,** and VoiceOver
+  hears its notices, refusals and receipts as they arrive.
+- **macOS: the indicator says hands-free, and what to do when a recording was
+  kept.** A double-tapped dictation reads "Listening hands-free" with "Right
+  Command, Space or Return inserts · Esc cancels", so it no longer looks like
+  a held one or hides Escape. When the speech engine fails but the recording
+  is saved, the indicator says "Recording kept. Recover it from Earlet's menu
+  bar icon." instead of "Try again".
+- **macOS: Settings and History explain themselves.** The key test is a row
+  that says what it checks; the silence setting says what silence does; the
+  Troubleshooting buttons say what each one is for and wrap in a narrow
+  window, and Check Permissions Again always answers. A long dictation in
+  History has Show All, Copy confirms with a check mark, and a locked History
+  says how to unlock it.
+- **macOS: Settings' footer says what is kept apart from History:** one
+  dictation that couldn't be transcribed stays as audio, not encrypted, for
+  up to 7 days so you can recover it.
+
 ## [0.2.2] - 2026-10-29
 
 A copy of 0.2.0 or 0.2.1 updates itself to this one. It is a signed, notarized
@@ -60,9 +139,9 @@ disk image on [GitHub Releases](https://github.com/scamai/earlet/releases/tag/v0
 ### Changed
 
 - **macOS: a smaller download.** The bundled Python no longer carries
-  PyTorch, pip or the Tk toolkit, which Earlet never used. Measured on a
-  package built from 0.2.1's own Python and model, the disk image drops
-  from 851 MB to 580 MB and the installed app from 1.9 GB to 1.1 GB.
+  PyTorch, pip or the Tk toolkit, which Earlet never used. The 0.2.2 disk
+  image is 572 MB, down from 851 MB for 0.2.1, and the installed app 1.1 GB
+  instead of 1.9 GB. An update from 0.2.0 or 0.2.1 downloads about 640 KB.
   Dictation itself is unchanged.
 - **Vocabulary: the field after the word now reads "Often misheard as".** It
   used to read "Sounds like", but it never took a pronunciation: it takes the

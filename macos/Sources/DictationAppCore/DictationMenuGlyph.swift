@@ -112,7 +112,7 @@ public enum DictationMenuGlyph: Equatable, Sendable, CaseIterable {
         case .recording: return "Earlet, listening"
         case .transcribing: return "Earlet, transcribing"
         case .needsPermission: return "Earlet, needs permission"
-        case .needsReopen: return "Earlet, needs to reopen"
+        case .needsReopen: return "Earlet, needs a restart"
         case .engineFailed: return "Earlet, speech engine unavailable"
         }
     }
@@ -122,12 +122,12 @@ public enum DictationMenuGlyph: Equatable, Sendable, CaseIterable {
     public var headline: String {
         switch self {
         case .paused: return "Earlet is off"
-        case .starting: return "Starting dictation…"
+        case .starting: return "Turning on…"
         case .ready: return "Earlet is on"
         case .recording: return "Listening…"
         case .transcribing: return "Transcribing…"
         case .needsPermission: return "Needs permission"
-        case .needsReopen: return "Reopen Earlet to finish"
+        case .needsReopen: return "Restart Earlet to finish"
         case .engineFailed: return "Speech engine unavailable"
         }
     }
@@ -301,8 +301,9 @@ public struct DictationWindowAttention: Sendable {
 /// closed nothing noticed.
 public enum DictationPermissionWatch {
     /// While dictation is off, a grant is missing or a reopen is due: once a
-    /// second, so the checklist flips as the user grants and an Enable that
-    /// was waiting for the grants finishes at once.
+    /// second, so the checklist flips as the user grants, and an Enable that
+    /// was waiting for the grants, or a first run's own (G16), finishes at
+    /// once.
     public static let settingUp: Duration = .seconds(1)
     /// On with every grant in: only to notice a revocation, so the menu bar
     /// icon and the window can say the hold key stopped working.
@@ -317,8 +318,9 @@ public enum DictationPermissionWatch {
 
 extension DictationModel {
     /// The app's permission poll, for the life of the process: a tick
-    /// (`permissionTick`, which also finishes a pending Enable), then a
-    /// sleep of `DictationPermissionWatch.interval`, until cancelled.
+    /// (`permissionTick`, which also finishes a pending Enable and turns a
+    /// first run on), then a sleep of `DictationPermissionWatch.interval`,
+    /// until cancelled.
     public func watchPermissionsForLife() async {
         while !Task.isCancelled {
             await permissionTick()

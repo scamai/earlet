@@ -408,8 +408,10 @@ failures are handled differently:
   adaptive metadata keep their previous strength. Net-zero automatic rows are
   excluded. When valid scene evidence exists, §4.7 reorders this eligible set
   before either recognition budget is applied, preserving each word's strength.
-  The Vocabulary list shows Tentative, Confirmed or Established for
-  adaptive words; older rows keep their origin label. Words are prepended
+  The Vocabulary list labels adaptive words by that net evidence, in words:
+  "Learned from one fix, not yet confirmed", "Confirmed by 2 or 3 of your
+  fixes" or "Confirmed by 4 or more of your fixes"; older rows keep their
+  origin label. Words are prepended
   (deduplicated case-insensitively) to the request's `bias_phrases`. On macOS
   (`mlx`) they become Whisper's `initial_prompt` through `_vocabulary_prompt`
   (223-token budget, most relevant kept). On Windows (`faster`) the same prompt

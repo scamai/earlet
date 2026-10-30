@@ -492,7 +492,8 @@ public sealed class DictationLearning
         var opposition = word.Extra.TryGetValue("opposition", out var value)
             && value.ValueKind == System.Text.Json.JsonValueKind.Number && value.TryGetInt64(out var count) ? count : 0;
         var score = word.Count - Math.Clamp(opposition, 0, Math.Max(0, word.Count));
-        return score >= 4 ? "Established" : score >= 2 ? "Confirmed" : "Tentative";
+        return score >= 4 ? "Confirmed by 4 or more of your fixes"
+            : score >= 2 ? "Confirmed by 2 or 3 of your fixes" : "Learned from one fix, not yet confirmed";
     }
 
     private static DateTimeOffset TimeOf(long millis) => DateTimeOffset.FromUnixTimeMilliseconds(Math.Clamp(

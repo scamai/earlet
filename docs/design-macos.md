@@ -43,7 +43,7 @@ window's title still names the pane, for the Window menu and VoiceOver.
 ⌘1 to ⌘4 switch panes. Settings… ⌘, in the app menu and Settings… in the
 menu bar menu open
 or raise the window on Settings, because the preferences live there. Show
-Earlet, Finish permission setup… and every time the window comes forward on
+Earlet, Finish Setup… and every time the window comes forward on
 its own (a lost grant, a refused key listener, a recording to recover) open it
 on Home, and Review vocabulary… on Vocabulary. A Dock click raises it on the
 pane it was left on.
@@ -60,19 +60,23 @@ grow to hundreds of rows) pushed General and Troubleshooting out of sight.
 
 1. The status header
    ([Status header and menu bar glyph](#status-header-and-menu-bar-glyph)).
-2. Once setup is done, a card with the mark, the hold key drawn as a key (the
-   keycap: "Right ⌘", "Left ⌥", "fn") and "Hold to talk, release to insert"
-   over "Double-tap to keep listening · Esc to cancel", with the hold-key
-   caution in it. In a narrow window the mark leaves first. VoiceOver reads
-   it as one sentence that names the key in words.
-3. Permissions, while a grant is missing or a restart is due
+2. Permissions, while a grant is missing or a restart is due
    ([Permission setup and recovery](#permission-setup-and-recovery)).
-4. The recent result, while one is held: "Your words are still here" after a
-   failed paste, otherwise "Last available text"
+3. The recent result, only while it needs the user: "Your words are still
+   here" after a failed paste, or "Last available text" while a recovered
+   recording's words wait to be copied
    ([Recent result and Copy last text](#recent-result-and-copy-last-text)).
-5. The saved recording, while one is kept for Recover Last Dictation
+4. The saved recording, while one is kept for Recover Last Dictation
    ([Recording, silence and recovery](#recording-silence-and-recovery)).
-6. "Learning from you", while a learning receipt is shown
+5. "Learning from you", while a learning receipt is shown
+6. Once setup is done, a card with the mark, the hold key drawn as a key (the
+   keycap: "Right ⌘", "Left ⌥", "fn") and "Hold to talk, release to insert",
+   "Or hold mouse button 4" when a mouse button is chosen, and "Double-tap for
+   hands-free, press again to insert · Esc to cancel", with the hold-key
+   caution in it. While dictation is off it is dimmed and reads "Off: turn
+   Earlet on to use this key". It comes after everything that waits for the
+   user, because it never changes. In a narrow window the mark leaves first.
+   VoiceOver reads it as one sentence that names the key in words.
    ([Learning feedback, receipts and Undo](#learning-feedback-receipts-and-undo)).
 7. "Last 7 days", once the history holds a dictation: words, dictations,
    speaking time and the pace as the page's figures, the pace labelled "words
@@ -101,26 +105,29 @@ rendered or heard VoiceOver read the hint.
 leading side, its control on the trailing side, or under the words in a
 narrow window):
 
-1. Dictating: Hold to talk (the hold-key choice, disabled during a
+1. Dictating: Dictation key (the hold-key choice, disabled during a
    dictation, with a how-to line that names the double-tap; a recorded key
    is listed after the seven presets while it is chosen, and the menu ends
    with "Record a Key…", which turns the control into "Press a key…" with
    Cancel and a line of instructions, then says why a press was refused or
    which key it chose), the caution,
-   Test key, Mouse button (None, Mouse button 4 (Back) or Mouse button 5
+   "Test this key" (a row under the key it tests: "Without recording, Earlet
+   checks whether another app also reacts when you hold or double-tap the
+   key.", with Test Key, which reads Stop Test while it runs), Mouse button (None, Mouse button 4 (Back) or Mouse button 5
    (Forward), a recorded button after them while it is chosen, and "Record a
    Mouse Button…" at the end of the menu, which turns the control into
    "Click a mouse button…" with Cancel; disabled during a dictation, with the
-   line "Optional. Hold a side button to talk, or click or double-click it to
-   keep listening and click again to stop." and, once one is chosen, the
+   line "Optional. Hold a side button to talk, or click or double-click it for
+   hands-free and click again to insert." and, once one is chosen, the
    caution that it no longer goes Back or Forward in browsers or Finder (for
    a recorded button, that it no longer does what the mouse's software or
    other apps give it), or instead a note that macOS refused its listener and
    the hold key still works), Language (Automatic and ten languages; a change applies at the
    next hold, without restarting the speech engine, and a dictation under
    way keeps its language), and Stop hands-free after silence, with the note
-   that a recording runs for up to ten minutes and keeps its captured words
-   when the microphone or the speech engine fails. Until 2026-10-16 these
+   "After this much silence, hands-free stops and inserts what you said. A
+   held key never stops for silence, and any recording ends at ten minutes
+   with its words kept." Until 2026-10-16 these
    were three sections, Shortcut, Recording and Language.
 2. History: Save dictations, Keep dictations, Keep recordings, what is saved
    ("5 dictations · 96 KB of recordings") beside the group's title, where and
@@ -130,14 +137,18 @@ narrow window):
    copy, "Update Earlet automatically" and the version with Check for
    Updates… or Restart to Update ([Updates](#updates)).
 4. Troubleshooting, a closed disclosure: this copy's version, build and path
-   with Show This Copy in Finder, then Check permissions again, Restart
-   Earlet and Open Log Folder.
-5. The footer, by a lock, explains that no account is needed, that the history
-   is encrypted on this Mac and kept as long as the user chooses, and that a
-   recording that could not be transcribed is kept for recovery.
+   with Show This Copy in Finder, then Check Permissions Again, Restart
+   Earlet and Open Log Folder (one row, or one under another when the column
+   is too narrow), a line saying what each does, and Check Permissions
+   Again's answer, also when a grant is missing.
+5. The footer, by a lock, says only what Settings decides (the rail already
+   says that audio stays on this Mac with no account): the history is
+   encrypted on this Mac and kept as long as the user chooses, and, apart from
+   it, one dictation that couldn't be transcribed is kept as audio, not
+   encrypted, for up to 7 days for recovery, whatever Keep recordings says.
 
-The rail marks Home with a dot in the caution colour while it holds something
-only the user can finish (`homeNeedsAttention`): a missing grant or a due
+The rail marks Home with a dot while it holds something only the user can
+finish (gold during a first run's setup, the caution colour otherwise) (`homeNeedsAttention`): a missing grant or a due
 restart, whether dictation is on or off; words left after a refused paste; a
 recording kept for Recover Last Dictation; or a recording file that could not
 be removed. Paused by the user and a learning receipt are not marked: neither
@@ -223,11 +234,17 @@ time into the line under the words, so the words keep the width.
 The header is the page's headline: the state's one-line headline, then the
 status sentence (with room for two lines, so a longer one does not move the
 button under the pointer) beside a dot in the state's colour, and
-Enable/Pause, with Cancel dictation beside it while there is something to
-cancel. The button is the gold primary, under the sentence, only when it is
-the next step: a setup action, or Enable dictation while dictation is off.
-Pause dictation is a secondary button at the headline's trailing edge, so
-while dictation is on the hold key under the header leads. The dot is green
+Turn On or Turn Off, with Cancel Dictation beside it while there is something
+to cancel. The state is always "on" or "off": the headline reads "Earlet is
+on" or "Earlet is off", the actions are Turn On and Turn Off (Turn Earlet On
+and Turn Earlet Off in the menu bar menu), and Turn Off leaves "Off. The
+microphone is closed, and your dictation key does nothing until you turn
+Earlet on." The button is the gold primary, under the sentence, only when it
+is the next step: a setup action, or Turn On while dictation is off. Turn Off
+is a secondary button at the headline's trailing edge, so while dictation is
+on the hold key card leads. While the recent result holds a failed paste, the
+dot is in the caution colour and does not glow, so a green dot never sits
+beside a sentence saying the words could not be typed. The dot is green
 when on and red while recording, both with the page's one glow; gold while
 transcribing; rust for anything to fix; and a quiet ink when off or
 starting. The menu bar keeps its own glyph (below). While permission setup is incomplete, and nothing is recording or
@@ -243,12 +260,12 @@ fix, then the quiet states.
 | State | Menu bar glyph | Headline |
 |---|---|---|
 | Off: paused, not yet enabled, or an Enable that failed | `mic.slash` | Earlet is off |
-| Starting (Enable is loading the engine) | `mic.slash` | Starting dictation… |
+| Starting (Turn On is loading the engine) | `mic.slash` | Turning on… |
 | On and idle | `mic` | Earlet is on (menu: "On — hold Right Command", with the chosen key) |
 | Recording, held or hands-free | `mic.fill` | Listening… |
 | Transcribing | `waveform` | Transcribing… |
 | A grant missing | `exclamationmark.triangle` | Needs permission |
-| A restart due | `exclamationmark.triangle` | Reopen Earlet to finish |
+| A restart due | `exclamationmark.triangle` | Restart Earlet to finish |
 | The speech engine failed | `exclamationmark.triangle` | Speech engine unavailable |
 
 While words or a recording wait in the menu for the user, the icon carries a
@@ -280,12 +297,32 @@ triangle for its one grant, the microphone
 The header's action advances one step at a time: Microphone ("Allow
 Microphone…"), Accessibility ("Open System Settings…"), Input Monitoring ("Open
 Input Monitoring Settings…"), a restart when one is needed ("Restart
-Earlet"), then "Enable dictation". Granted steps are skipped. One click
-requests one permission, and coming back from System Settings advances to the
-next action without another system prompt. While the microphone request is
-open the header shows progress, and the button refuses a second click. The
-system microphone prompt reads "Earlet records while you hold the shortcut
-to type your speech locally." On macOS 27 and later, System Settings calls
+Earlet"), then "Turn On". Granted steps are skipped. On a first run
+the last one is skipped too: once every grant is in, the permission poll turns
+dictation on by itself. A first run is an install whose dictation has never
+been on: only an enable and Pause write the `dictation.enabled` preference, so
+an app its user paused, under this build or an older one, stays off until
+Enable, while an older install that was given the grants but never turned on
+is a first run and turns on after the update. The poll tries once per process:
+a failure after the grants is shown and not retried on every tick, and a
+refused key listener takes the restart step, after which the fresh process
+finishes the enable. It waits while a permission prompt is open and while
+Settings records a key or a mouse button. Until the first dictation is
+inserted, the line after any enable reads "You're set up. Hold Right Command
+wherever you type." (with the chosen key, and the mouse button when one is
+chosen), so it also greets a user whom macOS's Quit & Reopen relaunched after
+the automatic enable; after that it reads "On. Dictate wherever you can
+type.", leaving the key to the card below it. One click
+requests one permission and puts one thing on screen: macOS's own dialog the
+first time a permission is asked, whose button opens System Settings, or the
+pane itself when no dialog comes up (`systemDialogAppeared`: a dialog from
+another process takes Earlet out of the front within 0.7 s). Coming back from
+System Settings advances to the next action without another system prompt,
+and a grant made there during setup, with dictation off and Earlet behind,
+brings Earlet's window back once. While the microphone request is open the
+header shows progress, and the button refuses a second click. The system
+microphone prompt reads "Earlet listens while you dictate and turns your
+speech into text on this Mac." On macOS 27 and later, System Settings calls
 Accessibility "Device Control and Data Access", and so does every sentence
 that names it: the checklist, the recovery text, the status line, the
 floating indicator ("Allow Earlet in Privacy & Security → Device Control and
@@ -295,21 +332,48 @@ Data Access, then try again."), the key test and the refused mouse button.
 that spells "Accessibility", except one failure description only the log
 reads.
 
+On an install whose dictation has never been on, setup opens with one
+sentence on what Earlet is: "Earlet types what you say into any app: hold a
+key, speak, and let go. Your speech is turned into text on this Mac, with no
+account. macOS asks for three permissions first, one at a time." Each step's
+sentence says what the permission is for in plain words; the Input Monitoring
+step says that between dictations Earlet sees only keys like Shift, Option
+and Command and keeps nothing it types, and the Accessibility step says that
+learning, when on, rereads the words it just typed for up to 90 seconds and
+keeps words, not sentences.
+
 The checklist is read-only progress: a "Permissions · N of 3 allowed" header,
-one row per grant (Microphone, Accessibility, Input Monitoring) that says
-Allowed or Not allowed, and "Checked again when you come back from System
-Settings." with Check again beside it. Check again reports what this running
-process can use, without opening a prompt. The poll and app activation also refresh it. The
-checklist and the recovery disclosure wrap at the 420-point minimum width.
+one row per grant (Microphone, Accessibility, Input Monitoring), and "Earlet
+checks again when you come back from System Settings." with Check Again
+beside it. On a first run a row reads Allowed, Next (in gold, with a gold
+number, for the step the header's button asks for) or Not yet, the status dot
+and the rail's mark are gold, and nothing is in the caution colour: these are
+steps not reached, not failures. Once dictation has been on, a missing grant
+reads Not allowed in the caution colour. VoiceOver hears the next step when
+setup moves on, and what Check Again found. When this copy is outside
+Applications a notice says so above the rows, with Show in Finder, because
+macOS gives each permission to one copy. Check Again reports what this
+running process can use, without opening a prompt. The poll and app
+activation also refresh it. The checklist and the recovery disclosure wrap at
+the 420-point minimum width.
 
 A restart is offered only after this process's key listener was refused: when
 the event tap cannot be created although every probe says the grants are in, or
 when Input Monitoring arrives after the refusal. That process cannot use the
-grant, so only a fresh one can. Restart Earlet (in the header, the recovery
-disclosure and Troubleshooting) cannot interrupt a recording or an insertion,
-and an Enable that was waiting for the grants resumes in the new process.
+grant, so only a fresh one can. Restart Earlet (in the header and
+Troubleshooting) cannot interrupt a recording or an insertion, and an Enable
+that was waiting for the grants resumes in the new process. On the restart
+step the checklist shows its three rows only: Check Again and the recovery
+disclosure, with its second Restart button, are hidden, because restarting is
+the one thing left.
 
-The closed "Already enabled in System Settings?" disclosure explains, in order:
+When this copy has no bundled Python or model, Home offers Download Earlet…,
+which opens the latest release page, instead of an Enable that would fail the
+same way every time, and shows no hold key. A load failure or a timeout
+offers Try Again. While dictation is off the hold key card is dimmed and reads
+"Off: turn dictation on to use this key".
+
+The closed "Already on in System Settings?" disclosure explains, in order:
 restart first, because a switch can be on before macOS makes it available to
 the running app; if still blocked, an older copy may own the permission, so
 remove only Earlet with − in Accessibility or Input Monitoring, add the copy
@@ -389,7 +453,7 @@ and log classifications, not persisted learning records.
 
 The latest usable final text is held in memory only, so a dictation can be
 finished without losing its words. The next usable result replaces it, and
-Dismiss or quitting discards it. It is kept both when the text was inserted and
+Discard or quitting discards it. It is kept both when the text was inserted and
 when the paste failed, and can be copied again without another transcription.
 A password-field or Secure Input refusal clears it and never exposes its words.
 The section title says which case it is: "Last available text" ("Ready to copy
@@ -397,7 +461,10 @@ again.") or "Your words are still here" ("Couldn't type into the field."). A
 timestamp tells it apart from a newer dictation that was cancelled or failed.
 The words stay collapsed under "Show text" until the user opens it, the
 disclosure closes again for each new result, and the expanded text scrolls
-within 160 points. The section offers Copy last text and Dismiss on Home, and
+within 160 points. Home shows the section only while it needs the user (a
+failed paste, or a recovered recording's words waiting); after an ordinary
+dictation the text is where it was typed, and Copy last text stays in the menu
+bar menu. The section offers Copy last text and Discard on Home, and
 says where else the words are: "Your history keeps a copy, encrypted on this
 Mac." when they were handed to the [history](#history), otherwise "It isn't
 saved to disk." (Windows, which keeps no history, always says the second).
@@ -462,9 +529,6 @@ its secondary text style, above the teach row, and never with the dictated
 words:
 
 - "Checking this field for corrections…" while the watch runs;
-- a field that could not be read, text that moved before it could be checked,
-  or a field that was not checked (a secure field, another app), each ending
-  "You can add the word manually below.";
 - a correction that needs a second matching one: "Correction checked. Another
   matching correction is needed before it is used." This comes from that
   dictation's actual pending entries, not from a changed file or a candidate
@@ -473,16 +537,21 @@ words:
   vocabulary.";
 - an edit that taught nothing: "No vocabulary change was learned. You can add
   the word manually below.";
-- no edit: "No correction detected.";
 - a saved new word: the receipt in
   [Learning feedback, receipts and Undo](#learning-feedback-receipts-and-undo).
 
-A stale or abandoned watch cannot replace the notice for a newer dictation.
+A watch that saw no edit, or could not read the field (no focused field, the
+span missing or moved, a secure field, another app, an unknown paste target),
+ends with no notice: those are most dictations, and the disclosure under the
+switch already says that Earlet learns only in apps whose text it can read
+(.Codex/decisions.md, 2026-10-29). A stale or abandoned watch cannot replace
+the notice for a newer dictation. VoiceOver hears each notice, refusal and
+receipt as it arrives.
 
 The Mac observer reports whether the inserted span stayed readable through
 its ending and whether it ever changed, without returning surrounding text.
-An untouched readable span reports "No correction detected." A change that
-was reverted or did not settle reports that nothing was learned. Normal watch
+An untouched readable span ends quietly. A change that was reverted or did not
+settle reports that nothing was learned. Normal watch
 completion preserves the latest revision notice, including when focus moves
 to the Earlet window; abandonment clears it. These paths are covered by
 automated observer and app-model tests. Attended correction capture remains
@@ -562,15 +631,18 @@ Earlet runs.
 **The pane.** Dictations by day (Today, Yesterday, then the date), newest
 first, under the title, how many are saved and the search field (⌘F; Escape
 clears it; case and accents ignored). A row shows the
-time, the words (up to four lines, selectable), and the app, length,
-language and delivery when it was not typed in; then Play (with a
-recording), Copy and a menu with Delete…, all also in the row's context menu.
+time, the words (up to four lines, selectable, with Show All and Show Less for
+a longer dictation), and the app, length, language and delivery when it was
+not typed in; then Play (with a recording), Copy and a menu with Delete…, all
+also in the row's context menu. Copy's icon turns into a check for 1.5 s once
+the words are on the clipboard, and VoiceOver hears "Copied".
 Copy uses Copy last text's clipboard-safe writer. Delete asks first and
 deletes the recording with the words. Playback stops when a recording
 starts, because speech from the speakers would be typed with the user's
 words, and Play is disabled while one runs. Empty, off and locked are each
 their own state: "No dictations yet", "History is off" with Turn On History,
-and "History is locked" with Try Again.
+and "History is locked" with Try Again, whose sentence says to unlock the
+login keychain in Keychain Access first.
 
 **Without the key.** When the keychain refuses (locked, or the user denied a
 build whose signature changed), the history reads as locked: nothing is
@@ -604,9 +676,9 @@ In order:
    while it runs), after a separator of its own when no recent result is held.
 4. While a learning receipt is live: a separator, "Remembered your
    correction", "Review vocabulary…" and "Undo last learning".
-5. "Enable dictation" or "Pause dictation"; while dictation is off and setup is
-   incomplete, "Finish permission setup…", which opens the window.
-6. "Cancel dictation", only while there is something to cancel.
+5. "Turn Earlet On" or "Turn Earlet Off"; while dictation is off and setup is
+   incomplete, "Finish Setup…", which opens the window.
+6. "Cancel Dictation", only while there is something to cancel.
 7. A separator, "Show Earlet", "Settings… ⌘," and "Open Log Folder".
 8. A separator, "Preview Earlet Indicator" and "Quit Earlet ⌘Q".
 
@@ -755,10 +827,16 @@ notice; and an ending. The priority is: mic change, then a live hold, then an
 ending, then Transcribing. A visible state stays at least 375 ms before a
 different visible state replaces it. Hidden, a mic change and an ending land at
 once, and a new hold replaces an ending at once. The hint line under the title
-says how to stop: "Release to insert · Esc to cancel" while held; "m:ss · Press
-Right Command, Space or Return to stop" while hands-free (keypad Enter also
-stops, unnamed); "Stops in 0:NN · …" in the last 60 s before the 600-second
-limit; "Esc to cancel" while transcribing. While recording, the title becomes
+says how to stop: "Release to insert · Esc to cancel" while held; "Right
+Command, Space or Return inserts · Esc cancels" while hands-free, then "m:ss ·
+Right Command, Space or Return inserts" once its clock shows (keypad Enter also
+inserts, unnamed); "Stops in 0:NN · …" in the last 60 s before the 600-second
+limit; "Esc to cancel" while transcribing. The window's status line says
+"Listening hands-free. Press Right Command, Space or Return to insert." After a
+failure that kept the recording for Recover Last Dictation (the engine did not
+start, stopped answering, restarted or failed the decode), the ending's second
+line is "Recording kept. Recover it from Earlet's menu bar icon." instead of
+"Try again", and it stays at least 4 s. While recording, the title becomes
 the live preview of the user's words once there are any (display only, never
 inserted, oldest words clipped on one line); `DICTATION_PREVIEW=0` turns the
 preview off. Escape's question on a long take takes the title and the hint

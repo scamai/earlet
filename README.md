@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <sub>macOS 14+ · Apple Silicon · 0.2.2 preview<br>
+  <sub>macOS 14+ · Apple Silicon · 0.2.3 preview<br>
   Signed and notarized by Apple.</sub>
 </p>
 
@@ -88,7 +88,7 @@ recording. Retention and deletion stay under your control.
 
 ## Install
 
-Download `Earlet-0.2.2-macos-arm64.dmg` from
+Download `Earlet-0.2.3-macos-arm64.dmg` from
 [Releases](https://github.com/scamai/earlet/releases/latest), open it and drag
 Earlet to Applications. It needs an Apple Silicon Mac with macOS 14 or later.
 The image is signed with Reality Inc.'s Developer ID and notarized by Apple,
@@ -153,7 +153,8 @@ checks, follow [Build and test](CONTRIBUTING.md#build-and-test).
 1. Open the Mac app and follow its setup prompts. The full workflow needs
    **Microphone**, **Accessibility** (called **Device Control and Data
    Access** on macOS 27 and later), and **Input Monitoring** access. Quit and
-   reopen the app after granting Input Monitoring.
+   reopen the app after granting Input Monitoring. Once all three are
+   allowed, Earlet turns itself on and says "You're set up."
 2. In Home, click the **Try dictation** practice field. Hold **Right Command**,
    say a short sentence, then release. Wait for the transcription to finish.
    Practice text is not saved to History.

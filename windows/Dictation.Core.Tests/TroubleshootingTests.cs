@@ -89,20 +89,23 @@ public sealed class TroubleshootingTests
     // ─── The footer and the pointers to the log ─────────────────────────
 
     [Fact]
-    public void The_footer_shares_the_Mac_s_opening_then_says_what_Windows_keeps()
+    public void The_footer_says_what_Windows_keeps_after_the_shared_privacy_line()
     {
-        const string mac = "Your audio stays on this device. No account is required.";
+        const string opening = "Your audio stays on this device. No account is required.";
         const string recordings = "No transcript history is saved, and a recording only until its words are in, or for you to recover.";
-        // The Mac keeps an encrypted history (2026-10-16); Windows keeps none
-        // yet, so the two footers share their opening and part there.
-        const string macHistory = "Your history is encrypted on this Mac and kept as long as you choose above; a recording that could not be transcribed is kept for you to recover.";
+        // The Mac keeps an encrypted history (2026-10-16), and since 2026-10-30
+        // its window's rail says that audio stays on the Mac with no account,
+        // so its Settings footer says only what Settings decides. Windows has
+        // no rail and keeps the privacy line as its footer's opening.
+        const string macHistory = "History is encrypted on this Mac and kept as long as you choose above. Apart from it, one dictation that couldn't be transcribed is kept as audio, not encrypted, for up to 7 days so you can recover it, whatever Keep recordings says.";
         const string obsoleteRecordings = "Recordings and transcript history are not saved to disk.";
         var swift = File.ReadAllText(Path.Combine(
             DictationOverridesTests.WindowsRoot(), "..", "macos", "Sources", "DictationApp", "DictationSettingsView.swift"));
 
-        Assert.Contains(mac + " " + macHistory, swift, StringComparison.Ordinal);
+        Assert.Contains(macHistory, swift, StringComparison.Ordinal);
+        Assert.DoesNotContain(opening, swift, StringComparison.Ordinal);
         Assert.DoesNotContain(recordings, swift, StringComparison.Ordinal);
-        Assert.StartsWith(mac + " " + recordings + " ", DictationCopy.Footer, StringComparison.Ordinal);
+        Assert.StartsWith(opening + " " + recordings + " ", DictationCopy.Footer, StringComparison.Ordinal);
         // Both platforms spool a take and retain a failed one for recovery.
         // Neither footer may claim that recordings never reach disk.
         Assert.DoesNotContain(obsoleteRecordings, swift, StringComparison.Ordinal);

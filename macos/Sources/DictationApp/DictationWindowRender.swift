@@ -92,7 +92,7 @@ enum DictationRenderScenario: String, CaseIterable {
     case vocabularyUnsaved = "vocabulary-unsaved", vocabularySaved = "vocabulary-saved"
     case recentResult = "recent-result", recovery, copiedResult = "copied-result"
     case learned, learningUndone = "learning-undone"
-    case learningChecking = "learning-checking", learningUnavailable = "learning-unavailable"
+    case learningChecking = "learning-checking"
     case learningPending = "learning-pending", learningRejected = "learning-rejected", learnedRepo = "learned-repo"
     /// The speech resources are missing: the failure sentence.
     case missingResources = "missing-resources"
@@ -122,7 +122,7 @@ enum DictationRenderScenario: String, CaseIterable {
     var pane: DictationWindowPane {
         switch self {
         case .vocabulary, .vocabularyUnsaved, .vocabularySaved,
-             .learningChecking, .learningUnavailable, .learningPending, .learningRejected, .learnedRepo:
+             .learningChecking, .learningPending, .learningRejected, .learnedRepo:
             return .vocabulary
         case .settings, .troubleshooting, .settingsShortcut, .settingsRecording, .settingsExtraMouseButton,
              .settingsMouseRecording, .settingsMouseRefused:
@@ -293,13 +293,11 @@ final class DictationRenderRig {
             _ = await model.vocabulary.observe(dictationID: "render", dictated: "We use brivio",
                                                edited: "We use Brivioo")
             if scenario == .learningUndone { await model.vocabulary.undoLastLearning() }
-        case .learningChecking, .learningUnavailable, .learningPending, .learningRejected, .learnedRepo:
+        case .learningChecking, .learningPending, .learningRejected, .learnedRepo:
             await model.toggle()
             let id = UUID()
             model.vocabulary.beginObservationFeedback(id: id)
             switch scenario {
-            case .learningUnavailable:
-                model.vocabulary.endObservationFeedback(id: id, reason: "span_missing")
             case .learningPending:
                 _ = await model.vocabulary.observe(dictationID: "render", dictated: "we use sunshine",
                     edited: "we use Sunshine42x!", observationID: id)

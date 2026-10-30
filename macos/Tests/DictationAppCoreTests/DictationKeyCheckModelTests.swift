@@ -216,7 +216,7 @@ struct DictationKeyCheckModelTests {
         for _ in 0..<10 { await Task.yield() }
         #expect(!model.isTesting)
         #expect(fixture.index == 0)
-        #expect(model.message?.contains("could not start") == true)
+        #expect(model.message?.contains("can't watch the keyboard") == true)
     }
 
     @Test("a double tap alone cannot certify a key before its held test")

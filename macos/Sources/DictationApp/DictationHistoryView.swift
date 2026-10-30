@@ -89,7 +89,7 @@ struct DictationHistoryPane: View {
                             hasRecording: history.recordings.contains(entry.id),
                             playing: player.playing == entry.id,
                             canPlay: !model.recording,
-                            copy: { Task { await history.copy(entry) } },
+                            copy: { await history.copy(entry) },
                             play: { togglePlayback(entry) },
                             delete: { deleting = entry })
                         DictationDivider()
@@ -220,11 +220,30 @@ private struct DictationHistoryRow: View {
     let hasRecording: Bool
     let playing: Bool
     let canPlay: Bool
-    let copy: () -> Void
+    /// Whether the words reached the clipboard.
+    let copy: () async -> Bool
     let play: () -> Void
     let delete: () -> Void
 
     @Environment(\.dictationNarrow) private var narrow
+    /// A long dictation shows four lines until the user asks for the rest.
+    @State private var expanded = false
+    /// Copy's answer, for a moment: the button gave none.
+    @State private var copied = false
+
+    private var isLong: Bool {
+        entry.text.count > 280 || entry.text.filter(\.isNewline).count >= 4
+    }
+
+    private func copyNow() {
+        Task {
+            guard await copy() else { return }
+            copied = true
+            AccessibilityNotification.Announcement("Copied").post()
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
@@ -240,9 +259,13 @@ private struct DictationHistoryRow: View {
                 Text(entry.text)
                     .font(.system(size: 14))
                     .foregroundStyle(.brandInk)
-                    .lineLimit(4)
+                    .lineLimit(expanded ? nil : 4)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                if isLong {
+                    Button(expanded ? "Show Less" : "Show All") { expanded.toggle() }
+                        .buttonStyle(.dictation(.quiet))
+                }
                 Text(narrow ? entry.recordedAt.formatted(date: .omitted, time: .shortened) + " · " + detail : detail)
                     .font(DictationType.callout)
                     .foregroundStyle(.brandInk2)
@@ -257,9 +280,9 @@ private struct DictationHistoryRow: View {
                     .help(playing ? "Stop" : "Play the recording")
                     .accessibilityLabel(playing ? "Stop the recording" : "Play the recording")
                 }
-                Button(action: copy) { Image(systemName: "doc.on.doc") }
-                    .help("Copy")
-                    .accessibilityLabel("Copy")
+                Button(action: copyNow) { Image(systemName: copied ? "checkmark" : "doc.on.doc") }
+                    .help(copied ? "Copied" : "Copy")
+                    .accessibilityLabel(copied ? "Copied" : "Copy")
                 Menu {
                     menuItems
                 } label: {
@@ -280,7 +303,7 @@ private struct DictationHistoryRow: View {
 
     @ViewBuilder
     private var menuItems: some View {
-        Button("Copy", action: copy)
+        Button("Copy", action: copyNow)
         if hasRecording {
             Button(playing ? "Stop" : "Play Recording", action: play).disabled(!canPlay && !playing)
         }

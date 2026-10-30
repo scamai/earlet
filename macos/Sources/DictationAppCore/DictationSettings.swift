@@ -73,6 +73,15 @@ public final class DictationSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Self.enabledKey) }
     }
 
+    /// Whether dictation has ever been on with these preferences. Only a
+    /// successful enable and Pause write `enabled`, so the key being there
+    /// at all says so, for installs from before this property too. Guards
+    /// the first-run enable (G16): a user who paused is never turned back
+    /// on.
+    public var hasBeenEnabledBefore: Bool {
+        defaults.object(forKey: Self.enabledKey) != nil
+    }
+
     /// The language the user dictates in. Unset or unreadable is Automatic,
     /// which lets the recognizer detect it per dictation.
     public var language: DictationLanguage {

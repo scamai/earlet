@@ -20,21 +20,15 @@ namespace Dictation.Core;
 /// the user clearing the section):
 /// no notice, as the Mac's <c>abandoned</c>;</item>
 /// <item>no focused field, no text pattern, the pasted text not found once in
-/// the field: "The field could not be read." (<c>no_focused_field</c>,
-/// <c>span_missing</c>);</item>
-/// <item>the span lost its anchor: "The dictated text moved…"
-/// (<c>span_context_lost</c>);</item>
-/// <item>a password field or one that could not be shown not to be, another
-/// application, a console (never watched), this app's own window: "This
-/// field was not checked." (<c>secure_field</c>, <c>other_application</c>);</item>
-/// <item>everything else that stopped the observer — a paste target nobody
-/// could name, a document too long to read, a UI Automation timeout or
-/// failure: "This field could not be checked.";</item>
+/// the field, a lost anchor, a password field, another application, a
+/// console, this app's own window, or any other reason the observer
+/// stopped: no notice. Those are most dictations, and the disclosure under
+/// the switch already says learning works only where Earlet can read the
+/// text;</item>
 /// <item>an observation that ran its course (settled, navigated, cleared or
-/// timed out) without a revision for learning: "No correction detected." when
-/// the span never changed and "No vocabulary change was learned." when it
-/// changed but nothing settled into a correction — docs/design-macos.md's "no edit" and
-/// "an edit that taught nothing".</item>
+/// timed out) without a revision for learning: "No vocabulary change was
+/// learned." when the span changed but nothing settled into a correction,
+/// and no notice when it never changed.</item>
 /// </list>
 /// <para>
 /// After a revision went to learning, its own notice stands when the
@@ -42,11 +36,11 @@ namespace Dictation.Core;
 /// other reason.
 /// </para>
 /// <para>
-/// Those last two follow docs/design-macos.md and depart from the Mac's running code. Its
-/// continuous observer never hands a span to the end of a watch, so an
-/// untouched watch that ran its course falls to "This field could not be
-/// checked.", and every end after a revision clears that revision's notice
-/// (a Windows-side decision of 2026-10-09).
+/// The revision rule follows docs/design-macos.md and departs from the Mac's
+/// running code, whose continuous observer never hands a span to the end of a
+/// watch: there every end after a revision clears that revision's notice (a
+/// Windows-side decision of 2026-10-09). Both platforms end an untouched or
+/// unreadable watch with no notice.
 /// </para>
 /// </remarks>
 public static class CorrectionNotices
@@ -75,9 +69,9 @@ public static class CorrectionNotices
             return !ranItsCourse;
         }
 
-        notice = ranItsCourse
-            ? ended.SawChange ? DictationCopy.CorrectionNothingLearned : DictationCopy.CorrectionNotDetected
-            : ForReason(ended.Reason);
+        // A notice reports something that happened: a watch that saw no edit,
+        // or stopped before it could read the field, ends quietly.
+        notice = ranItsCourse && ended.SawChange ? DictationCopy.CorrectionNothingLearned : null;
         return true;
     }
 
@@ -104,20 +98,6 @@ public static class CorrectionNotices
 
         return outcome.Rejections > 0 || observed.Edited
             ? DictationCopy.CorrectionNothingLearned
-            : DictationCopy.CorrectionNotDetected;
+            : null;
     }
-
-    private static string ForReason(string? reason) => reason switch
-    {
-        SpanObservation.ReasonNoFocus
-            or SpanObservation.ReasonNoTextPattern
-            or SpanObservation.ReasonAnchorAmbiguous => DictationCopy.CorrectionFieldUnread,
-        SpanObservation.ReasonAnchorLost => DictationCopy.CorrectionTextMoved,
-        SpanObservation.ReasonSecure
-            or SpanObservation.ReasonSecureUnknown
-            or SpanObservation.ReasonSelf
-            or SpanObservation.ReasonTerminal
-            or CorrectionWatch.ReasonOtherApplication => DictationCopy.CorrectionFieldNotChecked,
-        _ => DictationCopy.CorrectionFieldUncheckable,
-    };
 }

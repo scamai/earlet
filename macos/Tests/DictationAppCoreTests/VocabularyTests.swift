@@ -22,7 +22,7 @@ struct VocabularyTests {
         typealias Copy = DictationVocabularyCopy
         #expect(Copy.heading == "Vocabulary")
         #expect(Copy.learnSwitch == "Learn from my corrections")
-        #expect(Copy.disclosure == "In supported text fields, Earlet checks your corrections for up to 90 seconds. Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences.")
+        #expect(Copy.disclosure == "If you fix a word within 90 seconds of dictating it, Earlet may learn it, but only in apps whose text it can read, so that happens rarely. Adding the word below always works. Learning keeps words on this computer, never whole sentences.")
         #expect(Copy.wordPlaceholder == "Word or name")
         #expect(Copy.soundsLikePlaceholder == "Often misheard as (optional)")
         #expect(Copy.soundsLikeHelp == "Optional: how Earlet writes it now, like “get hub” for GitHub. Earlet will write the word instead.")
@@ -32,7 +32,7 @@ struct VocabularyTests {
         #expect(Copy.addedByYou == "Added by you")
         #expect(Copy.remove == "Remove")
         #expect(Copy.forgetAll == "Forget all")
-        #expect(Copy.forgetAllQuestion == "Forget every learned and added word? Earlet will stop using them.")
+        #expect(Copy.forgetAllQuestion == "Forget every word you added and every word Earlet learned, with their misheard forms and the corrections it is still checking? Earlet stops using them, and this can't be undone.")
         #expect(Copy.cancel == "Cancel")
         #expect(Copy.unsaved == "Your vocabulary isn't saved yet. Earlet keeps using it and will try again.")
         #expect(Copy.alias(heard: "trovio", meant: "Trovioo") == "trovio → Trovioo")
@@ -42,7 +42,7 @@ struct VocabularyTests {
     func refusalSentences() {
         #expect(DictationVocabularyCopy.refusal(.ok) == nil)
         #expect(DictationVocabularyCopy.refusal(.empty) == "Type a word first.")
-        #expect(DictationVocabularyCopy.refusal(.tooLong) == "That is too long. Use up to 60 characters.")
+        #expect(DictationVocabularyCopy.refusal(.tooLong) == "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all.")
         #expect(DictationVocabularyCopy.refusal(.selfContaining) == "The misheard form can't be part of the word itself.")
         #expect(DictationVocabularyCopy.refusal(.full) == "The list is full. Remove a word first.")
     }
@@ -95,7 +95,8 @@ struct VocabularyTests {
         let (_, vocabulary) = vocabulary()
         let cases: [(String, String, String)] = [
             ("   ", "", "Type a word first."),
-            (String(repeating: "x", count: 61), "", "That is too long. Use up to 60 characters."),
+            (String(repeating: "x", count: 61), "", "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all."),
+            ("one two three four five six seven", "", "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all."),
             ("Fable Notes", "notes", "The misheard form can't be part of the word itself."),
         ]
         for (written, soundsLike, sentence) in cases {

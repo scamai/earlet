@@ -315,6 +315,9 @@ public extension LearnedWord {
         let opposition: Int
         if case .integer(let value) = extra["opposition"] { opposition = Int(clamping: value) } else { opposition = 0 }
         let score = count - max(0, min(count, opposition))
-        return score >= 4 ? "Established" : score >= 2 ? "Confirmed" : "Tentative"
+        // Say what the count means; "Tentative", "Confirmed" and
+        // "Established" were labels nobody was told how to read.
+        return score >= 4 ? "Confirmed by 4 or more of your fixes"
+            : score >= 2 ? "Confirmed by 2 or 3 of your fixes" : "Learned from one fix, not yet confirmed"
     }
 }

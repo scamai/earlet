@@ -83,7 +83,7 @@ public sealed class VocabularyModelTests
         Assert.Equal(
             [
                 new VocabularyRow(VocabularyRowKind.Word, "SkyDock", "Added by you", "SkyDock", null),
-                new VocabularyRow(VocabularyRowKind.Word, "Trovioo", "Confirmed", "Trovioo", null),
+                new VocabularyRow(VocabularyRowKind.Word, "Trovioo", "Confirmed by 2 or 3 of your fixes", "Trovioo", null),
                 new VocabularyRow(VocabularyRowKind.Alias, "trovio → Trovioo", null, "Trovioo", "trovio"),
             ],
             rows);
@@ -95,8 +95,8 @@ public sealed class VocabularyModelTests
     public void Confidence_follows_independent_support_and_later_rejections_in_the_view()
     {
         using var s = new Section();
-        foreach (var (id, label) in new[] { ("one", "Tentative"), ("two", "Confirmed"),
-                     ("three", "Confirmed"), ("four", "Established") })
+        foreach (var (id, label) in new[] { ("one", "Learned from one fix, not yet confirmed"), ("two", "Confirmed by 2 or 3 of your fixes"),
+                     ("three", "Confirmed by 2 or 3 of your fixes"), ("four", "Confirmed by 4 or more of your fixes") })
         {
             s.Learning.Observe(id, "we use trovio", "we use Trovioo", T);
             s.Dispatcher.Drain();
@@ -104,7 +104,7 @@ public sealed class VocabularyModelTests
         }
         s.Learning.Observe("rejected", "we use Trovioo", "we use Trovio", T.AddSeconds(1));
         s.Dispatcher.Drain();
-        Assert.Equal("Confirmed", s.View.Last.Rows.Single(r => r.Kind == VocabularyRowKind.Word && r.Text == "Trovioo").Detail);
+        Assert.Equal("Confirmed by 2 or 3 of your fixes", s.View.Last.Rows.Single(r => r.Kind == VocabularyRowKind.Word && r.Text == "Trovioo").Detail);
     }
 
     [Fact]
@@ -169,8 +169,8 @@ public sealed class VocabularyModelTests
         { "   ", "trovio", "Type a word first." },
         { null, null, "Type a word first." },
         { "Trovioo", "t", "Type a word first." },
-        { new string('x', 61), null, "That is too long. Use up to 60 characters." },
-        { "one two three four five six seven", null, "That is too long. Use up to 60 characters." },
+        { new string('x', 61), null, "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all." },
+        { "one two three four five six seven", null, "That is too long. Use at most 6 words, or 12 Chinese, Japanese or Korean characters, and 60 characters in all." },
         { "Trovioo Cloud", "trovioo", "The misheard form can't be part of the word itself." },
     };
 
@@ -278,7 +278,7 @@ public sealed class VocabularyModelTests
         Assert.True(s.View.Last.ConfirmingForgetAll);
         Assert.False(s.View.Last.CanForgetAll);
         Assert.Equal(
-            "Forget every learned and added word? Earlet will stop using them.", DictationCopy.ForgetAllQuestion);
+            "Forget every word you added and every word Earlet learned, with their misheard forms and the corrections it is still checking? Earlet stops using them, and this can't be undone.", DictationCopy.ForgetAllQuestion);
         Assert.Equal(("Forget all", "Cancel"), (DictationCopy.ForgetAll, DictationCopy.ForgetAllCancel));
 
         s.Model.CancelForgetAll();
@@ -398,8 +398,8 @@ public sealed class VocabularyModelTests
         Assert.Equal("Vocabulary", DictationCopy.VocabularyHeading);
         Assert.Equal("Learn from my corrections", DictationCopy.LearnFromCorrections);
         Assert.Equal(
-            "In supported text fields, Earlet checks your corrections for up to 90 seconds. "
-            + "Useful words are remembered on this computer for future dictations; learning keeps words, not whole sentences.",
+            "If you fix a word within 90 seconds of dictating it, Earlet may learn it, but only in apps whose text it can read, "
+            + "so that happens rarely. Adding the word below always works. Learning keeps words on this computer, never whole sentences.",
             DictationCopy.LearnFromCorrectionsDisclosure);
         Assert.Equal("Word or name", DictationCopy.TeachWordPlaceholder);
         Assert.Equal("Often misheard as (optional)", DictationCopy.TeachSoundsLikePlaceholder);

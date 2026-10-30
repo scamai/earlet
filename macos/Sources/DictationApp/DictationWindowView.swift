@@ -88,7 +88,8 @@ private struct DictationRail: View {
                 .padding(.bottom, 22)
             ForEach(Array(DictationWindowPane.allCases.enumerated()), id: \.element) { index, pane in
                 DictationRailItem(pane: pane, selected: navigation.pane == pane,
-                                  marked: pane == .home && model.homeNeedsAttention) {
+                                  marked: pane == .home && model.homeNeedsAttention,
+                                  markRole: model.isFirstSetup ? .wheatStrong : .caution) {
                     navigation.pane = pane
                 }
                 .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
@@ -115,6 +116,9 @@ private struct DictationRailItem: View {
     let pane: DictationWindowPane
     let selected: Bool
     let marked: Bool
+    /// The mark's colour: a first run's next step is gold, anything that
+    /// broke is the caution colour.
+    var markRole: DictationColorRole = .caution
     let action: () -> Void
     @State private var hovering = false
 
@@ -131,7 +135,7 @@ private struct DictationRailItem: View {
                     .foregroundStyle(selected || hovering ? AnyShapeStyle(.brandInk) : AnyShapeStyle(.brandInk2))
                 Spacer(minLength: 4)
                 if marked {
-                    Circle().fill(.brandCaution).frame(width: 7, height: 7)
+                    Circle().fill(DictationColor(markRole)).frame(width: 7, height: 7)
                 }
             }
             .padding(.horizontal, 10)

@@ -22,6 +22,8 @@ struct MouseButtonTests {
     private func enabled(_ harness: Harness, button: DictationMouseSideButton? = .back,
                          clock: Clock = Clock()) async -> DictationModel {
         harness.settings.mouseButton = button
+        // A returning user, whose enabled line reads "On.".
+        harness.settings.hasCompletedFirstDictation = true
         var environment = harness.environment()
         environment.holdKeyUptime = { clock.now }
         let model = DictationModel(environment: environment)
@@ -35,7 +37,7 @@ struct MouseButtonTests {
         let harness = Harness()
         let clock = Clock()
         let model = await enabled(harness, clock: clock)
-        #expect(model.status == "Enabled. Hold Right Command or mouse button 4 in a text field.")
+        #expect(model.status == "On. Dictate wherever you can type.")
 
         harness.mouse.press()
         #expect(await eventually { model.recording })
@@ -57,7 +59,7 @@ struct MouseButtonTests {
         clock.now += 0.1
         harness.mouse.release()
         #expect(await eventually { model.latched && model.recording })
-        #expect(model.status == "Dictating. Press mouse button 4, Space or Return to stop.")
+        #expect(model.status == "Listening hands-free. Press mouse button 4, Space or Return to insert.")
         #expect(harness.stopTrap.active, "Space and Return stop a mouse latch too")
         try? await Task.sleep(for: .milliseconds(200))
         #expect(harness.workers.made[0].state.get.transcribes == 0, "the click did not finish anything")
@@ -205,12 +207,21 @@ struct MouseButtonTests {
         #expect(await eventually { !model.busy && model.status.hasPrefix("Text inserted") })
     }
 
+    @Test("the first line after setup teaches the key and the button; later lines leave that to Home's card")
+    func firstLineTeachesTheTriggers() async {
+        let harness = Harness()
+        harness.settings.mouseButton = .back
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.status == "You're set up. Hold Right Command or mouse button 4 wherever you type.")
+    }
+
     @Test("with no button chosen there is no mouse listener")
     func noButtonNoListener() async {
         let harness = Harness()
         let model = await enabled(harness, button: nil)
         #expect(harness.mouse.starts == 0)
-        #expect(model.status == "Enabled. Hold Right Command in a text field.")
+        #expect(model.status == "On. Dictate wherever you can type.")
     }
 
     @Test("choosing, changing and clearing the button while enabled")
@@ -221,7 +232,7 @@ struct MouseButtonTests {
         model.selectMouseButton(.back)
         #expect(harness.mouse.running && harness.mouse.buttons == [.back])
         #expect(harness.settings.mouseButton == .back)
-        #expect(model.status == "Enabled. Hold Right Command or mouse button 4 in a text field.")
+        #expect(model.status == "On. Dictate wherever you can type.")
 
         model.selectMouseButton(.forward)
         #expect(harness.mouse.buttons == [.back, .forward], "the live listener moves; no second one")

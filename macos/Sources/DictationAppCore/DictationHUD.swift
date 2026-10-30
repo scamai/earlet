@@ -206,7 +206,9 @@ public enum DictationHUDContent {
     public static func title(for state: DictationHUDState, livePreviewText: String = "") -> String? {
         switch state {
         case .hidden: return nil
-        case .recording: return livePreviewText.isEmpty ? "Listening" : livePreviewText
+        // Hands-free says so: held and hands-free looked the same.
+        case .recording(let latched):
+            return livePreviewText.isEmpty ? (latched ? "Listening hands-free" : "Listening") : livePreviewText
         case .transcribing: return "Transcribing…"
         case .micChanged(let message): return message
         case .outcome(let outcome): return outcome.title
@@ -220,7 +222,8 @@ public enum DictationHUDContent {
         // Escape still cancels until the paste begins.
         case .transcribing: return "Esc to cancel"
         case .recording(latched: false): return "Release to insert · Esc to cancel"
-        case .recording(latched: true): return "Press \(holdKeyName), Space or Return to stop"
+        // What ends it, that ending inserts, and that Escape still cancels.
+        case .recording(latched: true): return "\(holdKeyName), Space or Return inserts · Esc cancels"
         case .outcome(let outcome): return outcome.detail
         }
     }
@@ -244,11 +247,11 @@ public enum DictationHUDContent {
         }
         let remaining = limit - elapsed
         if remaining <= countdownSeconds {
-            let stop = latched ? "Press \(holdKeyName), Space or Return to stop" : "Release to insert"
+            let stop = latched ? "\(holdKeyName), Space or Return inserts" : "Release to insert"
             return "Stops in \(clock(remaining.rounded(.up))) · \(stop)"
         }
         guard latched else { return hint(for: state, holdKeyName: holdKeyName) }
-        return "\(clock(elapsed)) · Press \(holdKeyName), Space or Return to stop"
+        return "\(clock(elapsed)) · \(holdKeyName), Space or Return inserts"
     }
 
     /// Whole seconds as m:ss, floored ("1:05"); never negative.

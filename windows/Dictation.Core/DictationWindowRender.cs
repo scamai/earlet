@@ -118,9 +118,6 @@ public enum DictationWindowRenderScenario
     /// <summary>A correction watch is running.</summary>
     LearningChecking,
 
-    /// <summary>The watch could not read the field.</summary>
-    LearningUnavailable,
-
     /// <summary>A correction that needs a second matching one.</summary>
     LearningPending,
 
@@ -643,15 +640,6 @@ public static class DictationWindowRenderScript
             case DictationWindowRenderScenario.LearningChecking:
                 await EnableAsync(stage);
                 await BeginWatchAsync(stage);
-                break;
-
-            case DictationWindowRenderScenario.LearningUnavailable:
-                await EnableAsync(stage);
-                var watch = await BeginWatchAsync(stage);
-                stage.Parts.Corrections.Raise(new CorrectionWatchEnded(
-                    watch, SpanObservation.TerminalUnobservable, SpanObservation.ReasonNoFocus, null, 0, false));
-                await UntilAsync(
-                    stage, () => vocabulary.Shown?.CorrectionNotice != CorrectionNotices.Checking, "the watch's ending");
                 break;
 
             case DictationWindowRenderScenario.LearningPending:

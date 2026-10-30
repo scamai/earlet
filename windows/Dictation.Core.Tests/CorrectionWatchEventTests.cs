@@ -231,7 +231,7 @@ public sealed class CorrectionWatchEventTests
         var revisions = s.Recorder.Events.OfType<CorrectionWatchObserved>().ToArray();
         Assert.Equal([(1, true), (2, false)], revisions.Select(r => (r.Revision, r.Edited)));
         Assert.Equal(DictationCopy.CorrectionNothingLearned, CorrectionNotices.ForOutcome(revisions[0]));
-        Assert.Equal(DictationCopy.CorrectionNotDetected, CorrectionNotices.ForOutcome(revisions[1]));
+        Assert.Null(CorrectionNotices.ForOutcome(revisions[1]));
         Assert.Equal(2, s.Recorder.Events.OfType<CorrectionWatchEnded>().Single().Revisions);
     }
 
@@ -262,10 +262,10 @@ public sealed class CorrectionWatchEventTests
 
     // ─── Order, and a watch that fails ─────────────────────────────────
 
-    public static TheoryData<string, string> EndsAtOnce => new()
+    public static TheoryData<string> EndsAtOnce => new()
     {
-        { "an application nobody could name", DictationCopy.CorrectionFieldUncheckable },
-        { "another application", DictationCopy.CorrectionFieldNotChecked },
+        "an application nobody could name",
+        "another application",
     };
 
     /// <summary>
@@ -277,7 +277,7 @@ public sealed class CorrectionWatchEventTests
     /// </summary>
     [Theory]
     [MemberData(nameof(EndsAtOnce))]
-    public void A_watch_that_ends_at_once_is_heard_to_start_first(string pastedInto, string notice)
+    public void A_watch_that_ends_at_once_is_heard_to_start_first(string pastedInto)
     {
         FakeField? field = null;
         using var s = new Standalone(
@@ -303,7 +303,7 @@ public sealed class CorrectionWatchEventTests
             Assert.Equal(started.Watch, Assert.IsType<CorrectionWatchEnded>(events[i + 1]).Watch);
         }
 
-        Assert.Equal(notice, s.Notice);
+        Assert.Null(s.Notice);
     }
 
     /// <summary>
@@ -328,7 +328,7 @@ public sealed class CorrectionWatchEventTests
         Assert.Equal(
             ("unobservable:exception", (CorrectionWatchEnd?)null, 0, false),
             (ended.Label, ended.EndedBy, ended.Revisions, ended.SawChange));
-        Assert.Equal(DictationCopy.CorrectionFieldUncheckable, s.Notice);
+        Assert.Null(s.Notice);
         var log = ReadLog(dir);
         Assert.Contains("Correction watch ended: failed (InvalidOperationException)", log, StringComparison.Ordinal);
         Assert.DoesNotContain(Heard, log, StringComparison.OrdinalIgnoreCase);

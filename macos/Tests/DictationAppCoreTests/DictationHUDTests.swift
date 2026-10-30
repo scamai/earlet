@@ -36,9 +36,9 @@ struct DictationHUDMappingTests {
         let state = Resolve.resolve(recording: true, transcribing: false, latched: true,
                                     micChangedNotice: nil)
         #expect(state == .recording(latched: true))
-        #expect(Resolve.title(for: state) == "Listening")
+        #expect(Resolve.title(for: state) == "Listening hands-free")
         #expect(Resolve.hint(for: state, holdKeyName: "Right Command")
-            == "Press Right Command, Space or Return to stop")
+            == "Right Command, Space or Return inserts · Esc cancels")
     }
 
     @Test("a release shows Transcribing, and Escape still cancels it")
@@ -303,9 +303,9 @@ struct DictationHUDTimeTests {
     @Test("a latched hold shows how long it has run")
     func latchedShowsElapsed() {
         #expect(Content.hint(for: .recording(latched: true), holdKeyName: key, elapsed: 42, limit: 120)
-            == "0:42 · Press Right Command, Space or Return to stop")
+            == "0:42 · Right Command, Space or Return inserts")
         #expect(Content.hint(for: .recording(latched: true), holdKeyName: key, elapsed: 65.9, limit: 600)
-            == "1:05 · Press Right Command, Space or Return to stop")
+            == "1:05 · Right Command, Space or Return inserts")
     }
 
     @Test("a held key keeps its plain hint until the countdown")
@@ -323,9 +323,9 @@ struct DictationHUDTimeTests {
         #expect(Content.hint(for: .recording(latched: false), holdKeyName: key, elapsed: 107.2, limit: 120)
             == "Stops in 0:13 · Release to insert")
         #expect(Content.hint(for: .recording(latched: true), holdKeyName: key, elapsed: 110, limit: 120)
-            == "Stops in 0:10 · Press Right Command, Space or Return to stop")
+            == "Stops in 0:10 · Right Command, Space or Return inserts")
         #expect(Content.hint(for: .recording(latched: true), holdKeyName: key, elapsed: 125, limit: 120)
-            == "Stops in 0:00 · Press Right Command, Space or Return to stop", "never negative")
+            == "Stops in 0:00 · Right Command, Space or Return inserts", "never negative")
     }
 
     @Test("without a clock, and outside a recording, the hint is the plain one")

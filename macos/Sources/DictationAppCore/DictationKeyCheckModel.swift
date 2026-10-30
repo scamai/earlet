@@ -135,7 +135,7 @@ public final class DictationKeyCheckModel: ObservableObject {
             self?.message = "In Privacy & Security, allow Earlet under Input Monitoring and under \(pane), then restart Earlet to test this key."
         }
         if trigger.start() { testTrigger = trigger; return true }
-        message = "The key listener could not start. Check permissions, then restart Earlet."
+        message = "Earlet can't watch the keyboard yet. Check its permissions on Home, then restart Earlet."
         return false
     }
 

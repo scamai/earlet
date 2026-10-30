@@ -134,7 +134,7 @@ public sealed class CorrectionNoticeTests
     // ─── The Mac's scenarios ────────────────────────────────────────────
 
     [Fact]
-    public void An_unreadable_field_gives_a_generic_manual_add_fallback()
+    public void An_unreadable_field_ends_quietly()
     {
         using var s = new Section();
         var id = s.Begin();
@@ -143,7 +143,7 @@ public sealed class CorrectionNoticeTests
         // The pasted text was not found once in the field: the Mac's span_missing.
         s.End(id, Unobservable, SpanObservation.ReasonAnchorAmbiguous);
 
-        Assert.Equal("The field could not be read. You can add the word manually below.", s.Notice);
+        Assert.Null(s.Notice);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class CorrectionNoticeTests
 
         Assert.Equal(DictationCopy.CorrectionChecking, s.Notice);
         s.End(current, Unobservable, SpanObservation.ReasonAnchorLost);
-        Assert.Contains("manually", s.Notice, StringComparison.Ordinal);
+        Assert.Null(s.Notice);
     }
 
     [Fact]
@@ -226,14 +226,14 @@ public sealed class CorrectionNoticeTests
     }
 
     [Fact]
-    public void An_unchanged_edit_reports_no_correction()
+    public void An_unchanged_edit_reports_nothing()
     {
         using var s = new Section();
         var id = s.Begin();
 
         s.Observe(id, "we use it", "we use it");
 
-        Assert.Equal("No correction detected.", s.Notice);
+        Assert.Null(s.Notice);
     }
 
     [Fact]
@@ -415,35 +415,35 @@ public sealed class CorrectionNoticeTests
 
     // ─── The map ────────────────────────────────────────────────────────
 
-    public static TheoryData<string, string?, string> Endings => new()
+    public static TheoryData<string, string?> Endings => new()
     {
         // Could not be read: the Mac's no_focused_field and span_missing.
-        { Unobservable, SpanObservation.ReasonNoFocus, DictationCopy.CorrectionFieldUnread },
-        { Unobservable, SpanObservation.ReasonNoTextPattern, DictationCopy.CorrectionFieldUnread },
-        { Unobservable, SpanObservation.ReasonAnchorAmbiguous, DictationCopy.CorrectionFieldUnread },
+        { Unobservable, SpanObservation.ReasonNoFocus },
+        { Unobservable, SpanObservation.ReasonNoTextPattern },
+        { Unobservable, SpanObservation.ReasonAnchorAmbiguous },
         // Moved: span_context_lost.
-        { Unobservable, SpanObservation.ReasonAnchorLost, DictationCopy.CorrectionTextMoved },
+        { Unobservable, SpanObservation.ReasonAnchorLost },
         // Not checked, on purpose: secure_field and other_application.
-        { Unobservable, SpanObservation.ReasonSecure, DictationCopy.CorrectionFieldNotChecked },
-        { Unobservable, SpanObservation.ReasonSecureUnknown, DictationCopy.CorrectionFieldNotChecked },
-        { Unobservable, SpanObservation.ReasonSelf, DictationCopy.CorrectionFieldNotChecked },
-        { Unobservable, SpanObservation.ReasonTerminal, DictationCopy.CorrectionFieldNotChecked },
-        { Unobservable, CorrectionWatch.ReasonOtherApplication, DictationCopy.CorrectionFieldNotChecked },
+        { Unobservable, SpanObservation.ReasonSecure },
+        { Unobservable, SpanObservation.ReasonSecureUnknown },
+        { Unobservable, SpanObservation.ReasonSelf },
+        { Unobservable, SpanObservation.ReasonTerminal },
+        { Unobservable, CorrectionWatch.ReasonOtherApplication },
         // Everything else that stopped the observer, the unknown target included.
-        { Unobservable, CorrectionWatch.ReasonTargetUnknown, DictationCopy.CorrectionFieldUncheckable },
-        { Unobservable, SpanObservation.ReasonDocTooLong, DictationCopy.CorrectionFieldUncheckable },
-        { Unobservable, SpanObserverFailures.UiaTimeout, DictationCopy.CorrectionFieldUncheckable },
-        { Unobservable, SpanObserverFailures.NoSelection, DictationCopy.CorrectionFieldUncheckable },
-        { Unobservable, SpanObserverFailures.Exception, DictationCopy.CorrectionFieldUncheckable },
-        { Unobservable, "a reason a newer observer adds", DictationCopy.CorrectionFieldUncheckable },
+        { Unobservable, CorrectionWatch.ReasonTargetUnknown },
+        { Unobservable, SpanObservation.ReasonDocTooLong },
+        { Unobservable, SpanObserverFailures.UiaTimeout },
+        { Unobservable, SpanObserverFailures.NoSelection },
+        { Unobservable, SpanObserverFailures.Exception },
+        { Unobservable, "a reason a newer observer adds" },
     };
 
     [Theory]
     [MemberData(nameof(Endings))]
-    public void Each_reason_the_observer_stops_lands_on_the_macs_sentence(string terminal, string? reason, string expected)
+    public void Each_reason_the_observer_stops_ends_quietly(string terminal, string? reason)
     {
         Assert.True(CorrectionNotices.TryForEnding(Ended(terminal, reason), out var notice));
-        Assert.Equal(expected, notice);
+        Assert.Null(notice);
     }
 
     [Theory]
@@ -451,10 +451,10 @@ public sealed class CorrectionNoticeTests
     [InlineData(SpanObservation.TerminalNavigated)]
     [InlineData(SpanObservation.TerminalCleared)]
     [InlineData(SpanObservation.TerminalTimeout)]
-    public void A_watch_that_ran_its_course_without_a_revision_says_whether_the_text_changed(string terminal)
+    public void A_watch_that_ran_its_course_without_a_revision_speaks_only_when_the_text_changed(string terminal)
     {
         Assert.True(CorrectionNotices.TryForEnding(Ended(terminal, null), out var untouched));
-        Assert.Equal("No correction detected.", untouched);
+        Assert.Null(untouched);
 
         Assert.True(CorrectionNotices.TryForEnding(Ended(terminal, null, sawChange: true), out var changed));
         Assert.Equal("No vocabulary change was learned. You can add the word manually below.", changed);
@@ -500,11 +500,11 @@ public sealed class CorrectionNoticeTests
         { 1, 0, 0, 0, LearningWrite.Saved, 1, true, DictationCopy.CorrectionPending },
         { 1, 0, 0, 0, LearningWrite.Saved, 0, true, DictationCopy.CorrectionAlreadyKnown },
         { 0, 1, 0, 0, LearningWrite.Saved, 0, true, DictationCopy.CorrectionNothingLearned },
-        // Nothing written: an edit or a rejection taught nothing; no edit, none detected.
+        // Nothing written: an edit or a rejection taught nothing; no edit, no notice.
         { 0, 1, 0, 0, LearningWrite.Unchanged, 0, true, DictationCopy.CorrectionNothingLearned },
         { 0, 1, 0, 0, LearningWrite.Unchanged, 0, false, DictationCopy.CorrectionNothingLearned },
         { 1, 0, 0, 0, LearningWrite.Unchanged, 1, true, DictationCopy.CorrectionNothingLearned },
-        { 0, 0, 0, 0, LearningWrite.Unchanged, 0, false, DictationCopy.CorrectionNotDetected },
+        { 0, 0, 0, 0, LearningWrite.Unchanged, 0, false, null },
     };
 
     [Theory]
@@ -526,14 +526,9 @@ public sealed class CorrectionNoticeTests
     public static TheoryData<string> Sentences => new()
     {
         DictationCopy.CorrectionChecking,
-        DictationCopy.CorrectionFieldUnread,
-        DictationCopy.CorrectionTextMoved,
-        DictationCopy.CorrectionFieldNotChecked,
-        DictationCopy.CorrectionFieldUncheckable,
         DictationCopy.CorrectionPending,
         DictationCopy.CorrectionAlreadyKnown,
         DictationCopy.CorrectionNothingLearned,
-        DictationCopy.CorrectionNotDetected,
     };
 
     /// <summary>Word for word the Mac's, read from its source: the two

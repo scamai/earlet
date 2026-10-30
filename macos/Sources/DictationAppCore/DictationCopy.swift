@@ -100,12 +100,26 @@ public enum DictationCopy {
     }
 
     /// The idle status before dictation is enabled, once every grant is in.
-    public static let readyToEnable = "Ready to enable."
+    public static let readyToEnable = "Ready to turn on."
+
+    /// The line after Turn Off: what off means for the key and the
+    /// microphone.
+    public static let turnedOff = "Off. The microphone is closed, and your dictation key does nothing until you turn Earlet on."
 
     /// The idle status before dictation is enabled while a grant is still
     /// missing: what to do, not a "ready" that is not true yet. Says no
-    /// "above" or "below", because the same line is the menu's first item.
-    public static let allowPermissionsFirst = "Allow the permissions Earlet needs, then enable it."
+    /// "above" or "below", because the same line is the menu's first item,
+    /// and no "then enable it": a first run turns itself on once the grants
+    /// are in (G16), and a paused app's next step is its Enable button.
+    public static let allowPermissionsFirst = "Allow the permissions Earlet needs."
+
+    /// This copy has no bundled Python or model, so the engine can never
+    /// start; Home offers the download (`releasesPage`) instead of Enable.
+    public static let speechResourcesMissing =
+        "This copy of Earlet is missing its speech files, so it can't turn speech into text. Download Earlet again and replace this copy in Applications."
+
+    /// Where a complete, signed Earlet comes from.
+    public static let releasesPage = "https://github.com/scamai/earlet/releases/latest"
 
     /// A press refused because the last dictation was still being
     /// transcribed or typed.
@@ -172,6 +186,10 @@ public enum DictationCopy {
     }
 
     /// Where a kept recording is pointed at, as the end of a sentence.
+    /// The indicator's second line after a failure that kept the recording:
+    /// "Try again" would tell the user to say it all again.
+    public static let recordingKeptHint = "Recording kept. Recover it from Earlet's menu bar icon."
+
     public static let takeSavedWhere =
         "The recording is saved. Recover it from Earlet's menu bar icon or on Home."
 
@@ -231,8 +249,8 @@ public enum DictationCopy {
     /// which keeps no history, says the second form.
     public static func recentResultFootnote(inHistory: Bool) -> String {
         inHistory
-            ? "Only the latest available text is kept here, until you dismiss it or quit. Your history keeps a copy, encrypted on this Mac."
-            : "Only the latest available text is kept, until you dismiss it or quit. It isn’t saved to disk."
+            ? "Only the latest available text is kept here, until you discard it or quit. Your history keeps a copy, encrypted on this Mac."
+            : "Only the latest available text is kept, until you discard it or quit. It isn’t saved to disk."
     }
 
     /// The launch offer for a take a quit or crash left mid-recording.

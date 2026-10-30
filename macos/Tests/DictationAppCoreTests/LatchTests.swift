@@ -29,7 +29,7 @@ struct LatchTests {
         harness.trigger.doubleTap()
         // Recording is published once the press passes the privacy gate.
         #expect(await eventually { model.latched && model.recording })
-        #expect(model.status == "Dictating. Press Right Command, Space or Return to stop.")
+        #expect(model.status == "Listening hands-free. Press Right Command, Space or Return to insert.")
 
         harness.trigger.doubleTapAgain()
         #expect(await eventually { !model.busy && model.status.hasPrefix("Text inserted") })

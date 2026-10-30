@@ -771,8 +771,12 @@ struct Harness {
         set { grants.mutate { $0.inputMonitoring = newValue } }
     }
     /// Every permission call, in order: "mic?", "mic", "mic-pane", "ax?",
-    /// "ax!", "ax-pane", "im?", "im!".
+    /// "ax!", "ax-pane", "im?", "im!", "im-pane".
     let permissionCalls = Locked([String]())
+    /// Whether macOS puts up its own dialog for the next permission request.
+    let systemDialogShows = Locked(false)
+    /// Whether Earlet is the frontmost app.
+    let dictationFrontmost = Locked(false)
     /// What System Settings calls the Accessibility pane: macOS 26's name
     /// unless a test sets another, so no sentence depends on the test Mac.
     var accessibilitySettingsName = DictationPermissionStep.accessibilitySettingsName(majorVersion: 26)
@@ -880,6 +884,7 @@ struct Harness {
         let mouse = mouse
         let resources = resources, grants = grants
         let calls = permissionCalls, settles = clipboardSettles, paneName = accessibilitySettingsName
+        let dialogShows = systemDialogShows, frontmost = dictationFrontmost
         let privacy = privacy, privacyChecks = privacyChecks
         let clipboard = clipboard, clipboardWorks = clipboardWorks
         let target = targetApplication, opens = logFolderOpens, openWorks = logFolderOpenWorks
@@ -900,7 +905,9 @@ struct Harness {
                 requestInputMonitoring: { calls.mutate { $0.append("im!") } },
                 openMicrophoneSettings: { calls.mutate { $0.append("mic-pane") } },
                 openAccessibilitySettings: { calls.mutate { $0.append("ax-pane") } },
-                accessibilitySettingsName: paneName),
+                openInputMonitoringSettings: { calls.mutate { $0.append("im-pane") } },
+                accessibilitySettingsName: paneName,
+                systemDialogAppeared: { dialogShows.get }),
             resolveResources: { resources },
             makeWorker: { workers.make($0) },
             makeTrigger: { key -> any DictationHoldTrigger in
@@ -939,6 +946,7 @@ struct Harness {
             history: historyStore,
             ownBundleID: ownBundleID)
         environment.canReserveShortcut = { _ in reserves }
+        environment.isDictationFrontmost = { frontmost.get }
         return environment
     }
 

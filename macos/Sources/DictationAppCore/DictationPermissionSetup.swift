@@ -23,26 +23,42 @@ public enum DictationPermissionStep: Equatable, Sendable {
 
     public var title: String {
         switch self {
-        case .microphone: "Allow microphone access"
-        case .accessibility: "Allow Earlet to type for you"
-        case .inputMonitoring: "Allow your dictation shortcut"
-        case .restart: "Restart to finish setup"
+        case .microphone: "Allow the microphone"
+        case .accessibility: "Let Earlet type for you"
+        case .inputMonitoring: "Let your dictation key work everywhere"
+        case .restart: "Restart Earlet to finish setup"
         case .ready: "Permissions are ready"
+        }
+    }
+
+    /// What the app is and what setup asks for, before the first grant:
+    /// someone who has just opened it should not meet a permission request
+    /// with no idea what it is for.
+    public static let intro =
+        "Earlet types what you say into any app: hold a key, speak, and let go. Your speech is turned into text on this Mac, with no account. macOS asks for three permissions first, one at a time."
+
+    /// The step's place in the checklist, for the setup steps.
+    public var number: Int? {
+        switch self {
+        case .microphone: 1
+        case .accessibility: 2
+        case .inputMonitoring: 3
+        case .restart, .ready: nil
         }
     }
 
     public var detail: String {
         switch self {
         case .microphone:
-            "Earlet needs your microphone to turn speech into text on this Mac. Allow access when macOS asks, or enable Earlet in Microphone settings if you denied it earlier."
+            "Earlet hears your speech through the microphone and turns it into text on this Mac. Click Allow Microphone…, then choose Allow when macOS asks."
         case .accessibility:
-            "In System Settings → Privacy & Security → \(Self.accessibilitySettingsName), enable Earlet, then return here. This lets Earlet insert text in the app you are using."
+            "In System Settings → Privacy & Security → \(Self.accessibilitySettingsName), turn on Earlet; Earlet comes back here when you do. With learning on, Earlet also rereads the words it just typed for up to 90 seconds to learn from your corrections, and keeps words, not sentences."
         case .inputMonitoring:
-            "In System Settings → Input Monitoring, enable Earlet, then return here. This lets your shortcut work in other apps. If macOS offers Quit & Reopen, choose it."
+            "Between dictations Earlet sees only keys like Shift, Option and Command, and keeps nothing you type. In System Settings → Privacy & Security → Input Monitoring, turn on Earlet; if macOS offers Quit & Reopen, choose it."
         case .restart:
-            "macOS has allowed access, but the shortcut listener could not start. Restart this copy of Earlet to apply the permissions."
+            "macOS has given Earlet access, but Earlet can use it only after a restart. Your settings stay as they are."
         case .ready:
-            "All three permissions are available to this copy of Earlet. Enable dictation, then try a sentence below."
+            "All three permissions are in place. Turn Earlet on, then try a sentence below."
         }
     }
 
@@ -50,20 +66,30 @@ public enum DictationPermissionStep: Equatable, Sendable {
         switch self {
         case .microphone: "Allow Microphone…"
         case .accessibility: "Open System Settings…"
-        case .inputMonitoring: "Open Input Monitoring Settings…"
+        case .inputMonitoring: "Open Input Monitoring…"
         case .restart: "Restart Earlet"
-        case .ready: "Enable dictation"
+        case .ready: "Turn On"
         }
     }
 
     public var checkMessage: String {
         switch self {
         case .ready:
-            "All permissions are available. Try dictation to check the microphone and shortcut."
+            "All three permissions are in place."
         case .restart:
-            "Access is allowed. Restart Earlet to reconnect the shortcut."
+            "Access is in place. Restart Earlet to use it."
         default:
-            "This copy still cannot use all permissions. If the switches are already on, restart Earlet. If that does not help, follow the recovery steps below."
+            "Earlet still can't use every permission. If its switch is already on in System Settings, restart Earlet. If that doesn't help, open the steps below."
+        }
+    }
+
+    /// What VoiceOver hears when setup moves on, since nothing else on the
+    /// page announces it.
+    public var arrivalAnnouncement: String {
+        switch self {
+        case .microphone, .accessibility, .inputMonitoring: "Next: \(title)."
+        case .restart: "All three permissions are allowed. Restart Earlet to finish setup."
+        case .ready: "Permissions are ready."
         }
     }
 }

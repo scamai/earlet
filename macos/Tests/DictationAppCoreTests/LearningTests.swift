@@ -126,7 +126,7 @@ struct LearningTests {
         #expect(!harness.learningFileText.contains("OUTPUT"))
         let relaunched = DictationLearning(store: LearningStore(url: harness.learningURL), lexicon: harness.lexicon)
         #expect(await relaunched.snapshot().words.map(\.text) == ["Miles"])
-        #expect(await eventually { model.vocabulary.rows.first?.detail == "Tentative" })
+        #expect(await eventually { model.vocabulary.rows.first?.detail == "Learned from one fix, not yet confirmed" })
     }
 
     @Test("a Claude Code composer correction in Witty teaches the meant word and keeps the terminal out")
@@ -200,7 +200,7 @@ struct LearningTests {
         #expect(harness.learningFile?.words.first?.origin == .correction)
         #expect(harness.learningFile?.aliases.isEmpty == true, "one dictation never makes an alias")
         #expect(await eventually { model.vocabulary.rows.map(\.title) == ["Trovioo"] })
-        #expect(model.vocabulary.rows.first?.detail == "Tentative")
+        #expect(model.vocabulary.rows.first?.detail == "Learned from one fix, not yet confirmed")
 
         await dictate("we use trovio", harness, model)
         #expect(harness.correctionWatch.begins.get.count == 2)
@@ -236,24 +236,24 @@ struct LearningTests {
         harness.correctionWatch.finish(span: nil, reason: "span_context_lost")
         #expect(await eventually { logged(harness, "(span_context_lost); nothing to learn") })
         #expect(harness.learningFile == nil)
-        #expect(model.vocabulary.observationNotice?.contains("moved") == true)
+        #expect(model.vocabulary.observationNotice == nil)
     }
 
-    @Test("an untouched dictation whose field lost focus reports no correction detected")
+    @Test("an untouched dictation whose field lost focus ends quietly")
     func untouchedFocusLeftNotice() async {
         let (harness, model) = await enabled()
         await dictate("we use trovio", harness, model)
         harness.correctionWatch.finish(span: nil, reason: "focus_left", spanObservedToEnd: true)
-        #expect(await eventually { model.vocabulary.observationNotice == "No correction detected." })
+        #expect(await eventually { model.vocabulary.observationNotice == nil })
         #expect(harness.learningFile == nil)
     }
 
-    @Test("an untouched dictation whose ninety seconds ran out reports no correction detected")
+    @Test("an untouched dictation whose ninety seconds ran out ends quietly")
     func untouchedTimeoutNotice() async {
         let (harness, model) = await enabled()
         await dictate("we use trovio", harness, model)
         harness.correctionWatch.finish(span: nil, reason: "watch_expired", spanObservedToEnd: true)
-        #expect(await eventually { model.vocabulary.observationNotice == "No correction detected." })
+        #expect(await eventually { model.vocabulary.observationNotice == nil })
         #expect(harness.learningFile == nil)
     }
 
@@ -383,7 +383,7 @@ struct LearningTests {
         #expect(harness.correctionWatch.begins.get.isEmpty)
         #expect(harness.correctionWatch.preparations.get.isEmpty)
         #expect(logged(harness, "learning: not observed (the target app is unknown)"))
-        #expect(model.vocabulary.observationNotice?.contains("could not be checked") == true)
+        #expect(model.vocabulary.observationNotice == nil)
     }
 
     @Test("without a place to keep the vocabulary, nothing is watched and the section is hidden")

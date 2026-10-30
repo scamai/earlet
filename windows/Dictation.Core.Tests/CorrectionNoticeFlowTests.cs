@@ -135,29 +135,29 @@ public sealed class CorrectionNoticeFlowTests
     }
 
     [Fact]
-    public async Task Text_left_as_it_was_says_no_correction_was_detected()
+    public async Task Text_left_as_it_was_says_nothing()
     {
         using var app = new App(rig => rig.Platform.Field.Fix = null);
         await app.Rig.EnableAsync();
 
         app.DictateAndWatch();
 
-        Assert.Equal("No correction detected.", app.Notice);
+        Assert.Null(app.Notice);
     }
 
     /// <remarks>A password field the press can see is refused before
     /// anything is recorded, so it never gets a watch; the observer meets one
     /// only when the press's own probe could not tell (Unknown).</remarks>
-    public static TheoryData<string, string> Unwatchable => new()
+    public static TheoryData<string> Unwatchable => new()
     {
-        { "another application", DictationCopy.CorrectionFieldNotChecked },
-        { "a password field the press could not classify", DictationCopy.CorrectionFieldNotChecked },
-        { "no focused field", DictationCopy.CorrectionFieldUnread },
+        "another application",
+        "a password field the press could not classify",
+        "no focused field",
     };
 
     [Theory]
     [MemberData(nameof(Unwatchable))]
-    public async Task A_field_that_cannot_be_watched_says_why_and_how_to_add_the_word(string field, string expected)
+    public async Task A_field_that_cannot_be_watched_ends_quietly(string field)
     {
         using var app = new App(rig =>
         {
@@ -179,7 +179,7 @@ public sealed class CorrectionNoticeFlowTests
 
         app.DictateAndWatch();
 
-        Assert.Equal(expected, app.Notice);
+        Assert.Null(app.Notice);
         Assert.False(File.Exists(app.Rig.LearningFile));
     }
 
@@ -261,7 +261,7 @@ public sealed class CorrectionNoticeFlowTests
             app.Rig.Time.Release();
             app.Rig.WaitForWatch();
             app.Rig.Dispatcher.Drain();
-            Assert.Equal(DictationCopy.CorrectionNotDetected, app.Notice);
+            Assert.Null(app.Notice);
         }
         finally
         {
@@ -289,14 +289,14 @@ public sealed class CorrectionNoticeFlowTests
     [Fact]
     public async Task A_finished_watchs_notice_stays_through_pause_until_the_next_watch_replaces_it()
     {
-        using var app = new App(rig => rig.Platform.Field.Fix = null);
+        using var app = new App(rig => rig.Platform.Field.FixAfterEachPaste(Heard, Meant, typed: false));
         await app.Rig.EnableAsync();
         app.DictateAndWatch();
-        Assert.Equal(DictationCopy.CorrectionNotDetected, app.Notice);
+        Assert.Equal(DictationCopy.CorrectionNothingLearned, app.Notice);
 
         app.Rig.Controller.Pause();
         app.Rig.Dispatcher.Drain();
-        Assert.Equal(DictationCopy.CorrectionNotDetected, app.Notice);
+        Assert.Equal(DictationCopy.CorrectionNothingLearned, app.Notice);
 
         await app.Rig.EnableAsync();
         app.Rig.Time.Limit = app.Rig.Time.NowMs + 3_500;

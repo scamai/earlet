@@ -34,15 +34,15 @@ struct DictationSettingsPane: View {
             DictationPageHeader(title: "Settings")
             DictationSection("Dictating") {
                 VStack(alignment: .leading, spacing: 0) {
-                    DictationRow(title: "Hold to talk",
-                                 detail: "Hold \(model.holdKey.name) to talk and release to insert. Double-tap it to keep listening.") {
+                    DictationRow(title: "Dictation key",
+                                 detail: "Hold \(model.holdKey.name) to talk and release to insert. Double-tap it for hands-free, and press it again to insert.") {
                         if model.recordingHoldKey {
                             DictationRecordingPrompt(prompt: "Press a key…",
                                                      spoken: "Recording a hold key. Press a key or a key combination. Escape cancels.") {
                                 finishRecording(nil)
                             }
                         } else {
-                            DictationChoice(title: "Hold to talk", current: model.holdKey.label, selection: Binding(
+                            DictationChoice(title: "Dictation key", current: model.holdKey.label, selection: Binding(
                                 get: { model.holdKey },
                                 set: { model.selectHoldKey($0) }
                             )) {
@@ -67,7 +67,7 @@ struct DictationSettingsPane: View {
                     }
                     DictationShortcutCheck(model: model, check: model.keyCheck)
                     DictationRow(title: "Mouse button",
-                                 detail: "Optional. Hold a side button to talk, or click or double-click it to keep listening and click again to stop.") {
+                                 detail: "Optional. Hold a side button to talk, or click or double-click it for hands-free and click again to insert.") {
                         if model.recordingMouseButton {
                             DictationRecordingPrompt(prompt: "Click a mouse button…",
                                                      spoken: "Recording a mouse button. Click a side or extra mouse button over this window. Escape cancels.") {
@@ -115,7 +115,7 @@ struct DictationSettingsPane: View {
                         }
                     }
                     DictationRow(title: "Stop hands-free after silence",
-                                 detail: "Up to ten minutes per recording. If the microphone or speech engine fails, the words captured so far are kept.",
+                                 detail: "After this much silence, hands-free stops and inserts what you said. A held key never stops for silence, and any recording ends at ten minutes with its words kept.",
                                  showsDivider: false) {
                         DictationChoice(title: "Stop hands-free after silence", current: model.silenceSetting.label,
                                         selection: Binding(get: { model.silenceSetting },
@@ -152,14 +152,17 @@ struct DictationSettingsPane: View {
             DisclosureGroup("Troubleshooting", isExpanded: $troubleshootingExpanded) {
                 VStack(alignment: .leading, spacing: 14) {
                     DictationInstallationDetails()
-                    HStack(spacing: 8) {
-                        Button("Check permissions again") { model.checkPermissionsAgain() }
-                        Button("Restart Earlet") { model.quitAndReopen() }
-                            .disabled(model.busy || model.recording)
-                        Button("Open Log Folder") { model.openLogFolder() }
+                    // Three buttons wider than the narrowest column wrap
+                    // instead of running off it.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { troubleshootingButtons }
+                        VStack(alignment: .leading, spacing: 8) { troubleshootingButtons }
                     }
                     .buttonStyle(.dictation(.secondary))
-                    if let message = model.permissionCheckMessage, model.permissionStep == .ready {
+                    DictationFootnote("Check Permissions Again re-reads what macOS lets Earlet use. Restart Earlet applies a permission given while it ran. Open Log Folder shows the logs to attach to a report: timings and outcomes, never your words.")
+                    // Also when a grant is missing: the message then says to
+                    // finish setup on Home, instead of the click showing nothing.
+                    if let message = model.permissionCheckMessage {
                         DictationFootnote(message)
                     }
                 }
@@ -173,6 +176,13 @@ struct DictationSettingsPane: View {
             if model.recordingHoldKey { finishRecording(nil) }
             if model.recordingMouseButton { finishMouseRecording(nil) }
         }
+    }
+
+    @ViewBuilder private var troubleshootingButtons: some View {
+        Button("Check Permissions Again") { model.checkPermissionsAgain() }
+        Button("Restart Earlet") { model.quitAndReopen() }
+            .disabled(model.busy || model.recording)
+        Button("Open Log Folder") { model.openLogFolder() }
     }
 }
 
@@ -404,7 +414,9 @@ private struct DictationPrivacyFooter: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.brandWheatStrong)
                 .accessibilityHidden(true)
-            Text("Your audio stays on this device. No account is required. Your history is encrypted on this Mac and kept as long as you choose above; a recording that could not be transcribed is kept for you to recover.")
+            // The rail already says audio stays on this Mac with no account,
+            // on every pane; this says only what Settings decides.
+            Text("History is encrypted on this Mac and kept as long as you choose above. Apart from it, one dictation that couldn't be transcribed is kept as audio, not encrypted, for up to 7 days so you can recover it, whatever Keep recordings says.")
                 .font(DictationType.callout)
                 .foregroundStyle(.brandInk2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -449,24 +461,31 @@ private struct DictationShortcutCheck: View {
     @ObservedObject var model: DictationModel
     @ObservedObject var check: DictationKeyCheckModel
 
+    // A row of its own, under the key it tests, that says what the test is:
+    // it used to be a bare "Test key" button between dividers.
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Button(check.isTesting ? "Stop key test" : "Test key") {
+            DictationRow(title: "Test this key",
+                         detail: "Without recording, Earlet checks whether another app also reacts when you hold or double-tap the key.",
+                         showsDivider: false) {
+                Button(check.isTesting ? "Stop Test" : "Test Key") {
                     if check.isTesting { check.stopTest() } else { check.startTest() }
                 }
+                .buttonStyle(.dictation(.secondary))
                 .disabled(model.recording || model.busy || model.recoveringSavedTake)
-                if check.hasConflict {
+            }
+            if check.hasConflict {
+                HStack(spacing: 8) {
                     Button("Try \(check.suggestedKey.name)") { model.selectHoldKey(check.suggestedKey) }
                     Button("Keep \(model.holdKey.name)") { check.keepKey() }
                 }
+                .buttonStyle(.dictation(.secondary))
             }
-            .buttonStyle(.dictation(.secondary))
             if let message = check.message {
                 DictationFootnote(message)
             }
         }
-        .padding(.vertical, 12)
+        .padding(.bottom, check.message == nil && !check.hasConflict ? 0 : 12)
         DictationDivider()
     }
 }

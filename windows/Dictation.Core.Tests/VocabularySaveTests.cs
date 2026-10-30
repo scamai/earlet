@@ -297,7 +297,7 @@ public sealed class VocabularySaveTests
 
         Assert.Equal((0, 0, LearningWrite.Unchanged), (outcome.NewWords, outcome.NewAliases, outcome.Write));
         Assert.Equal(receipt, s.Last.ManagementNotice);
-        Assert.Equal(DictationCopy.CorrectionNotDetected, s.Last.CorrectionNotice);
+        Assert.Null(s.Last.CorrectionNotice);
     }
 
     // ─── The save halves of VocabularyTests and LearningFeedbackTests ───

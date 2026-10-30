@@ -6,14 +6,14 @@ import Testing
 @MainActor
 @Suite("Privacy-safe observation feedback")
 struct ObservationFeedbackTests {
-    @Test("an unreadable field gives a generic manual-add fallback")
+    @Test("an unreadable field ends quietly: the disclosure already says where learning works")
     func unreadableField() async {
         let vocabulary = Harness().model().vocabulary
         let id = UUID()
         vocabulary.beginObservationFeedback(id: id)
         #expect(vocabulary.observationNotice == "Checking this field for corrections…")
         vocabulary.endObservationFeedback(id: id, reason: "span_missing")
-        #expect(vocabulary.observationNotice == "The field could not be read. You can add the word manually below.")
+        #expect(vocabulary.observationNotice == nil)
     }
 
     @Test("a stale completion cannot replace the current observation")
@@ -26,7 +26,7 @@ struct ObservationFeedbackTests {
         vocabulary.endObservationFeedback(id: first, reason: "no focused field")
         #expect(vocabulary.observationNotice == "Checking this field for corrections…")
         vocabulary.endObservationFeedback(id: current, reason: "anchor moved")
-        #expect(vocabulary.observationNotice?.contains("manually") == true)
+        #expect(vocabulary.observationNotice == nil, "the current watch's own ending, quiet")
     }
 
     @Test("an observation result for an older begin cannot replace current checking")
@@ -90,7 +90,7 @@ struct ObservationFeedbackTests {
         let id = UUID()
         vocabulary.beginObservationFeedback(id: id)
         _ = await vocabulary.observe(dictationID: "same", dictated: "we use it", edited: "we use it", observationID: id)
-        #expect(vocabulary.observationNotice == "No correction detected.")
+        #expect(vocabulary.observationNotice == nil)
         #expect(vocabulary.undoToken == token)
         #expect(vocabulary.learningNotice == learningNotice)
     }
@@ -152,31 +152,31 @@ struct ObservationFeedbackTests {
 
     // ─── The watch's end and the shared list ───
 
-    @Test("an untouched watch whose field lost focus reports no correction detected")
+    @Test("an untouched watch whose field lost focus ends quietly")
     func untouchedFocusLeftReportsNoCorrection() async {
         let vocabulary = Harness().model().vocabulary
         let id = UUID()
         vocabulary.beginObservationFeedback(id: id)
         vocabulary.endObservationFeedback(id: id, reason: "focus_left", spanObservedToEnd: true)
-        #expect(vocabulary.observationNotice == "No correction detected.")
+        #expect(vocabulary.observationNotice == nil)
     }
 
-    @Test("an untouched watch whose ninety seconds ran out reports no correction detected")
+    @Test("an untouched watch whose ninety seconds ran out ends quietly")
     func untouchedTimeoutReportsNoCorrection() async {
         let vocabulary = Harness().model().vocabulary
         let id = UUID()
         vocabulary.beginObservationFeedback(id: id)
         vocabulary.endObservationFeedback(id: id, reason: "watch_expired", spanObservedToEnd: true)
-        #expect(vocabulary.observationNotice == "No correction detected.")
+        #expect(vocabulary.observationNotice == nil)
     }
 
-    @Test("a watch that never got its span to the end still says the field could not be checked")
+    @Test("a watch that never got its span to the end ends quietly")
     func unobservedEndStillUncheckable() async {
         let vocabulary = Harness().model().vocabulary
         let id = UUID()
         vocabulary.beginObservationFeedback(id: id)
         vocabulary.endObservationFeedback(id: id, reason: "watch_expired")
-        #expect(vocabulary.observationNotice == "This field could not be checked. You can add the word manually below.")
+        #expect(vocabulary.observationNotice == nil)
     }
 
     @Test("a span that changed but never settled into a revision learned nothing")
@@ -234,7 +234,7 @@ struct ObservationFeedbackTests {
         vocabulary.endObservationFeedback(id: first, reason: "watch_expired", spanObservedToEnd: true)
         #expect(vocabulary.observationNotice == "Checking this field for corrections…")
         vocabulary.endObservationFeedback(id: current, reason: "focus_left", spanObservedToEnd: true)
-        #expect(vocabulary.observationNotice == "No correction detected.")
+        #expect(vocabulary.observationNotice == nil)
     }
 }
 #endif

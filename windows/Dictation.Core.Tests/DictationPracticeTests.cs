@@ -647,7 +647,7 @@ public sealed class DictationPracticeTests
         var key = DictationHotkeys.ResolveHold(_ => { }, 0, null);
 
         Assert.Equal(
-            "Click below. Hold Right Ctrl, say a sentence, then release. Your words should appear here.",
+            "Click in the field, hold Right Ctrl and say a sentence, then let go. Your words appear here.",
             DictationCopy.PracticeInstructions(key));
 
         var swift = File.ReadAllText(Path.Combine(
@@ -658,7 +658,7 @@ public sealed class DictationPracticeTests
             $"TextField(\"{DictationCopy.PracticePlaceholder}\"",
             $".accessibilityLabel(\"{DictationCopy.PracticeFieldName}\")",
             $"Text(\"{DictationCopy.PracticeNotSaved}\")",
-            "Text(\"Click below. Hold \\(model.holdKey.name), say a sentence, then release. Your words should appear here.\")",
+            "Text(\"Click in the field, hold your dictation key and say a sentence, then let go. Your words appear here.\")",
         })
         {
             Assert.Contains(words, swift, StringComparison.Ordinal);

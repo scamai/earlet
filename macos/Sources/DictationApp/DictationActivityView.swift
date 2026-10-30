@@ -17,7 +17,7 @@ struct DictationPracticeSection: View {
     var body: some View {
         DisclosureGroup("Try dictation", isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Click below. Hold \(model.holdKey.name), say a sentence, then release. Your words should appear here.")
+                Text("Click in the field, hold your dictation key and say a sentence, then let go. Your words appear here.")
                     .font(DictationType.callout)
                     .foregroundStyle(.brandInk2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -48,7 +48,9 @@ struct DictationRecentResultSection: View {
     @ObservedObject var result: DictationRecentResult
 
     var body: some View {
-        if let entry = result.entry {
+        // Only while it needs the user: after an ordinary dictation the text
+        // is where it was typed, and Copy last text stays in the menu bar.
+        if let entry = result.entry, entry.needsRecovery || model.savedTakeAwaitsCopy {
             DictationCard {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     if entry.needsRecovery {
@@ -75,10 +77,10 @@ struct DictationRecentResultSection: View {
                     }
                     .buttonStyle(.dictation(entry.needsRecovery ? .primary : .secondary))
                     .disabled(model.busy || model.recording || result.copying)
-                    Button("Dismiss") { Task { await model.dismissRecentResult() } }
+                    Button("Discard") { Task { await model.dismissRecentResult() } }
                         .buttonStyle(.dictation(.quiet))
                         .disabled(result.copying)
-                        .accessibilityLabel("Discard the last text from Earlet")
+                        .accessibilityHint("Removes the last text from Earlet")
                 }
                 if let message = result.copyMessage {
                     DictationFootnote(message)

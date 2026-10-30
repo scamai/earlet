@@ -249,6 +249,33 @@ def test_a_staged_python_that_cannot_import_the_worker_fails_the_package(tmp_pat
                                 mlx_model(tmp_path / "model"), False)
 
 
+def test_recompiled_mac_bytecode_names_no_builder_directory(tmp_path):
+    import importlib.util
+    import marshal
+    python = tmp_path / "builder-home/checkout/python"
+    module = python / "lib/python3.11/site-packages/pkg/__init__.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("def fail():\n    raise ValueError('x')\n")
+    tool("package").recompile_mac_runtime(Path(sys.executable), python, 1)
+    pyc = Path(importlib.util.cache_from_source(str(module)))
+    data = pyc.read_bytes()
+    assert int.from_bytes(data[4:8], "little") == 0b01, "hash-based and never checked against the source"
+    assert marshal.loads(data[16:]).co_filename == "python/lib/python3.11/site-packages/pkg/__init__.py"
+    assert b"builder-home" not in data
+
+
+def test_a_mac_package_recompiles_its_python_after_the_import_smoke(tmp_path, monkeypatch):
+    package = tool("package")
+    calls = []
+    monkeypatch.setattr(package, "import_smoke", lambda *args: calls.append("smoke"))
+    monkeypatch.setattr(package, "recompile_mac_runtime", lambda executable, python, jobs: calls.append(python))
+    monkeypatch.setattr(package, "compile_worker", lambda *args: calls.append("worker"))
+    resources = tmp_path / "Earlet.app/Contents/Resources"
+    package.stage_resources(resources, "macos", mac_runtime(tmp_path / "input-python"),
+                            mlx_model(tmp_path / "model"), False, run_python=True)
+    assert calls == ["smoke", resources / "python", "worker"]
+
+
 def relocatable_python(folder):
     """A copy of this interpreter whose sys.path comes only from a ._pth file,
     the way an embeddable distribution's does. Its site-packages holds a stand-in
@@ -331,14 +358,28 @@ def mac_runtime(folder):
                           "lib/python3.11/turtledemo/__init__.py": b"# turtledemo",
                           "lib/python3.11/ensurepip/__init__.py": b"# ensurepip",
                           "lib/python3.11/lib-dynload/_tkinter.cpython-311-darwin.so": b"tkinter-ext",
-                          "lib/python3.11/lib-dynload/_ssl.cpython-311-darwin.so": b"ssl-ext"}.items():
+                          "lib/python3.11/lib-dynload/_ssl.cpython-311-darwin.so": b"ssl-ext",
+                          "include/python3.11/Python.h": b"header",
+                          # Console scripts whose #! line names the machine that installed them.
+                          "bin/f2py": b"#!/opt/builder/python/bin/python3.11", "bin/2to3": b"#!/bin/sh",
+                          # A path file beside the interpreter, which the packager extends.
+                          "bin/python3._pth": b"../lib/python3.11\n",
+                          # A package's own tests at any depth, and testing, which it imports.
+                          f"{SITE}/numpy/__init__.py": b"numpy", f"{SITE}/numpy/tests/test_numpy.py": b"test",
+                          f"{SITE}/numpy/_core/tests/test_core.py": b"test",
+                          f"{SITE}/numpy/_core/tests/data/sample.npy": b"data",
+                          f"{SITE}/numpy/testing/__init__.py": b"testing",
+                          # The stray setuptools build tree of the 0.2.x runtime.
+                          f"{SITE}/build/lib/mlx_whisper/__init__.py": b"stray",
+                          f"{SITE}/build/lib/build/lib/mlx_whisper/whisper.py": b"stray"}.items():
         (folder / name).parent.mkdir(parents=True, exist_ok=True)
         (folder / name).write_bytes(content)
     distribution(site, "torch", "2.14.0", {"torch/__init__.py": b"torch", "torch/lib/libtorch.dylib": b"x" * 4096,
                                            "functorch/__init__.py": b"functorch", "torchgen/__init__.py": b"torchgen",
                                            "../../../bin/torchrun": b"#!torchrun",
+                                           "../../../share/torch/notes.txt": b"notes",
                                            # The only file in its folder, which then goes too.
-                                           "../../../share/torch/notes.txt": b"notes"},
+                                           "../../../lib/torch-extras/notes.txt": b"notes"},
                  requires=["sympy>=1.13.3", "jinja2", "filelock",
                            'triton~=3.8.0; platform_system == "Linux"'])
     # Bytecode compiled after install is not in RECORD; the package directory goes whole.
@@ -378,7 +419,10 @@ def mac_runtime(folder):
 
 
 MAC_PRUNED = {"bin/python", "bin/python3.11", "bin/python3.11-config", "bin/idle3", "bin/idle3.11", "bin/torchrun",
+              "bin/python3-config", "bin/mlx_whisper", "bin/f2py", "bin/2to3", "include", "share",
+              f"{SITE}/numpy/tests", f"{SITE}/numpy/_core/tests", f"{SITE}/build/lib",
               "bin/isympy", "bin/pip", "bin/pip3.11", "share/torch/notes.txt", "share/man/man1/isympy.1",
+              "lib/torch-extras/notes.txt",
               "lib/libtcl9.0.dylib", "lib/libtcl9tk9.0.dylib", "lib/libtk8.6.dylib", "lib/tcl9.0", "lib/tcl9",
               "lib/tk9.0", "lib/itcl4.3.8", "lib/thread3.0.6", "lib/python3.11/turtle.py",
               "lib/python3.11/__pycache__/turtle.cpython-311.pyc", "lib/python3.11/tkinter",
@@ -414,18 +458,23 @@ def test_staging_a_mac_python_prunes_what_the_worker_never_imports(tmp_path):
     after = tree_bytes(staged)
     gone = set(before) - set(after)
     # Every pruned path is gone, with everything under it, and nothing else is.
-    assert {name for name in gone if not any(name.startswith(f"{p}/") for p in MAC_PRUNED)} == MAC_PRUNED & set(before)
+    assert {name for name in before
+            if name in MAC_PRUNED or any(name.startswith(f"{p}/") for p in MAC_PRUNED)} == gone
     assert not any((staged / name).exists() for name in MAC_PRUNED)
     assert set(after) <= set(before)
-    for kept in ("bin/python3", "bin/python3-config", "bin/mlx_whisper", "lib/libpython3.11.dylib",
+    for kept in ("bin/python3", "bin/python3._pth", "lib/libpython3.11.dylib",
                  "lib/python3.11/os.py", "lib/python3.11/__pycache__/os.cpython-311.pyc",
-                 "lib/python3.11/lib-dynload/_ssl.cpython-311-darwin.so", "share/man/man1/python3.11.1",
+                 "lib/python3.11/lib-dynload/_ssl.cpython-311-darwin.so",
+                 f"{SITE}/numpy/__init__.py", f"{SITE}/numpy/testing/__init__.py",
                  f"{SITE}/mlx/core.py", f"{SITE}/mlx/lib/libmlx.dylib", f"{SITE}/mlx_whisper/torch_whisper.py",
                  f"{SITE}/huggingface_hub/__init__.py", f"{SITE}/__pycache__/six.cpython-311.pyc",
                  f"{SITE}/filelock-4.0.5.dist-info/RECORD"):
         assert kept in after, kept
-    # A folder its last pruned file leaves empty goes; one still holding a kept file stays.
-    assert not (staged / "share/torch").exists() and (staged / "share/man/man1").is_dir()
+    # Of bin, only the interpreter and its path file are left.
+    assert sorted(path.name for path in (staged / "bin").iterdir()) == ["python3", "python3._pth"]
+    assert not (staged / "share").exists() and not (staged / "include").exists()
+    # A folder its last pruned file leaves empty goes.
+    assert not (staged / "lib/torch-extras").exists() and (staged / "lib").is_dir()
     assert facts["pruned"] == {
         "distributions": ["jinja2", "markupsafe", "mpmath", "networkx", "pip", "setuptools", "sympy", "torch"],
         "paths": sorted(MAC_PRUNED), "bytes": sum(size for name, size in before.items() if name in gone)}
@@ -858,7 +907,7 @@ def test_the_macos_bundle_is_its_own_single_instance_app(tmp_path, monkeypatch):
     assert info["CFBundleName"] == "Earlet"
     assert info["CFBundleDisplayName"] == "Earlet"
     assert info["CFBundleExecutable"] == "Dictation"
-    assert info["NSMicrophoneUsageDescription"].startswith("Earlet records")
+    assert info["NSMicrophoneUsageDescription"] == "Earlet listens while you dictate and turns your speech into text on this Mac."
     assert info["CFBundleIdentifier"] == json.loads((ROOT / "product.json").read_text())["bundle_id"]
     assert info["LSMultipleInstancesProhibited"] is True
     # Multiple previews share the product version; the actual signed bundle

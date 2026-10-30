@@ -269,7 +269,7 @@ then ends by Cancel in the notification-area menu or the window, at the
 hands-free silence stop, or at the recording limit. While such a window is in front, the notification-area
 tooltip and the window's shortcut line say that the hold key cannot be heard.
 Cancel in the notification-area menu is the Mac menu's
-"Cancel dictation". A Right Alt press on a keyboard layout with AltGr is
+"Cancel Dictation". A Right Alt press on a keyboard layout with AltGr is
 typing (Windows sends a Left Ctrl with every AltGr), so it never latches.
 
 Windows differs from the Mac in two ways, both deliberate. It pairs more
@@ -550,13 +550,16 @@ platforms or not at all). The rules behind it are in [LEARNING.md](LEARNING.md).
 In order:
 
 1. The heading, "Vocabulary".
-2. The "Learn from my corrections" switch, on by default, and its two-sentence
-   disclosure: in supported fields Earlet checks corrections for up to 90
-   seconds and remembers useful words on this computer, and learning keeps
-   words, not whole sentences.
-3. While the switch is on, the correction notice: how the last correction
-   watch went, in the disclosure's secondary style and never with a dictated
-   word
+2. The "Learn from my corrections" switch, on by default, and its disclosure,
+   which promises only what learning does: Earlet may learn a fix made within
+   90 seconds of a dictation, but only in apps whose text it can read, so
+   rarely; adding the word always works; learning keeps words on this
+   computer, never whole sentences.
+3. While the switch is on, the correction notice, when the last correction
+   watch has something to report (a correction that needs a second match, one
+   already known, or an edit that taught nothing; a watch that saw no edit or
+   could not read the field ends quietly), in the disclosure's secondary style
+   and never with a dictated word
    ([Correction notices, save receipts and Save again](docs/design-macos.md#correction-notices-save-receipts-and-save-again)).
 4. The teach row: a word, an optional "Often misheard as" and Add. The
    second field takes the text Earlet writes for the word now, which it
@@ -575,8 +578,9 @@ In order:
    ([Correction notices, save receipts and Save again](docs/design-macos.md#correction-notices-save-receipts-and-save-again)).
 6. The list: each word with a label, each rewrite as "heard → meant", and a
    Remove button on every row. A word the user added says "Added by you". A
-   word learned from corrections says Tentative, Confirmed or Established by its
-   net evidence (1, 2 to 3, 4 or more;
+   word learned from corrections says how much its net evidence confirms it:
+   "Learned from one fix, not yet confirmed", "Confirmed by 2 or 3 of your
+   fixes" or "Confirmed by 4 or more of your fixes" (1, 2 to 3, 4 or more;
    [LEARNING.md §4.6](LEARNING.md#46-reversible-evidence-and-confidence)); an
    older learned row without that evidence says "Learned from your fix". A row
    whose origin a newer version wrote shows no label.
@@ -741,6 +745,12 @@ use or leaves the next step unclear.
   dictations into Earlet's own window (its practice field) are never
   saved. Windows has no history yet.
 - The Mac window stays closed on a ready login launch (2026-09-30).
+- A Mac first run turns itself on once every grant is in (2026-10-29): the
+  three grants are the user's consent, and an Enable click after them asked
+  nothing new. An app that has been on before, and may have been paused, is
+  never turned on this way. Windows, which has no grant step to stand for
+  that consent, still starts with Enable dictation (Turn On on the Mac)
+  ([Permission setup and recovery](docs/design-macos.md#permission-setup-and-recovery)).
 - The Windows hold-key hook consumes Space and Enter, and nothing else, while
   a hands-free latch records (2026-10-09), so Windows keeps the Mac's stop
   keys.

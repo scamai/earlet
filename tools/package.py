@@ -100,15 +100,25 @@ MAC_PRUNED_DISTRIBUTIONS = {
 MAC_PRUNE_DECLARED = {("mlx-whisper", "torch")}
 #: Interpreter parts no shipped module imports, relative to the Python root:
 #: Tcl/Tk and what is built on it (tkinter, IDLE, turtle), the pip
-#: bootstrapper, and the two extra copies of the interpreter that copy_tree
-#: materializes from bin's links. Both hosts start bin/python3 only.
-MAC_PRUNED_PATHS = ("bin/python", "bin/python3.[0-9]*", "bin/idle3*",
+#: bootstrapper, the C headers and man pages, every
+#: package's own test suite (`tests`, never `testing`, which numpy and scipy
+#: import at run time), and a setuptools build tree of mlx-whisper that the
+#: 0.2.x runtime carried inside site-packages. Both hosts start bin/python3
+#: only, and MAC_KEPT_BIN keeps nothing else in bin.
+MAC_PRUNED_PATHS = ("include", "share",
+                    "lib/python3.*/site-packages/**/tests", "lib/python3.*/site-packages/build/lib",
                     # Tcl/Tk 9 ships libtcl9tk9.0; older builds ship libtk8.6.
                     "lib/libtcl*", "lib/libtk*", "lib/tcl[0-9]*", "lib/tk[0-9]*", "lib/itcl[0-9]*",
                     "lib/thread[0-9]*", "lib/python3.*/tkinter", "lib/python3.*/idlelib",
                     "lib/python3.*/turtledemo", "lib/python3.*/turtle.py",
                     "lib/python3.*/__pycache__/turtle.*", "lib/python3.*/lib-dynload/_tkinter.*",
                     "lib/python3.*/ensurepip")
+#: The only files bin keeps, with any `._pth` path file beside the interpreter,
+#: which extend_path_files appends the runtime to. The others are the extra
+#: copies of the interpreter that copy_tree materializes from bin's links, and
+#: console scripts nothing runs, whose #! line names the machine that installed
+#: them.
+MAC_KEPT_BIN = ("python3",)
 #: Every top-level name the pruning removes; the import smoke asserts the
 #: staged interpreter finds none of them.
 MAC_PRUNED_IMPORTS = ("torch", "functorch", "torchgen", "sympy", "isympy", "mpmath", "networkx", "jinja2",
@@ -252,6 +262,11 @@ def prune_mac_runtime(python: Path) -> dict:
             take(info, str(info.relative_to(python)))
     for pattern in MAC_PRUNED_PATHS:
         for path in sorted(python.glob(pattern)):
+            # A test folder inside one already taken is gone with it.
+            if path.exists() or path.is_symlink():
+                take(path, str(path.relative_to(python)))
+    for path in sorted(python.glob("bin/*")):
+        if path.name not in MAC_KEPT_BIN and not path.name.endswith("._pth"):
             take(path, str(path.relative_to(python)))
     return {"distributions": sorted({name for name, _ in pruned}), "paths": sorted(removed),
             "bytes": removed_bytes}
@@ -322,6 +337,9 @@ def extend_path_files(python: Path, runtime: Path, target: str) -> list[str]:
                 lines[stripped.index("#import site")] = "import site"
             else:
                 lines.append("import site")
+        # The staged copy keeps the input's modes, and a read-only input's
+        # path file is read-only too.
+        pth.chmod(pth.stat().st_mode | stat.S_IWUSR)
         pth.write_bytes((newline.join(lines) + newline).encode("utf-8"))
         changed.append(str(pth.relative_to(python)))
     return changed
@@ -383,6 +401,22 @@ def compile_worker(executable: Path, runtime: Path, jobs: int) -> None:
                    env=worker_environment(runtime), capture_output=True, text=True, check=True)
 
 
+def recompile_mac_runtime(executable: Path, python: Path, jobs: int) -> None:
+    """Rewrite the staged Mac Python's bytecode so no code object names the
+    machine that compiled it.
+
+    The supplied runtime's .pyc files carry the absolute path it was installed
+    at (a home directory and a checkout) as each code object's file name, which
+    tracebacks print. Recompiled with that prefix stripped, they say
+    "python/lib/…". unchecked-hash: the signed bundle never changes, so an
+    import neither stats nor hashes the source.
+    """
+    subprocess.run([str(executable), "-m", "compileall", "-q", "-f", f"-j{jobs}",
+                    "--invalidation-mode", "unchecked-hash", "-s", str(python), "-p", "python",
+                    str(python / "lib")],
+                   capture_output=True, text=True, check=True)
+
+
 def stage_resources(resources: Path, target: str, python: Path | None, model: Path | None,
                     app_only: bool, rid: str = "win-x64", run_python: bool | None = None,
                     jobs: int = 1) -> dict:
@@ -413,6 +447,8 @@ def stage_resources(resources: Path, target: str, python: Path | None, model: Pa
         if run_python:
             executable = python_executable(resources / "python", target)
             import_smoke(executable, runtime, target)
+            if target == "macos":
+                recompile_mac_runtime(executable, resources / "python", jobs)
             compile_worker(executable, runtime, jobs)
             facts["import_smoke"] = "passed"
         else:
@@ -586,7 +622,7 @@ def build(args: argparse.Namespace) -> Path:
                           # A second copy would add a second key tap and a second model.
                           "LSMultipleInstancesProhibited": True,
                           "CFBundleIconFile": "AppIcon",
-                          "NSMicrophoneUsageDescription": f"{name} records while you hold the shortcut to type your speech locally.",
+                          "NSMicrophoneUsageDescription": f"{name} listens while you dictate and turns your speech into text on this Mac.",
                           **update_keys(product)}, stream)
         resources = contents / "Resources"
         resources.mkdir(exist_ok=True)

@@ -21,16 +21,27 @@ struct DictationHomePane: View {
 
     var body: some View {
         DictationPage {
-            DictationStatusHeader(model: model)
-            if model.permissionStep == .ready {
-                DictationHoldKeyCard(model: model)
+            if model.isFirstSetup {
+                Text(DictationPermissionStep.intro)
+                    .font(DictationType.body)
+                    .foregroundStyle(.brandInk2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            DictationStatusHeader(model: model, result: model.recentResult)
             if !model.allPermissionsGranted || model.reopenNeeded {
                 DictationPermissionChecklist(model: model, recoveryExpanded: permissionRecoveryExpanded)
             }
+            // What waits for the user comes before the how-to card, which
+            // never changes.
             DictationRecentResultSection(model: model, result: model.recentResult)
             DictationSavedTakeSection(model: model, result: model.recentResult)
             DictationLearningNoticeSection(vocabulary: model.vocabulary)
+            // A copy with no speech files can never dictate, so it shows
+            // no key to hold.
+            if model.permissionStep == .ready, !model.speechResourcesMissing {
+                DictationHoldKeyCard(model: model)
+            }
             if history.state == .ready, !history.entries.isEmpty {
                 DictationWeekSection(stats: history.lastSevenDays, navigation: navigation)
             }
@@ -110,6 +121,9 @@ private struct DictationWeekSection: View {
 /// edge, so while dictation is on nothing outranks the hold key below.
 private struct DictationStatusHeader: View {
     @ObservedObject var model: DictationModel
+    /// Watched for its failed paste: the dot must not glow green beside a
+    /// sentence saying the words could not be typed.
+    @ObservedObject var result: DictationRecentResult
 
     var body: some View {
         let glyph = model.menuGlyph
@@ -127,7 +141,9 @@ private struct DictationStatusHeader: View {
                 if !nextStep { controls(showingSetup: showingSetup, nextStep: false) }
             }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                DictationStatusDot(role: Self.tone(glyph), glows: glyph == .ready || glyph == .recording)
+                let failedPaste = glyph == .ready && result.entry?.needsRecovery == true
+                DictationStatusDot(role: failedPaste ? .caution : Self.tone(glyph, firstSetup: model.isFirstSetup),
+                                   glows: !failedPaste && (glyph == .ready || glyph == .recording))
                     // On the sentence's first line, not its top edge.
                     .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
                 // Room for two lines, so a longer sentence does not move the
@@ -146,35 +162,47 @@ private struct DictationStatusHeader: View {
     @ViewBuilder
     private func controls(showingSetup: Bool, nextStep: Bool) -> some View {
         HStack(spacing: 8) {
-            Button(showingSetup ? model.permissionStep.actionTitle
-                   : model.enabled ? "Pause dictation" : "Enable dictation") {
-                Task {
-                    if showingSetup { await model.continuePermissionSetup() }
-                    else { await model.toggle() }
+            if !showingSetup, model.engineFailed, model.speechResourcesMissing {
+                // Enable would fail the same way every time: this copy has
+                // no speech files, and only a complete download brings them.
+                Button("Download Earlet…") {
+                    if let page = URL(string: DictationCopy.releasesPage) { NSWorkspace.shared.open(page) }
                 }
+                .buttonStyle(.dictation(.primary, large: true))
+            } else {
+                Button(showingSetup ? model.permissionStep.actionTitle
+                       : model.enabled ? "Turn Off"
+                       : model.engineFailed ? "Try Again" : "Turn On") {
+                    Task {
+                        if showingSetup { await model.continuePermissionSetup() }
+                        else { await model.toggle() }
+                    }
+                }
+                .buttonStyle(.dictation(nextStep ? .primary : .secondary, large: nextStep))
+                .disabled(model.busy || model.recording || model.permissionRequestInProgress)
             }
-            .buttonStyle(.dictation(nextStep ? .primary : .secondary, large: nextStep))
-            .disabled(model.busy || model.recording || model.permissionRequestInProgress)
             if model.permissionRequestInProgress {
                 ProgressView().controlSize(.small)
                     .accessibilityLabel("Waiting for macOS permission")
             }
             if model.canCancel {
-                Button("Cancel dictation") { Task { await model.cancel() } }
+                Button("Cancel Dictation") { Task { await model.cancel() } }
                     .buttonStyle(.dictation(.secondary, large: nextStep))
             }
         }
     }
 
     /// The dot's colour: live for on, the recording red while the
-    /// microphone is open, gold while the words are on their way, caution
-    /// for anything to fix, and a quiet ink when off.
-    private static func tone(_ glyph: DictationMenuGlyph) -> DictationColorRole {
+    /// microphone is open, gold while the words are on their way and for a
+    /// first run's next setup step, caution for anything to fix, and a
+    /// quiet ink when off.
+    private static func tone(_ glyph: DictationMenuGlyph, firstSetup: Bool) -> DictationColorRole {
         switch glyph {
         case .ready: return .live
         case .recording: return .recording
         case .transcribing: return .wheatStrong
-        case .needsPermission, .needsReopen, .engineFailed: return .caution
+        case .needsPermission, .needsReopen: return firstSetup ? .wheatStrong : .caution
+        case .engineFailed: return .caution
         case .paused, .starting: return .ink3
         }
     }
@@ -189,13 +217,18 @@ private struct DictationHoldKeyCard: View {
 
     var body: some View {
         DictationCard(padding: 18, spacing: 14) {
-            // The mark leaves first when the window is narrow.
+            // The mark leaves first when the window is narrow. While
+            // dictation is off the gesture does nothing, so the card says so
+            // and steps back instead of promising it at full strength.
             ViewThatFits(in: .horizontal) {
                 row(withMark: true)
                 row(withMark: false)
             }
+            .opacity(model.enabled ? 1 : 0.55)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Hold \(model.holdKey.name) to talk, and release it to insert. Double-tap it to keep listening. Escape cancels.")
+            .accessibilityLabel(model.enabled
+                ? "Hold \(model.holdKey.name) to talk, and release it to insert. Double-tap it for hands-free, and press it again to insert. Escape cancels."
+                : "Dictation is off. Once it is on, hold \(model.holdKey.name) to talk, and release it to insert.")
             if let caution = model.caution {
                 DictationNotice(symbol: "exclamationmark.triangle.fill", tone: .caution, text: caution)
             }
@@ -207,16 +240,21 @@ private struct DictationHoldKeyCard: View {
             if withMark { DictationMark(size: 40) }
             DictationKeycap(label: model.holdKey.keycapLabel)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Hold to talk, release to insert")
+                Text(model.enabled ? "Hold to talk, release to insert" : "Off: turn Earlet on to use this key")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.brandInk)
                     .fixedSize(horizontal: false, vertical: true)
+                if let mouseButton = model.mouseButton {
+                    Text("Or hold \(mouseButton.name)")
+                        .font(DictationType.callout)
+                        .foregroundStyle(.brandInk2)
+                }
                 // One line when it fits; otherwise it breaks at the
                 // separator, never inside a phrase.
                 ViewThatFits(in: .horizontal) {
-                    Text("Double-tap to keep listening · Esc to cancel")
+                    Text("Double-tap for hands-free, press again to insert · Esc to cancel")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Double-tap to keep listening")
+                        Text("Double-tap for hands-free, press again to insert")
                         Text("Esc to cancel")
                     }
                 }
@@ -245,59 +283,112 @@ private struct DictationPermissionChecklist: View {
     var body: some View {
         let count = [model.microphoneGranted, model.accessibilityGranted, model.inputMonitoringGranted]
             .filter { $0 }.count
+        let step = model.permissionStep
+        let pending: PermissionRow.Pending = model.isFirstSetup ? .notYet : .notAllowed
         DictationSection(title: "Permissions", accessory: {
             Text("\(count) of 3 allowed")
                 .font(DictationType.callout)
                 .foregroundStyle(.brandInk2)
         }) {
+            if !installation.isInApplications {
+                // macOS gives each permission to one copy of the app; this
+                // used to sit only inside the collapsed disclosure below.
+                DictationNotice(symbol: "exclamationmark.triangle.fill", tone: .caution,
+                                text: "This copy of Earlet is not in Applications. Move it there and open it from there before you allow anything: macOS gives each permission to one copy.") {
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: installation.path)])
+                    }
+                    .buttonStyle(.dictation(.secondary))
+                }
+            }
             DictationCard(padding: 0, spacing: 0) {
-                PermissionRow(number: 1, title: "Microphone", detail: "Hear your speech.",
-                              granted: model.microphoneGranted)
+                PermissionRow(number: 1, title: "Microphone", detail: "Hears your speech.",
+                              granted: model.microphoneGranted, current: step == .microphone, pending: pending)
                 DictationDivider()
                 PermissionRow(number: 2, title: DictationPermissionStep.accessibilitySettingsName,
-                              detail: "Insert words where you type.", granted: model.accessibilityGranted)
+                              detail: "Types the words where your cursor is.", granted: model.accessibilityGranted,
+                              current: step == .accessibility, pending: pending)
                 DictationDivider()
-                PermissionRow(number: 3, title: "Input Monitoring", detail: "Use your shortcut in any app.",
-                              granted: model.inputMonitoringGranted)
+                PermissionRow(number: 3, title: "Input Monitoring", detail: "Lets your dictation key work in any app.",
+                              granted: model.inputMonitoringGranted, current: step == .inputMonitoring, pending: pending)
             }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                DictationFootnote("Checked again when you come back from System Settings.")
-                Button("Check again") { model.checkPermissionsAgain() }
-                    .buttonStyle(.dictation(.secondary))
-            }
-            if let message = model.permissionCheckMessage {
-                DictationFootnote(message)
-                    .accessibilityLabel("Permission check: \(message)")
-            }
-            DisclosureGroup("Already enabled in System Settings?", isExpanded: $recoveryExpanded) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("First, restart Earlet. A permission can be switched on before macOS makes it available to the running app.")
-                        .font(DictationType.body)
-                        .foregroundStyle(.brandInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("Restart Earlet") { model.quitAndReopen() }
+            // Restart is the one thing left once every grant is in: no
+            // second Restart button and no check that can only say so again.
+            if step != .restart {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    DictationFootnote("Earlet checks again when you come back from System Settings.")
+                    Button("Check Again") { model.checkPermissionsAgain() }
                         .buttonStyle(.dictation(.secondary))
-                        .disabled(model.busy || model.recording)
-                    DictationFootnote("Still blocked? An older copy may own the permission. In \(DictationPermissionStep.accessibilitySettingsName) or Input Monitoring, remove only Earlet with −, then use + to add the copy shown below. Enable it, then restart Earlet. For Microphone, switch Earlet off and on again.")
-                    DictationInstallationDetails()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                if let message = model.permissionCheckMessage {
+                    DictationFootnote(message)
+                        .accessibilityLabel("Permission check: \(message)")
+                }
+                recovery
             }
-            .disclosureGroupStyle(.dictation)
-            .padding(.top, 4)
+        }
+        // Nothing else on the page tells VoiceOver that a step is done or
+        // what Check Again found.
+        .onChange(of: step) { _, now in
+            AccessibilityNotification.Announcement(now.arrivalAnnouncement).post()
+        }
+        .onChange(of: model.permissionCheckMessage) { _, message in
+            if let message { AccessibilityNotification.Announcement(message).post() }
         }
     }
 
+    private let installation = DictationInstallation.current
+
+    private var recovery: some View {
+        DisclosureGroup("Already on in System Settings?", isExpanded: $recoveryExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("First, restart Earlet. macOS can turn a permission on before the running app can use it.")
+                    .font(DictationType.body)
+                    .foregroundStyle(.brandInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Restart Earlet") { model.quitAndReopen() }
+                    .buttonStyle(.dictation(.secondary))
+                    .disabled(model.busy || model.recording)
+                DictationFootnote("Still blocked? An older copy of Earlet may hold the permission. In \(DictationPermissionStep.accessibilitySettingsName) or Input Monitoring, select Earlet and remove it with −, then add the copy shown below with +, turn it on, and restart Earlet. For Microphone, turn Earlet off and on again.")
+                DictationInstallationDetails()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .disclosureGroupStyle(.dictation)
+        .padding(.top, 4)
+    }
+
+    /// One grant. On a first run a missing one is a step not reached yet
+    /// ("Not yet", in ink) and the step the button above asks for is marked
+    /// "Next" in gold; once dictation has been on, a missing grant is
+    /// something that broke ("Not allowed", in the caution colour).
     private struct PermissionRow: View {
+        enum Pending { case notYet, notAllowed }
+
         let number: Int
         let title: String
         let detail: String
         let granted: Bool
+        let current: Bool
+        let pending: Pending
+
+        private var stateLabel: String {
+            if granted { return "Allowed" }
+            if current { return "Next" }
+            return pending == .notYet ? "Not yet" : "Not allowed"
+        }
+
+        private var stateStyle: AnyShapeStyle {
+            if granted { return AnyShapeStyle(.brandInk2) }
+            if current { return AnyShapeStyle(.brandWheatInk) }
+            return pending == .notYet ? AnyShapeStyle(.brandInk2) : AnyShapeStyle(.brandCaution)
+        }
 
         var body: some View {
             HStack(alignment: .center, spacing: 12) {
                 ZStack {
-                    Circle().fill(granted ? AnyShapeStyle(.brandLive) : AnyShapeStyle(.brandRaised))
+                    Circle().fill(granted ? AnyShapeStyle(.brandLive)
+                                  : current ? AnyShapeStyle(.brandWheatWash) : AnyShapeStyle(.brandRaised))
                     if granted {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .heavy))
@@ -305,7 +396,7 @@ private struct DictationPermissionChecklist: View {
                     } else {
                         Text("\(number)")
                             .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(.brandInk2)
+                            .foregroundStyle(current ? AnyShapeStyle(.brandWheatInk) : AnyShapeStyle(.brandInk2))
                     }
                 }
                 .frame(width: 22, height: 22)
@@ -321,9 +412,9 @@ private struct DictationPermissionChecklist: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
-                Text(granted ? "Allowed" : "Not allowed")
-                    .font(DictationType.callout)
-                    .foregroundStyle(granted ? AnyShapeStyle(.brandInk2) : AnyShapeStyle(.brandCaution))
+                Text(stateLabel)
+                    .font(current ? DictationType.bodyEmphasis : DictationType.callout)
+                    .foregroundStyle(stateStyle)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

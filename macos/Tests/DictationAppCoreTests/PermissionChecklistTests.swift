@@ -1,6 +1,7 @@
 // The live permission checklist: its state mirrors the grants, each row
 // grants or opens a pane, the poll finishes an Enable click that was waiting
-// on a grant, and a degraded key listener says which access was lost.
+// on a grant and turns a first run on by itself (G16), and a degraded key
+// listener says which access was lost.
 
 #if canImport(Testing)
 import Foundation
@@ -67,10 +68,9 @@ struct PermissionSetupTests {
         harness.inputMonitoringGranted = true
         await model.permissionTick()
         #expect(model.permissionStep == .ready)
-        #expect(!model.enabled, "granting a permission alone does not start recording")
-        await model.continuePermissionSetup()
-        #expect(model.enabled)
+        #expect(model.enabled, "the last grant of a first run turns dictation on (G16)")
         #expect(harness.trigger.running)
+        #expect(!model.recording, "on is ready for the hold key, never a recording")
     }
 
     @Test("a refused event tap offers restart even when the permission probes all say yes")
@@ -95,13 +95,13 @@ struct PermissionSetupTests {
         harness.accessibilityGranted = false
         let model = harness.model()
         model.checkPermissionsAgain()
-        #expect(model.permissionCheckMessage?.contains("This copy") == true)
+        #expect(model.permissionCheckMessage?.contains("can't use every permission") == true)
         #expect(!harness.permissionCalls.get.contains("ax!"))
         harness.accessibilityGranted = true
         model.refreshPermissions()
         #expect(model.permissionCheckMessage == nil)
         model.checkPermissionsAgain()
-        #expect(model.permissionCheckMessage?.contains("All permissions") == true)
+        #expect(model.permissionCheckMessage?.contains("All three permissions") == true)
     }
 
     @Test("restart cannot interrupt a recording")
@@ -170,24 +170,157 @@ struct PermissionChecklistTests {
         #expect(!model.microphoneGranted)
     }
 
-    @Test("a refused accessibility prompt ends in the settings pane")
-    func grantAccessibilityDeniedOpensThePane() {
+    @Test("an accessibility request macOS no longer asks about ends in the settings pane")
+    func grantAccessibilityDeniedOpensThePane() async {
         var harness = Harness()
         harness.accessibilityGranted = false
         let model = harness.model()
-        model.grantAccessibility()
+        await model.grantAccessibility()
         let calls = harness.permissionCalls.get
         #expect(calls.contains("ax!") && calls.contains("ax-pane"), "\(calls)")
         #expect(!model.accessibilityGranted)
     }
 
-    @Test("input monitoring registers Dictation and shows its pane")
-    func grantInputMonitoringRequests() {
+    @Test("macOS's own accessibility dialog is the only thing a click opens")
+    func accessibilityDialogAlone() async {
+        var harness = Harness()
+        harness.accessibilityGranted = false
+        harness.systemDialogShows.mutate { $0 = true }
+        let model = harness.model()
+        await model.grantAccessibility()
+        let calls = harness.permissionCalls.get
+        #expect(calls.contains("ax!"), "\(calls)")
+        #expect(!calls.contains("ax-pane"), "the dialog has its own button for the pane: \(calls)")
+    }
+
+    @Test("input monitoring registers Earlet and shows its pane when macOS shows no dialog")
+    func grantInputMonitoringRequests() async {
         var harness = Harness()
         harness.inputMonitoringGranted = false
         let model = harness.model()
-        model.grantInputMonitoring()
-        #expect(harness.permissionCalls.get.contains("im!"))
+        await model.grantInputMonitoring()
+        let calls = harness.permissionCalls.get
+        #expect(calls.contains("im!") && calls.contains("im-pane"), "\(calls)")
+        #expect(calls.firstIndex(of: "im!")! < calls.firstIndex(of: "im-pane")!, "register first, so the pane lists Earlet")
+    }
+
+    @Test("macOS's own input monitoring dialog is the only thing a click opens")
+    func inputMonitoringDialogAlone() async {
+        var harness = Harness()
+        harness.inputMonitoringGranted = false
+        harness.systemDialogShows.mutate { $0 = true }
+        let model = harness.model()
+        await model.grantInputMonitoring()
+        let calls = harness.permissionCalls.get
+        #expect(calls.contains("im!"), "\(calls)")
+        #expect(!calls.contains("im-pane"), "\(calls)")
+    }
+}
+
+@MainActor
+@Suite("A grant made in System Settings brings Earlet back during setup")
+struct GrantLandsTests {
+    @Test("a grant that lands with Earlet behind asks for the window once")
+    func grantBehindBringsTheWindow() async {
+        var harness = Harness()
+        harness.accessibilityGranted = false
+        harness.inputMonitoringGranted = false
+        let model = harness.model()
+        model.refreshPermissions()
+        let before = model.windowAttention
+        harness.accessibilityGranted = true
+        model.refreshPermissions()
+        #expect(model.windowAttention == before + 1)
+        model.refreshPermissions()
+        #expect(model.windowAttention == before + 1, "a grant that stays in asks once")
+        #expect(harness.logLines.get.contains { $0.contains("a grant landed while Earlet was behind") })
+    }
+
+    @Test("a grant made with Earlet in front, as the microphone's dialog is, leaves the window alone")
+    func grantInFrontDoesNothing() async {
+        var harness = Harness()
+        harness.microphoneGranted = false
+        harness.dictationFrontmost.mutate { $0 = true }
+        let model = harness.model()
+        model.refreshPermissions()
+        let before = model.windowAttention
+        harness.microphoneGranted = true
+        model.refreshPermissions()
+        #expect(model.windowAttention == before)
+    }
+
+    @Test("the first read of grants already in place is not a grant landing")
+    func firstReadIsNotAGrant() {
+        let harness = Harness()
+        let model = harness.model()
+        model.refreshPermissions()
+        #expect(model.windowAttention == 0)
+    }
+
+    @Test("a grant restored while dictation is on is the fix, not a reason to come forward again")
+    func grantWhileOnDoesNothing() async {
+        var harness = Harness()
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.enabled)
+        harness.accessibilityGranted = false
+        model.refreshPermissions()
+        let before = model.windowAttention
+        harness.accessibilityGranted = true
+        model.refreshPermissions()
+        #expect(model.windowAttention == before)
+    }
+}
+
+@MainActor
+@Suite("Setup reads as a first run's next steps, and says what Earlet is")
+struct FirstSetupCopyTests {
+    @Test("a first run's setup is a first setup; a paused app missing a grant is not")
+    func firstSetupOnlyBeforeTheFirstEnable() async {
+        var harness = Harness()
+        harness.inputMonitoringGranted = false
+        let model = harness.model()
+        model.refreshPermissions()
+        #expect(model.isFirstSetup)
+        harness.inputMonitoringGranted = true
+        await model.permissionTick()
+        #expect(model.enabled)
+        #expect(!model.isFirstSetup)
+        await model.toggle()
+        #expect(!model.enabled)
+        harness.inputMonitoringGranted = false
+        model.refreshPermissions()
+        #expect(!model.isFirstSetup, "it has been on: a missing grant is something that broke")
+    }
+
+    @Test("the setup sentences use no engineering words")
+    func plainWords() {
+        let steps: [DictationPermissionStep] = [.microphone, .accessibility, .inputMonitoring, .restart, .ready]
+        let sentences = [DictationPermissionStep.intro] + steps.flatMap { [$0.title, $0.detail, $0.checkMessage, $0.arrivalAnnouncement] }
+        for sentence in sentences {
+            for word in ["listener", "this copy", "shortcut", "Reopen Earlet"] {
+                #expect(!sentence.contains(word), "\(word) in: \(sentence)")
+            }
+        }
+    }
+
+    @Test("the intro says what Earlet does, that it is local, and that three permissions follow")
+    func introSaysWhatItIs() {
+        let intro = DictationPermissionStep.intro
+        #expect(intro.contains("hold a key"))
+        #expect(intro.contains("on this Mac"))
+        #expect(intro.contains("three permissions"))
+    }
+
+    @Test("a copy with no speech files offers a download, not an Enable that fails again")
+    func missingResourcesSaySo() async {
+        var harness = Harness()
+        harness.resources = nil
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.engineFailed)
+        #expect(model.speechResourcesMissing)
+        #expect(model.status == DictationCopy.speechResourcesMissing)
     }
 }
 
@@ -209,7 +342,7 @@ struct PendingEnableTests {
         await model.permissionTick()
         #expect(model.enabled)
         #expect(harness.workers.made.count == 1)
-        #expect(model.status.contains("Enabled"))
+        #expect(model.status.hasSuffix("Hold \(model.holdKey.name) wherever you type."))
     }
 
     @Test("the enable waits while any grant is still missing")
@@ -226,9 +359,10 @@ struct PendingEnableTests {
         #expect(model.enabled)
     }
 
-    @Test("a tick does not enable what was never asked for")
+    @Test("a tick does not enable an app that has been on before and was paused")
     func tickWithoutAClickDoesNothing() async {
         let harness = Harness()
+        harness.settings.enabled = false
         let model = harness.model()
         await model.permissionTick()
         #expect(!model.enabled)
@@ -249,6 +383,182 @@ struct PendingEnableTests {
         #expect(harness.workers.made.count == 1)
         await model.permissionTick()
         #expect(harness.workers.made.count == 1, "the failure was not a permission, so nothing is pending")
+    }
+}
+
+@MainActor
+@Suite("A first run turns itself on once every grant is in (G16)")
+struct FirstRunEnableTests {
+
+    @Test("the tick that sees the last grant enables a first run without a click")
+    func lastGrantEnables() async {
+        var harness = Harness()
+        harness.accessibilityGranted = false
+        let model = harness.model()
+        await model.permissionTick()
+        #expect(!model.enabled, "a grant is still missing")
+        #expect(harness.workers.made.isEmpty)
+        harness.accessibilityGranted = true
+        await model.permissionTick()
+        #expect(model.enabled)
+        #expect(harness.trigger.running)
+        #expect(harness.workers.made.count == 1)
+        #expect(harness.settings.enabled, "remembered, so a relaunch comes back on")
+        #expect(harness.settings.hasBeenEnabledBefore)
+        #expect(model.status == "You're set up. Hold \(model.holdKey.name) wherever you type.")
+        #expect(harness.logLines.get.contains { $0.contains("first run: every permission is in place") })
+    }
+
+    @Test("a first run whose grants are already in turns on at the first tick")
+    func grantsAlreadyInEnable() async {
+        let harness = Harness()
+        let model = harness.model()
+        await model.permissionTick()
+        #expect(model.enabled)
+        #expect(harness.workers.made.count == 1)
+    }
+
+    @Test("after a first-run enable and Pause, no later tick or process turns it back on")
+    func pauseIsFinal() async {
+        let harness = Harness()
+        let model = harness.model()
+        await model.permissionTick()
+        #expect(model.enabled)
+        await model.toggle()
+        #expect(!model.enabled)
+        await model.permissionTick()
+        #expect(!model.enabled)
+        let relaunched = harness.model()
+        await relaunched.permissionTick()
+        #expect(!relaunched.enabled, "the paused choice is in the preferences, not only in memory")
+        #expect(harness.workers.made.count == 1)
+    }
+
+    @Test("a failed first-run enable is reported once, not retried on every tick")
+    func failureIsNotRetried() async {
+        let harness = Harness()
+        harness.workers.configure = { $0.state.mutate { $0.startReply = .fail } }
+        let model = harness.model()
+        await model.permissionTick()
+        #expect(!model.enabled)
+        #expect(model.engineFailed)
+        #expect(harness.workers.made.count == 1)
+        await model.permissionTick()
+        await model.permissionTick()
+        #expect(harness.workers.made.count == 1)
+        #expect(!harness.settings.hasBeenEnabledBefore, "it never was on")
+    }
+
+    @Test("a failed Enable click is not retried by the first-run enable either")
+    func failedClickIsNotRetried() async {
+        let harness = Harness()
+        harness.workers.configure = { $0.state.mutate { $0.startReply = .fail } }
+        let model = harness.model()
+        await model.toggle()
+        #expect(!model.enabled)
+        await model.permissionTick()
+        #expect(harness.workers.made.count == 1)
+    }
+
+    @Test("a refused key listener on a first-run enable offers the restart, and the fresh process finishes it")
+    func refusedTapResumesAfterRestart() async {
+        let harness = Harness()
+        harness.trigger.startResult = false
+        let model = harness.model()
+        await model.permissionTick()
+        #expect(!model.enabled)
+        #expect(model.permissionStep == .restart)
+        model.quitAndReopen()
+        #expect(harness.relaunches.get == 1)
+        #expect(harness.settings.resumeEnableAfterRelaunch)
+        harness.trigger.startResult = true
+        let reopened = harness.model()
+        await reopened.launch()
+        #expect(reopened.enabled)
+    }
+
+    @Test("no first-run enable while a permission request is open")
+    func waitsForAnOpenRequest() async {
+        var harness = Harness()
+        harness.microphoneGranted = false
+        var environment = harness.environment()
+        var continuation: CheckedContinuation<Bool, Never>?
+        var requests = 0
+        // The setup click's request stays open; the enable's own, later,
+        // answers at once.
+        environment.permissions.requestMicrophone = {
+            requests += 1
+            if requests > 1 { return true }
+            return await withCheckedContinuation { continuation = $0 }
+        }
+        let model = DictationModel(environment: environment)
+        let request = Task { await model.continuePermissionSetup() }
+        #expect(await eventually { continuation != nil })
+        harness.microphoneGranted = true
+        await model.permissionTick()
+        #expect(!model.enabled, "the prompt is still open")
+        #expect(harness.workers.made.isEmpty)
+        continuation?.resume(returning: true)
+        await request.value
+        await model.permissionTick()
+        #expect(model.enabled)
+    }
+
+    @Test("no first-run enable while the app quits or recovers a saved take", arguments: [true, false])
+    func waitsWhileQuittingOrRecovering(quitting: Bool) async {
+        let harness = Harness()
+        let model = harness.model()
+        if quitting { model.isQuitting = true } else { model.recoveringSavedTake = true }
+        await model.permissionTick()
+        #expect(!model.enabled)
+        #expect(harness.workers.made.isEmpty)
+    }
+
+    @Test("the set-up line survives the relaunch macOS asks for after Input Monitoring")
+    func setUpLineAfterRelaunch() async {
+        let harness = Harness()
+        let model = harness.model()
+        await model.permissionTick()
+        #expect(model.enabled)
+        // Quit & Reopen once the enable had already finished: the fresh
+        // process comes back on from the preference, not the first-run path.
+        let reopened = harness.model()
+        await reopened.launch()
+        #expect(reopened.enabled)
+        #expect(reopened.status == "You're set up. Hold \(reopened.holdKey.name) wherever you type.")
+    }
+
+    @Test("once a dictation has been inserted, an enable says Enabled.")
+    func returningUserLine() async {
+        let harness = Harness()
+        harness.settings.hasCompletedFirstDictation = true
+        harness.settings.enabled = false
+        let model = harness.model()
+        await model.toggle()
+        #expect(model.status == "On. Dictate wherever you can type.")
+    }
+
+    @Test("no first-run enable while Settings records a key or a mouse button", arguments: [true, false])
+    func waitsWhileRecording(holdKey: Bool) async {
+        let harness = Harness()
+        let model = harness.model()
+        #expect(holdKey ? model.beginRecordingHoldKey() : model.beginRecordingMouseButton())
+        await model.permissionTick()
+        #expect(!model.enabled, "the enable would start the listener the recorder stopped")
+        #expect(harness.workers.made.isEmpty)
+        if holdKey { model.endRecordingHoldKey(choosing: nil) } else { model.endRecordingMouseButton(choosing: nil) }
+        await model.permissionTick()
+        #expect(model.enabled)
+    }
+
+    @Test("an install counts as on before once enable or Pause wrote the setting, older builds included")
+    func hasBeenEnabledBeforeReadsTheKey() {
+        let harness = Harness()
+        #expect(!harness.settings.hasBeenEnabledBefore)
+        harness.settings.enabled = false
+        #expect(harness.settings.hasBeenEnabledBefore, "a pause written by any build")
+        harness.settings.enabled = true
+        #expect(harness.settings.hasBeenEnabledBefore)
     }
 }
 
@@ -394,7 +704,7 @@ struct ResumeEnableAfterRelaunchTests {
         let calls = harness.permissionCalls.get
         #expect(!calls.contains("mic") && !calls.contains("ax!") && !calls.contains("im!"),
                 "launch never prompts: \(calls)")
-        #expect(model.status.contains("Enable it again"))
+        #expect(model.status.contains("Turn it on again"))
     }
 }
 
@@ -446,7 +756,7 @@ struct AccessibilityPaneNameTests {
         let model = harness.model()
         await model.toggle()
         #expect(model.status
-            == "Allow Earlet in System Settings → Privacy & Security → \(pane), then enable dictation again.")
+            == "Allow Earlet in System Settings → Privacy & Security → \(pane), then turn Earlet on again.")
     }
 
     @Test("a lost grant names the pane", arguments: [26, 27])

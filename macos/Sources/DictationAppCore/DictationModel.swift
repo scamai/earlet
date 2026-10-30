@@ -63,6 +63,9 @@ public final class DictationModel: ObservableObject {
     /// The speech engine failed to load or start. Kept separate from the
     /// status sentence so the menu glyph never depends on string matching.
     @Published public internal(set) var engineFailed = false
+    /// The engine failed because this copy has no Python or model. Trying
+    /// again cannot help, so Home offers a fresh download instead of Enable.
+    @Published public private(set) var speechResourcesMissing = false
     /// Bumped when the key listener reports a missing grant, which the window
     /// must show while it may be closed or behind. The app delegate watches it
     /// (`DictationWindowAttention`, with the grants themselves) and brings the
@@ -225,9 +228,16 @@ public final class DictationModel: ObservableObject {
     public var mouseButtonCaution: String? { mouseButton?.caution }
 
     /// The line after an enable or a change of trigger: every way to start.
+    /// Until the first dictation is inserted it opens "You're set up.", so a
+    /// first run that turned itself on (G16) ends setup with it whether or
+    /// not macOS's Quit & Reopen relaunched the app in between; after that,
+    /// "Enabled.".
     var enabledStatus: String {
-        guard let mouseButton else { return "Enabled. Hold \(holdKey.name) in a text field." }
-        return "Enabled. Hold \(holdKey.name) or \(mouseButton.name) in a text field."
+        // Day to day the key is on Home's card right below, so the line
+        // does not repeat it; the first one teaches it.
+        guard !hasCompletedFirstDictation else { return "On. Dictate wherever you can type." }
+        guard let mouseButton else { return "You're set up. Hold \(holdKey.name) wherever you type." }
+        return "You're set up. Hold \(holdKey.name) or \(mouseButton.name) wherever you type."
     }
 
     /// Installs the listener for the chosen mouse button, or removes it when
@@ -317,6 +327,14 @@ public final class DictationModel: ObservableObject {
 
     // ─── Permissions ───
 
+    /// Setup on an install whose dictation has never been on: the steps are
+    /// a first run's next moves, not something that broke, so Home shows
+    /// them in the quiet gold of a next step rather than the caution colour
+    /// a lost grant gets.
+    public var isFirstSetup: Bool {
+        !enabled && !env.settings.hasBeenEnabledBefore && permissionStep != .ready
+    }
+
     public var permissionStep: DictationPermissionStep {
         .resolve(microphone: microphoneGranted, accessibility: accessibilityGranted,
                  inputMonitoring: inputMonitoringGranted, restart: reopenNeeded)
@@ -332,8 +350,8 @@ public final class DictationModel: ObservableObject {
         permissionCheckMessage = nil
         switch permissionStep {
         case .microphone: await grantMicrophone()
-        case .accessibility: grantAccessibility()
-        case .inputMonitoring: grantInputMonitoring()
+        case .accessibility: await grantAccessibility()
+        case .inputMonitoring: await grantInputMonitoring()
         case .restart: quitAndReopen()
         case .ready: await toggle()
         }
@@ -345,6 +363,9 @@ public final class DictationModel: ObservableObject {
         refreshPermissions()
         permissionCheckMessage = permissionStep.checkMessage
     }
+
+    /// Whether `refreshPermissions()` has read the grants at least once.
+    private var permissionsReadOnce = false
 
     /// Whether a refresh has ever seen Input Monitoring missing. Guards the
     /// false→true transition against the initial `false` defaults.
@@ -364,9 +385,23 @@ public final class DictationModel: ObservableObject {
         let permissions = env.permissions
         let previousStep = permissionStep
         let inputMonitoringWas = inputMonitoringGranted
+        let grantedBefore = (microphoneGranted, accessibilityGranted, inputMonitoringWas)
         microphoneGranted = permissions.microphoneAuthorized()
         accessibilityGranted = permissions.accessibilityTrusted(false)
         inputMonitoringGranted = permissions.inputMonitoringGranted()
+        let gainedGrant = (!grantedBefore.0 && microphoneGranted) || (!grantedBefore.1 && accessibilityGranted)
+            || (!grantedBefore.2 && inputMonitoringGranted)
+        // A grant made in System Settings during setup: bring the window
+        // back, as the step's sentence promises, instead of leaving the user
+        // to find it. Not on the first read, whose `false` defaults are not
+        // a grant changing; not while Earlet is already in front; and not
+        // while dictation is on, where losing the grant already brought the
+        // window and the grant coming back is the fix it asked for.
+        if permissionsReadOnce, gainedGrant, previousStep.number != nil, !enabled, !env.isDictationFrontmost() {
+            env.log("permissions: a grant landed while Earlet was behind; showing the window")
+            windowAttention += 1
+        }
+        permissionsReadOnce = true
         // Before the first enable the line says what to do next. Only the
         // two idle sentences are replaced: any other line is newer and says
         // something more specific.
@@ -396,35 +431,64 @@ public final class DictationModel: ObservableObject {
         refreshPermissions()
     }
 
-    /// Accessibility: the system prompt answers once, the pane after that.
-    public func grantAccessibility() {
-        if !env.permissions.accessibilityTrusted(true) {
+    /// Accessibility: macOS's dialog the first time it is asked, the pane
+    /// when no dialog comes up. One click puts one thing on screen.
+    public func grantAccessibility() async {
+        if !env.permissions.accessibilityTrusted(true), await !env.permissions.systemDialogAppeared() {
             env.permissions.openAccessibilitySettings()
         }
         refreshPermissions()
     }
 
-    /// Input Monitoring has no prompt of its own; registering Dictation and
-    /// showing the pane is all there is.
-    public func grantInputMonitoring() {
-        env.permissions.requestInputMonitoring()
+    /// Input Monitoring: the request registers Earlet in the list and, the
+    /// first time, brings macOS's dialog; the pane opens when no dialog does.
+    public func grantInputMonitoring() async {
+        await requestInputMonitoringOnce()
         refreshPermissions()
     }
 
+    private func requestInputMonitoringOnce() async {
+        env.permissions.requestInputMonitoring()
+        if await !env.permissions.systemDialogAppeared() {
+            env.permissions.openInputMonitoringSettings()
+        }
+    }
+
     /// `enable()` bailed on a permission guard: when the poll sees every
-    /// grant, it finishes what the click started.
+    /// grant, it finishes what the click, or the first-run enable, started.
     private var enablePending = false
 
-    /// One pass of the permission poll: re-read the grants, and finish a
-    /// pending Enable click once they are all in — unless a reopen is due:
-    /// this process can never use an Input Monitoring grant made during it.
+    /// An enable in this process, clicked or not, got past its permission
+    /// guards, whatever happened next. The first-run enable (G16) is not
+    /// tried after one: that failure was reported, and retrying it on every
+    /// tick would only repeat it.
+    private var enableRanPastPermissions = false
+
+    /// One pass of the permission poll: re-read the grants and, once they
+    /// are all in, finish a pending Enable click, or turn a first run on
+    /// without one — unless a reopen is due: this process can never use an
+    /// Input Monitoring grant made during it.
+    ///
+    /// A first run is an install whose dictation has never been on
+    /// (`settings.hasBeenEnabledBefore`). Its user has just given the three
+    /// grants, and an Enable click after them was a fourth step that asked
+    /// nothing new (G16). Anyone who has had it on, and may have paused it,
+    /// is left alone. Neither runs while Settings records a key or a mouse
+    /// button: the enable would start the listener the recorder stopped.
     /// The app runs it from `watchPermissionsForLife()`; tests drive it
     /// directly.
     func permissionTick() async {
         refreshPermissions()
-        guard !reopenNeeded, !permissionRequestInProgress, enablePending, allPermissionsGranted, !busy else { return }
-        enablePending = false
-        env.log("permissions complete; finishing the pending enable")
+        guard !reopenNeeded, !permissionRequestInProgress, allPermissionsGranted, !busy,
+              !recoveringSavedTake, !isQuitting, !recordingHoldKey, !recordingMouseButton else { return }
+        if enablePending {
+            enablePending = false
+            env.log("permissions complete; finishing the pending enable")
+            await enable()
+            return
+        }
+        guard !enableRanPastPermissions, !env.settings.hasBeenEnabledBefore else { return }
+        env.log("first run: every permission is in place; enabling without a click")
         await enable()
     }
 
@@ -472,7 +536,7 @@ public final class DictationModel: ObservableObject {
         guard permissions.microphoneAuthorized(), permissions.accessibilityTrusted(false),
               permissions.inputMonitoringGranted() else {
             status = resume
-                ? "Earlet reopened to finish enabling. Enable it again once every permission is in place."
+                ? "Earlet restarted to finish turning on. Turn it on again once every permission is in place."
                 : "Earlet was on when it last ran. Enable it again to finish allowing access."
             return
         }
@@ -491,26 +555,29 @@ public final class DictationModel: ObservableObject {
         guard env.permissions.accessibilityTrusted(true) else {
             enablePending = true
             refreshPermissions()
-            status = "Allow Earlet in System Settings → Privacy & Security → \(env.permissions.accessibilitySettingsName), then enable dictation again."
+            status = "Allow Earlet in System Settings → Privacy & Security → \(env.permissions.accessibilitySettingsName), then turn Earlet on again."
             return
         }
         // Before the worker: a multi-gigabyte model load is wasted if the
         // key listener is not allowed anyway.
         guard env.permissions.inputMonitoringGranted() else {
             enablePending = true
-            env.permissions.requestInputMonitoring()
+            await requestInputMonitoringOnce()
             refreshPermissions()
-            status = "Allow Earlet in System Settings → Privacy & Security → Input Monitoring, then enable dictation again. macOS may ask you to reopen Earlet."
+            status = "Allow Earlet in System Settings → Privacy & Security → Input Monitoring, then turn Earlet on again. If macOS offers Quit & Reopen, choose it."
             return
         }
         // Past the guards, the rest is not a permission problem: a failure
         // there must not retry on every poll tick.
         enablePending = false
+        enableRanPastPermissions = true
         guard let resources = env.resolveResources() else {
             engineFailed = true
-            status = "Speech resources are missing. Install the complete Earlet package and try again."
+            speechResourcesMissing = true
+            status = DictationCopy.speechResourcesMissing
             return
         }
+        speechResourcesMissing = false
         self.resources = resources
         status = "Preparing speech recognition…"
         let started = await ensureWorkerStarted()
@@ -525,7 +592,7 @@ public final class DictationModel: ObservableObject {
             return
         case .timedOut:
             engineFailed = true
-            status = "The speech engine took too long to start. Try enabling dictation again."
+            status = "The speech engine took too long to start. Try turning Earlet on again."
             return
         }
         refreshCaution()
@@ -582,7 +649,7 @@ public final class DictationModel: ObservableObject {
         enabled = false
         engineFailed = false
         env.settings.enabled = false
-        status = "Paused. The microphone is off."
+        status = DictationCopy.turnedOff
     }
 
     /// The key listener reports a missing grant. While `enable()` is busy it
@@ -629,10 +696,16 @@ public final class DictationModel: ObservableObject {
 
     /// Shows how a dictation ended on the HUD until its dwell runs out, the
     /// way the mic-changed notice is shown.
-    func showOutcome(_ kind: DictationHUDOutcome.Kind) {
+    /// `recordingKept`: the take was saved for Recover Last Dictation, so the
+    /// second line says where it is instead of asking for the words again.
+    func showOutcome(_ kind: DictationHUDOutcome.Kind, recordingKept: Bool = false) {
         hudOutcomeTask?.cancel()
-        let outcome = DictationHUDContent.outcome(for: kind, holdKeyName: holdKey.name,
+        var outcome = DictationHUDContent.outcome(for: kind, holdKeyName: holdKey.name,
                                                   accessibilitySettingsName: env.permissions.accessibilitySettingsName)
+        if recordingKept {
+            outcome.detail = DictationCopy.recordingKeptHint
+            outcome.dwell = max(outcome.dwell, 4)
+        }
         hudOutcome = outcome
         let seconds = hudOutcomeSecondsOverride ?? outcome.dwell
         hudOutcomeTask = Task { [weak self] in
@@ -1136,7 +1209,7 @@ public final class DictationModel: ObservableObject {
         status = latched ? latchedStatus : "Listening… Release \(pressName) to insert."
     }
 
-    private var latchedStatus: String { "Dictating. Press \(pressName), Space or Return to stop." }
+    private var latchedStatus: String { "Listening hands-free. Press \(pressName), Space or Return to insert." }
 
     /// What the user pressed to start this dictation: the hold key, or the
     /// mouse button.

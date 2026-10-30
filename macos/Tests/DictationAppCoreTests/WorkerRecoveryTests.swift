@@ -72,6 +72,37 @@ struct WorkerRecoveryTests {
                 "a worker that answered with an error has not stopped")
     }
 
+    @Test("a failed decode that kept the recording says where it is, not to dictate again")
+    func keptRecordingIsNamedOnTheIndicator() async {
+        let harness = Harness()
+        let model = harness.model()
+        await model.toggle()
+        harness.workers.made[0].state.mutate { $0.replies = [.failure(.engineError("bad audio"))] }
+
+        harness.trigger.press()
+        #expect(await eventually { model.recording })
+        // The collector callback is what writes the spool.
+        harness.capture.emitRetainedAudio([Float](repeating: 0.2, count: 16_000))
+        harness.trigger.release()
+        #expect(await eventually { !model.busy && !model.recording })
+        #expect(model.savedTake != nil)
+        #expect(model.hudOutcome?.title == "That didn't come through")
+        #expect(model.hudOutcome?.detail == DictationCopy.recordingKeptHint)
+        #expect((model.hudOutcome?.dwell ?? 0) >= 4)
+    }
+
+    @Test("a failed decode that kept nothing still asks for the words again")
+    func unkeptFailureAsksAgain() async {
+        let harness = Harness()
+        let model = harness.model()
+        await model.toggle()
+        harness.workers.made[0].state.mutate { $0.replies = [.failure(.engineError("bad audio"))] }
+
+        await dictate(harness, model)
+        #expect(model.savedTake == nil)
+        #expect(model.hudOutcome?.detail == "Nothing was inserted. Try again.")
+    }
+
     @Test("an idle worker is shut down, and the next hold starts a fresh one", .timeLimit(.minutes(1)))
     func idleWorkerIsReleased() async {
         var harness = Harness()

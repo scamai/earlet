@@ -38,7 +38,7 @@ struct MenuGlyphTests {
         let glyph = resolve(busy: true)
         #expect(glyph == .starting)
         #expect(glyph.symbolName == "mic.slash")
-        #expect(glyph.headline == "Starting dictation…")
+        #expect(glyph.headline == "Turning on…")
     }
 
     @Test("enabled and idle is the outline microphone")

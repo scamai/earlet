@@ -437,14 +437,14 @@ private struct DictationMenu: View {
         switch item {
         case .toggle:
             if !model.enabled && model.permissionStep != .ready {
-                Button("Finish permission setup…") { DictationMainWindow.show(using: openWindow, pane: .home) }
+                Button("Finish Setup…") { DictationMainWindow.show(using: openWindow, pane: .home) }
             } else {
-                Button(model.enabled ? "Pause dictation" : "Enable dictation") {
+                Button(model.enabled ? "Turn Earlet Off" : "Turn Earlet On") {
                     Task { await model.toggle() }
                 }.disabled(model.busy || model.recording)
             }
         case .cancel:
-            Button("Cancel dictation") { Task { await model.cancel() } }
+            Button("Cancel Dictation") { Task { await model.cancel() } }
         case .showWindow:
             Button("Show Earlet") { DictationMainWindow.show(using: openWindow, pane: .home) }
         case .openLogFolder:

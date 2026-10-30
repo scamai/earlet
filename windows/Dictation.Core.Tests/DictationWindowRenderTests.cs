@@ -419,9 +419,6 @@ public sealed class DictationWindowRenderTests
             case DictationWindowRenderScenario.LearningChecking:
                 Assert.Equal(DictationCopy.CorrectionChecking, section.CorrectionNotice);
                 break;
-            case DictationWindowRenderScenario.LearningUnavailable:
-                Assert.Equal(DictationCopy.CorrectionFieldUnread, section.CorrectionNotice);
-                break;
             case DictationWindowRenderScenario.LearningPending:
                 Assert.Equal(DictationCopy.CorrectionPending, section.CorrectionNotice);
                 Assert.Null(section.LearningReceipt);
@@ -624,15 +621,15 @@ public sealed class DictationWindowRenderTests
         {
             "first-run", "ready", "returning-user", "paused", "recording", "vocabulary", "vocabulary-unsaved",
             "vocabulary-saved", "recent-result", "recovery", "copied-result", "learned", "learning-undone",
-            "learning-checking", "learning-unavailable", "learning-pending", "learning-rejected", "learned-repo",
+            "learning-checking", "learning-pending", "learning-rejected", "learned-repo",
             "missing-resources", "troubleshooting",
         })
         {
             Assert.Contains(mac, names);
         }
 
-        // The Mac's 20 adapted, Windows' own, and LIMIT-WIN-A's saved-recording.
+        // The Mac's 19 adapted, Windows' own, and LIMIT-WIN-A's saved-recording.
         Assert.Contains("saved-recording", names);
-        Assert.Equal(34, names.Length);
+        Assert.Equal(33, names.Length);
     }
 }

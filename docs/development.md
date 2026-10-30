@@ -154,7 +154,11 @@ the files its platform needs. The packager:
   imports (`MAC_PRUNED_DISTRIBUTIONS` and `MAC_PRUNED_PATHS`): torch and the
   packages only it needs (sympy, mpmath, networkx, jinja2, MarkupSafe,
   setuptools), pip and its bootstrapper, Tcl/Tk with tkinter, IDLE and turtle,
-  and the two extra copies of the interpreter. Each distribution goes by its
+  the C headers and man pages, every package's `tests` folder (never
+  `testing`, which numpy and scipy import), and a stray setuptools build tree;
+  of `bin` it keeps only `python3` (`MAC_KEPT_BIN`), so the extra copies of the
+  interpreter and the console scripts, whose `#!` lines named the machine that
+  installed them, go. Each distribution goes by its
   `RECORD`. Before deleting anything it refuses a distribution a kept one
   requires outside its extras (mlx-whisper's declared torch is the one
   exception), a missing `RECORD`, and a `RECORD` row naming a directory or a
@@ -163,7 +167,10 @@ the files its platform needs. The packager:
   check; other conditions are treated conservatively as requirements.
   The import smoke then fails if the staged
   interpreter can still find any top-level name it removed
-  (`MAC_PRUNED_IMPORTS`);
+  (`MAC_PRUNED_IMPORTS`). After it, the packager recompiles the whole staged
+  Python's bytecode as unchecked-hash `.pyc` files whose code objects name
+  `python/lib/…` instead of the directory the runtime was installed in, which
+  the supplied bytecode carried into every traceback;
 - writes `package-mode.json` (mode, provider, no audio retention, no network
   inference), deletes debug symbols, and fails if anything it built names the
   builder's checkout, home directory, commit or private repository;

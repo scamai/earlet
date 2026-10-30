@@ -178,8 +178,9 @@ choices, as after a click on Enable. None of this has been seen on Windows.
 "Try dictation" is the Mac's practice field
 ([Try dictation](design-macos.md#try-dictation)) in a WPF `Expander` (access key T) after the
 buttons and the Recent result section, as on the Mac, with the Mac's words
-and the Windows key name: "Click below. Hold Right Ctrl, say a sentence, then
-release. Your words should appear here.", a three-to-five-line field with the placeholder "Your practice sentence" (named
+and the Windows key name where the Mac says "your dictation key", since no card
+shows the key on Windows: "Click in the field, hold Right Ctrl and say a
+sentence, then let go. Your words appear here.", a three-to-five-line field with the placeholder "Your practice sentence" (named
 "Earlet practice text" for a screen reader) and "This practice text is not
 saved." under it. It shows while dictation is on and Windows is not blocking
 the microphone, the Windows counterpart of the Mac's "every permission is
@@ -514,31 +515,20 @@ above the teach row, in the disclosure's grey, while "Learn from my
 corrections" is on; turning it off clears the notice. The correction watch
 reports its start, each settled revision's learning outcome (counts only) and
 its end, and `CorrectionNotices` maps the span observer's endings onto the
-Mac's sentences:
-
-- no focused field, no text pattern, or the pasted text not found exactly once:
-  "The field could not be read.";
-- the span's anchor lost: "The dictated text moved before it could be
-  checked.";
-- a password field, or one that could not be shown not to be; another
-  application; a console, which is never watched; Earlet's own window:
-  "This field was not checked." A password field that the press itself
-  detects is refused before anything is recorded, so it gets no watch and
-  the notice stays as it was; the observer meets one only when the press's
-  own check could not tell;
-- a paste into a process nobody could name (the watch does not even look),
-  a document too long to read, or a UI Automation timeout or failure: "This
-  field could not be checked.";
-- an observation that ran its course (settled, focus moved on, span cleared or
-  still changing at 90 s) without a revision for learning: "No correction
-  detected." when the text never changed, "No vocabulary change was learned."
-  when it changed but nothing settled into a correction.
+Mac's sentences. As on the Mac, a watch that saw no edit or could not read the
+field ends with no notice: no focused field, no text pattern, the pasted text
+not found exactly once, a lost anchor, a password field or one that could not
+be shown not to be, another application, a console, Earlet's own window, a
+paste into a process nobody could name, a document too long to read, or a UI
+Automation timeout or failure. An observation that ran its course (settled,
+focus moved on, span cleared or still changing at 90 s) without a revision
+says "No vocabulary change was learned." when the text changed but nothing
+settled into a correction, and nothing when it never changed.
 
 After a revision, that revision's notice stays when the observation runs its
-course and goes when the observer stopped for any other reason. These last two
-rules follow the list above and depart from the Mac's running code, which says
-"This field could not be checked." for an untouched watch that ran its course
-and clears a revision's notice at every end.
+course and goes when the observer stopped for any other reason. That rule
+departs from the Mac's running code, which clears a revision's notice at
+every end.
 A watch still running when the next dictation is released, Pause is chosen or the window is
 closed or hidden ends with no notice; a finished watch's notice stays until
 the next watch replaces it. Switching learning off, Add, Remove and Forget all
