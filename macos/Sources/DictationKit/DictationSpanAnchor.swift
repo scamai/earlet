@@ -158,17 +158,35 @@ public enum DictationAnchorSearch {
         case superseded
     }
 
+    /// Fixed labels only: no field content or app identity enters diagnostics.
+    public enum ReadStatus: String, Sendable {
+        case unspecified
+        case axValue = "ax_value"
+        case axError = "ax_error"
+        case valueNotString = "value_not_string"
+        case terminalComposer = "terminal_composer"
+        case terminalLayoutUnsupported = "terminal_layout_unsupported"
+    }
+
     /// Partial reads stay distinguishable: an app may expose text but no
     /// selection, or a selection but no readable value.
     public struct FieldRead: Sendable, Equatable {
         public var value: String?
         public var selectionLocation: Int?
         public var selectionLength: Int?
+        public var readStatus: ReadStatus
+        public var axError: Int32?
+        public var rawValueLength: Int?
 
-        public init(value: String?, selectionLocation: Int?, selectionLength: Int?) {
+        public init(value: String?, selectionLocation: Int?, selectionLength: Int?,
+                    readStatus: ReadStatus = .unspecified, axError: Int32? = nil,
+                    rawValueLength: Int? = nil) {
             self.value = value
             self.selectionLocation = selectionLocation
             self.selectionLength = selectionLength
+            self.readStatus = readStatus
+            self.axError = axError
+            self.rawValueLength = rawValueLength
         }
     }
 
@@ -179,6 +197,7 @@ public enum DictationAnchorSearch {
             case anchored, superseded
             case anchoredFromChange = "anchored_from_change"
             case changeMismatch = "change_mismatch"
+            case valueUnchanged = "value_unchanged"
             case valueUnavailable = "value_unavailable"
             case selectionUnavailable = "selection_unavailable"
             case selectionMismatch = "selection_mismatch"
@@ -191,13 +210,26 @@ public enum DictationAnchorSearch {
         public let pastedLength: Int
         public let selectionLocation: Int?
         public let selectionLength: Int?
+        public let readStatus: ReadStatus
+        public let axError: Int32?
+        public let rawValueLength: Int?
 
         public var logSummary: String {
             "anchor=\(result.rawValue) attempts=\(attempts) value_utf16=\(valueLength.map(String.init) ?? "n/a")"
                 + " before_utf16=\(beforeValueLength.map(String.init) ?? "n/a")"
                 + " pasted_utf16=\(pastedLength) selection_location=\(selectionLocation.map(String.init) ?? "n/a")"
                 + " selection_length=\(selectionLength.map(String.init) ?? "n/a")"
+                + " read=\(readStatus.rawValue) ax_error=\(axError.map(String.init) ?? "n/a")"
+                + " raw_value_utf16=\(rawValueLength.map(String.init) ?? "n/a")"
         }
+    }
+
+    /// Admission can change while waiting for a cached field or during AX IPC.
+    /// Never read after it is lost, or return a value after a mid-read change.
+    static func admittedRead<Value>(admit: () -> Bool, read: () -> Value?) -> Value? {
+        guard admit() else { return nil }
+        let value = read()
+        return admit() ? value : nil
     }
 
     /// Reads up to `attempts` times, `retrySeconds` apart, on `queue`, and
@@ -230,7 +262,9 @@ public enum DictationAnchorSearch {
             diagnostic(Diagnostic(result: result, attempts: attempts, beforeValueLength: beforePaste?.value?.utf16.count,
                                   valueLength: field?.value?.utf16.count,
                                   pastedLength: pasted.utf16.count, selectionLocation: field?.selectionLocation,
-                                  selectionLength: field?.selectionLength))
+                                  selectionLength: field?.selectionLength,
+                                  readStatus: field?.readStatus ?? .unspecified,
+                                  axError: field?.axError, rawValueLength: field?.rawValueLength))
         }
         guard isCurrent() else {
             report(.superseded, field: nil, attempts: number - 1)
@@ -260,6 +294,7 @@ public enum DictationAnchorSearch {
         guard number < attempts else {
             let reason: Diagnostic.Result
             if field?.value == nil { reason = .valueUnavailable }
+            else if let before = beforePaste?.value, before == field?.value { reason = .valueUnchanged }
             else if beforePaste != nil { reason = .changeMismatch }
             else if field?.selectionLocation == nil || field?.selectionLength == nil { reason = .selectionUnavailable }
             else if field?.value?.contains(pasted) == true { reason = .selectionMismatch }

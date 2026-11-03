@@ -524,6 +524,32 @@ was remembered
 
 ### Correction notices, save receipts and Save again
 
+The terminal adapter recognizes the Codex two-row footer even when a narrow
+pane clips `shortcuts` to a prefix such as `shortc`. This preserves the empty
+composer snapshot before paste; after typing, Codex may replace navigation
+with its queue/send hint. Without the before snapshot a terminal's mouse
+selection cannot establish the inserted span. The footer must still match the
+known grammar; output above the composer never becomes editable text. See
+[LEARNING.md §7](../LEARNING.md#7-observers-and-privacy). The observed completed-goal
+status can replace the context counter; it must match the explicit
+`Goal achieved (<integer>m)` grammar and retain the recognized navigation
+row, separator and final composer. The observed project/branch/usage/age/mode
+status and stalled-goal status are also recognized inside supported tmux
+layouts. An unsupported Codex pane can otherwise leave the aggregate value
+unchanged even when a different pane remains readable; a readable aggregate
+alone does not prove that the inserted span was found.
+
+Codex display wraps between CJK characters are joined without an invented
+space before establishing the exact pasted span. An explicit boundary space
+that cannot be proved, a clipped draft or a changed Latin boundary still
+refuses observation. Initial terminal anchor reads are spaced at least
+600 ms apart, matching the existing polling cadence and outlasting the terminal's
+approximately 500 ms AX cache; other editors keep the configured interval.
+Every retry and the session-start reread require the same admitted focused
+element with Secure Input off, checked before and after the AX round trip.
+These fixes improve capture, not the admission policy for Chinese typos or
+the recognizer's accuracy.
+
 While learning is on, the Vocabulary section reports each correction watch in
 its secondary text style, above the teach row, and never with the dictated
 words:
@@ -734,6 +760,14 @@ recognition or insertion. There is no voiced-fraction floor, so a 120 ms word
 inside a long quiet hold survives. Recovery uses the same gate. This blocks
 brief transients; it does not classify every kind of background sound as
 speech or silence.
+
+Correction-anchor diagnostics distinguish an AX read error (including its
+numeric error code), a successful non-string value, an unsupported terminal
+layout, and a readable value unchanged since the pre-paste snapshot. The
+read source and the raw/parsed UTF-16 lengths contain no field text, app name
+or window title. A terminal parser refusal therefore no longer looks like
+an unexplained system read failure; `span_missing` remains the observation's
+ending when none of the bounded attempts proves the pasted span.
 
 The log is `~/Library/Logs/Dictation/dictation.log`, capped in size with two
 rotated generations. Open Log Folder is in the menu and in Troubleshooting; if

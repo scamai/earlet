@@ -134,6 +134,34 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
         self.diagnostic = diagnostic
     }
 
+    /// The supported terminal keeps its AX snapshot for about 500 ms. A shorter
+    /// retry interval can exhaust every attempt against the same stale
+    /// screen and report `value_unchanged` even though the paste landed.
+    /// Ordinary editable fields keep the configured interval unchanged.
+    static func anchorRetrySeconds(configured: TimeInterval, bundleID: String) -> TimeInterval {
+        guard DictationWittyInput.supports(bundleID: bundleID) else { return configured }
+        return max(configured, DictationWittyInput.pollSeconds)
+    }
+
+    /// Shared production search boundary: terminal timing and admission are
+    /// applied here, before any value can reach the generic span search.
+    static func searchAnchor(
+        pasted: String, beforePaste: DictationAnchorSearch.FieldRead?, config: Config,
+        bundleID: String, queue: DispatchQueue,
+        read: @escaping @Sendable () -> DictationAnchorSearch.FieldRead?,
+        isAdmitted: @escaping @Sendable () -> Bool,
+        isCurrent: @escaping @Sendable () -> Bool,
+        diagnostic: @escaping @Sendable (DictationAnchorSearch.Diagnostic) -> Void,
+        completion: @escaping @Sendable (DictationAnchorSearch.Outcome) -> Void
+    ) {
+        DictationAnchorSearch.run(
+            pasted: pasted, beforePaste: beforePaste, attempts: config.anchorAttempts,
+            retrySeconds: anchorRetrySeconds(configured: config.anchorRetrySeconds, bundleID: bundleID),
+            queue: queue,
+            read: { DictationAnchorSearch.admittedRead(admit: isAdmitted, read: read) },
+            isCurrent: isCurrent, diagnostic: diagnostic, completion: completion)
+    }
+
     // ─── Starting and stopping ───
 
     /// An in-memory snapshot of the admitted field immediately before a
@@ -321,22 +349,37 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
                                 pid: pid, bundleID: bundleID))
     }
 
+    private func stillAdmitted(_ target: Target) -> Bool {
+        guard case .admitted(let current) = focusedTarget(expectedBundleID: target.bundleID) else { return false }
+        return current.pid == target.pid && current.bundleID == target.bundleID
+            && CFEqual(current.element, target.element)
+    }
+
     private static func readField(_ element: AXUIElement, bundleID: String) -> DictationAnchorSearch.FieldRead {
-        let value = readValue(element)
+        let result = readValueResult(element)
         let selection = DictationWittyInput.supports(bundleID: bundleID) ? nil : readSelectedRange(element)
-        return fieldSnapshot(value: value, selectedRange: selection, bundleID: bundleID)
+        return fieldSnapshot(value: result.value, selectedRange: selection, bundleID: bundleID,
+                             axError: result.error.rawValue)
     }
 
     /// Route the AX snapshot before it can enter the pasted-span search.
     static func fieldSnapshot(value: String?, selectedRange: CFRange?,
-                              bundleID: String) -> DictationAnchorSearch.FieldRead {
+                              bundleID: String, axError: Int32 = 0) -> DictationAnchorSearch.FieldRead {
+        guard axError == AXError.success.rawValue, let value else {
+            return .init(value: nil, selectionLocation: selectedRange?.location,
+                         selectionLength: selectedRange?.length,
+                         readStatus: axError == 0 ? .valueNotString : .axError, axError: axError)
+        }
         if DictationWittyInput.supports(bundleID: bundleID) {
             // A terminal screen is never a fallback editable field.
-            let input = value.flatMap(DictationWittyInput.parse)
-            return .init(value: input?.value, selectionLocation: nil, selectionLength: nil)
+            let input = DictationWittyInput.parse(value)
+            return .init(value: input?.value, selectionLocation: nil, selectionLength: nil,
+                         readStatus: input == nil ? .terminalLayoutUnsupported : .terminalComposer,
+                         axError: axError, rawValueLength: value.utf16.count)
         }
         return .init(value: value, selectionLocation: selectedRange?.location,
-                     selectionLength: selectedRange?.length)
+                     selectionLength: selectedRange?.length, readStatus: .axValue,
+                     axError: axError, rawValueLength: value.utf16.count)
     }
 
     /// On `setupQueue`: finds the pasted span (`DictationAnchorSearch`, which
@@ -353,11 +396,11 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
         let pastedText = isWitty ? DictationWittyInput.pasted(pastedText) : pastedText
         AXUIElementSetMessagingTimeout(target.element, config.messagingTimeoutSeconds)
         AXUIElementSetMessagingTimeout(target.applicationElement, config.messagingTimeoutSeconds)
-        DictationAnchorSearch.run(
-            pasted: pastedText, beforePaste: beforePaste,
-            attempts: config.anchorAttempts, retrySeconds: config.anchorRetrySeconds,
-            queue: setupQueue,
+        Self.searchAnchor(
+            pasted: pastedText, beforePaste: beforePaste, config: config,
+            bundleID: target.bundleID, queue: setupQueue,
             read: { Self.readField(target.element, bundleID: target.bundleID) },
+            isAdmitted: { [weak self] in self?.stillAdmitted(target) == true },
             isCurrent: { [weak self] in
                 // An observer that is gone has nothing current.
                 guard let self else { return false }
@@ -388,9 +431,16 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
         onRevision: (@Sendable (String) -> Void)? = nil,
         onFinished: @escaping @Sendable (DictationObservationResult) -> Void
     ) {
+        guard stillAdmitted(target) else {
+            finishImmediately(.spanContextLost, dictatedText: dictatedText, pastedText: pastedText,
+                              observedApp: target.bundleID, onFinished: onFinished)
+            return
+        }
         var terminalInput: DictationWittyInput?
         if DictationWittyInput.supports(bundleID: target.bundleID) {
-            terminalInput = Self.readValue(target.element).flatMap(DictationWittyInput.parse)
+            terminalInput = DictationAnchorSearch.admittedRead(
+                admit: { self.stillAdmitted(target) },
+                read: { Self.readValue(target.element) }).flatMap(DictationWittyInput.parse)
             guard terminalInput?.value == fieldValue else {
                 finishImmediately(.spanContextLost, dictatedText: dictatedText, pastedText: pastedText,
                                   observedApp: target.bundleID, onFinished: onFinished)
@@ -479,10 +529,13 @@ public final class DictationCorrectionObserver: @unchecked Sendable {
     // ─── AX reads (static, side-effect-free beyond the AX round trip) ───
 
     static func readValue(_ element: AXUIElement) -> String? {
+        readValueResult(element).value
+    }
+
+    private static func readValueResult(_ element: AXUIElement) -> (value: String?, error: AXError) {
         var value: CFTypeRef?
-        let err = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
-        guard err == .success else { return nil }
-        return value as? String
+        let error = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
+        return (error == .success ? value as? String : nil, error)
     }
 
     /// The selection as UTF-16 offsets. Right after a paste it is the caret

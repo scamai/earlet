@@ -174,6 +174,14 @@ to the recognition vocabulary; it does not replace future legitimate uses of
 and unreadable-lexicon safeguards still apply. Ordinary-to-ordinary rewording
 and multi-token distant rewrites do not qualify.
 
+CJK tokenization is not a promise of general Chinese typo learning. For
+example, the full-sentence edit `我认识张伟` → `我认识张玮` yields the hunk
+`伟` → `玮`, whose distance ratio is 1, so it is rejected as `rewording`.
+Repeating that edit does not overcome the rejection. CJK-only targets also
+fail the distinctiveness rule in §2, and one-character heard keys cannot be
+aliases (§4.2). Cross-script corrections can qualify as transliterations;
+manual teaching (§4.3) supports Chinese words and explicit aliases.
+
 ## 4. What is learned
 
 ### 4.1 Words (the vocabulary)
@@ -541,10 +549,26 @@ screen and it does not emit text-change notifications. A dedicated adapter
 isolates one composer and canonicalizes whitespace before the same
 unique-insertion proof: Codex's final `› ` composer above a recognized Codex
 footer (both the busy queue-hint footer and the idle draft's context-only
-footer, a 0–100 percent indicator with an optional warning count), or Claude
+footer, a 0–100 percent indicator with an optional warning count), or the
+two-row model/context and navigation footer. The observed completed-goal
+status (`Goal achieved (20m)`, with an integer minute duration) can replace
+the context row; it still needs the recognized navigation row and composer
+boundary. The observed project-status row (project, `git:(branch)`, signed
+usage percentage, age such as `(2d)` and mode) and `Goal stalled (/goal resume)`
+status are recognized too, still requiring a known navigation row. An
+unrecognized pane is not treated as editable merely because another pane is
+recognized. In a narrow pane the navigation
+label may show only a prefix of `shortcuts` (such as `shortc`), with or without
+the warning/F2 suffix; only prefixes of that known label are accepted, still
+requiring the complete footer and composer boundary. The same rule applies
+inside supported tmux panes. Claude
 Code's `❯` composer between two rules as wide as the terminal with at most
 eight indented status rows below. The empty placeholders (Codex's prompt,
-Claude Code's `Try "…"` and `Press up to …` hints) read as empty. Claude Code
+Claude Code's `Try "…"` and `Press up to …` hints) read as empty. Codex row
+breaks between two CJK characters or fullwidth punctuation join without a
+space before the exact insertion proof. Explicit spaces at that ambiguous
+boundary do not pass the proof; blank rows remain whitespace. Latin or mixed
+row boundaries retain their unchanged-boundary guard. Claude Code
 wraps its own rows four columns short of the terminal: a break after a full
 row that touches a Chinese, Japanese or Korean character or fullwidth
 punctuation joins without a space (those runs wrap anywhere), and any other
@@ -552,10 +576,15 @@ break is the space the wrap consumed. In tmux, panes are read separately
 between borders that hold their column on every row, and the value joins
 every pane's composer, so the proof also identifies the pane; stacked panes
 without a vertical border fail closed. The adapter polls only that focused,
-admitted field every 600 ms, within the existing 90 s window. Changing output
+admitted field every 600 ms, within the existing 90 s window. Initial anchor
+retries also wait at least 600 ms, so the six default attempts span the
+terminal's approximately 500 ms cached AX snapshot. Ordinary editable fields
+retain their configured retry interval. Each retry rechecks Secure Input,
+editability and the same focused element before reading, and discards the
+value if admission changes during the AX read. Changing output
 above a composer is never an edit to the input. Submission, unknown layouts,
 collapsed pastes/images, clipped drafts, and changes to an ambiguous row
-boundary (any Codex boundary; a Claude Code boundary after a full row that
+boundary (a Codex boundary touching Latin text; a Claude Code boundary after a full row that
 touches a Latin character) stop observation; no whole-screen fallback is
 permitted. A correction at such a boundary may therefore be missed. Other
 terminal programs and hosts have no adapter. These are local parsing rules,
@@ -573,8 +602,15 @@ rejected or saved is specified in
 [Learning feedback, receipts and Undo](docs/design-macos.md#learning-feedback-receipts-and-undo)
 (both apps; Windows has the receipt and Undo in its window and its
 notification-area menu, and its indicator says the correction was remembered).
-Anchor diagnostics record only a reason, attempt count, lengths and selection
-offsets, never field or dictated text.
+Anchor diagnostics record only a reason, attempt count, lengths, selection
+offsets, a fixed read-source label and the numeric AX error, never field or
+dictated text. A successful AX read whose terminal layout is not recognized
+is `read=terminal_layout_unsupported`, distinct from `read=ax_error` and a
+successful non-string value (`read=value_not_string`). `raw_value_utf16` is
+the raw string length before terminal parsing; `value_utf16` is the admitted
+field or composer length. `anchor=value_unchanged` means the final readable
+value equals the before-paste value; it does not prove why the paste was not
+observed. These diagnostics do not relax admission, retry or anchoring rules.
 
 ## 8. Evidence and limits
 

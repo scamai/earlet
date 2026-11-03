@@ -8,6 +8,33 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS: correction capture after Chinese text wraps in Codex.** Display
+  rows between CJK characters no longer add a space that prevents Earlet
+  from locating its own dictation. The exact paste proof remains required.
+- **macOS: give terminal text time to refresh after paste.** Supported terminal anchor
+  retries now wait beyond its cached accessibility snapshot, instead of
+  exhausting all attempts against the old input.
+
+- macOS: recognize the observed Codex project-status and stalled-goal footers
+  in tmux, so English corrections can be anchored in those panes rather than
+  only in neighboring supported panes.
+
+- **macOS: correction learning in narrow Codex terminal panes.** A clipped
+  shortcut hint could make Earlet reject the empty input area before paste,
+  leaving it unable to locate the dictation afterward. Recognized shortened
+  hints now preserve that snapshot, including in supported tmux pane layouts.
+
+- **macOS: clearer diagnostics when correction learning cannot start.**
+  The log distinguishes inaccessible text, unrecognized terminal layouts
+  and a field whose value did not change after paste, without logging words.
+  This improves diagnosis; it does not add support for previously unreadable
+  input fields.
+
+- macOS: keep correction capture available in the observed Codex completed-goal
+  layout, where a goal status replaces the context counter.
+
 ## [0.2.4] - 2026-10-30
 
 A copy of 0.2.0, 0.2.1, 0.2.2 or 0.2.3 updates itself to this one. It is a

@@ -78,14 +78,26 @@ struct DictationWittyInput: Sendable, Equatable {
                   return row.hasSuffix("↑") || row.hasSuffix("↓")
               }) else { return nil }
         let words = rows.map { $0.split(whereSeparator: \.isWhitespace).map(String.init) }
-        let flattened = words.flatMap { $0 }.joined(separator: " ")
-        if flattened == "Ask Codex to do anything" { return Self(value: " ", boundaryWords: []) }
+        var flattened = words[0].joined(separator: " ")
         var boundaries: [String] = []
         for index in 1..<words.count {
-            if let previous = words[index - 1].last, let next = words[index].first {
+            let row = words[index].joined(separator: " ")
+            if let previous = words[index - 1].last, let next = words[index].first,
+               let last = previous.last, let first = next.first {
+                // Codex wraps continuous CJK text between characters, without
+                // consuming a space. Restore that boundary before the exact
+                // paste proof; an explicit space there will fail that proof.
+                // Latin/mixed boundaries retain the existing ambiguity guard.
+                if isSpaceless(last) && isSpaceless(first) {
+                    flattened += row
+                    continue
+                }
                 boundaries.append(previous + "\n" + next)
             }
+            flattened += " " + row
         }
+        flattened = flattened.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        if flattened == "Ask Codex to do anything" { return Self(value: " ", boundaryWords: []) }
         return Self(value: flattened.isEmpty ? " " : " " + flattened + " ", boundaryWords: boundaries)
     }
 
@@ -112,18 +124,37 @@ struct DictationWittyInput: Sendable, Equatable {
     /// editable rows still pass the same clipping and exact-paste checks above.
     private static func isTwoRowFooter(status: String, navigation: String) -> Bool {
         guard status.hasPrefix("  "), navigation.hasPrefix("  ") else { return false }
-        let parts = status.trimmingCharacters(in: .whitespaces).components(separatedBy: " · Context ")
-        guard parts.count == 2,
-              parts[0].range(of: #"^[A-Za-z0-9][A-Za-z0-9 ._/-]*$"#, options: .regularExpression) != nil,
-              parts[1].range(of: #"^[0-9]{1,3}% (?:left|l…)(?: · [^\r\n]+)?$"#, options: .regularExpression) != nil,
-              let percentage = Int(parts[1].prefix(while: { $0.isNumber })), percentage <= 100 else { return false }
+        let statusText = status.trimmingCharacters(in: .whitespaces)
+        let parts = statusText.components(separatedBy: " · Context ")
+        // A completed or stalled goal replaces the context counter and may clip
+        // the model label. Require the observed state grammar; arbitrary
+        // status text is never enough to identify an editable composer.
+        let label = #"[A-Za-z0-9][A-Za-z0-9 ._/-]*…?"#
+        let goalStatus = #"^\#(label) Goal (?:achieved \([0-9]+m\)|stalled \(/goal resume\))$"#
+        // The project-status layout used in tmux replaces the model/context
+        // row with project, branch, signed usage pace, age and a mode label.
+        // Recognize that structure, never an arbitrary second footer row.
+        let projectStatus = #"^[A-Za-z0-9][A-Za-z0-9._/-]*…? git:\([^()\s]+\) [+-][0-9]+% \([0-9]+(?:\.[0-9]+)?[smhd]\) · \#(label)$"#
+        var recognizedStatus = statusText.range(of: goalStatus, options: .regularExpression) != nil
+            || statusText.range(of: projectStatus, options: .regularExpression) != nil
+        if parts.count == 2,
+           parts[0].range(of: #"^[A-Za-z0-9][A-Za-z0-9 ._/-]*$"#, options: .regularExpression) != nil,
+           parts[1].range(of: #"^[0-9]{1,3}% (?:left|l…)(?: · [^\r\n]+)?$"#, options: .regularExpression) != nil,
+           let percentage = Int(parts[1].prefix(while: { $0.isNumber })), percentage <= 100 {
+            recognizedStatus = true
+        }
+        guard recognizedStatus else { return false }
         // Typing into the live composer replaces the navigation row with
         // the existing queue/send hint, while the model row stays visible.
         let nav = navigation.trimmingCharacters(in: .whitespaces)
+        // A narrow composer clips this label without an ellipsis while the
+        // warning/F2 suffix stays visible. Accept only prefixes of the known
+        // label, still inside the complete two-row footer grammar.
+        let shortcutLabel = "(?:shortcuts?|shortcu|shortc|short|shor|sho|sh|s)"
         return isFooter(navigation)
-            || nav.range(of: #"^← for agents · \? for shortcuts?$"#,
+            || nav.range(of: #"^← for agents · \? for \#(shortcutLabel)$"#,
                          options: .regularExpression) != nil
-            || nav.range(of: #"^← for agents · \? for(?: shortcuts?)?\s*(?:⚠ [0-9]+(?: warnings?)?)?\s*· f2(?: to view)?$"#,
+            || nav.range(of: #"^← for agents · \? for(?: \#(shortcutLabel))?\s*(?:⚠ [0-9]+(?: warnings?)?)?\s*· f2(?: to view)?$"#,
                          options: .regularExpression) != nil
     }
 

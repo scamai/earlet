@@ -31,6 +31,72 @@ final class DictationWittyInputTests: XCTestCase {
         XCTAssertEqual(field.selectionLength, 2)
     }
 
+    func testAnchorLogSeparatesTerminalLayoutFailureFromUnreadableAXValue() {
+        let privateText = "PRIVATE-SENTINEL-9K"
+        let cases: [(String?, String, String)] = [
+            (privateText, DictationWittyInput.bundleID, "read=terminal_layout_unsupported"),
+            (nil, DictationWittyInput.bundleID, "read=value_not_string"),
+            (privateText, "com.example.editor", "read=ax_value"),
+            (screen("We use Mies"), DictationWittyInput.bundleID, "read=terminal_composer")
+        ]
+        for (raw, bundleID, expected) in cases {
+            let field = DictationCorrectionObserver.fieldSnapshot(
+                value: raw, selectedRange: nil, bundleID: bundleID)
+            let done = expectation(description: expected)
+            DictationAnchorSearch.run(
+                pasted: privateText, attempts: 1, retrySeconds: 0,
+                queue: DispatchQueue(label: "test.read-diagnostics"),
+                read: { field }, isCurrent: { true }, diagnostic: { report in
+                    XCTAssertTrue(report.logSummary.contains(expected), report.logSummary)
+                    XCTAssertFalse(report.logSummary.contains(privateText))
+                    XCTAssertFalse(report.logSummary.contains("Mies"))
+                    XCTAssertFalse(report.logSummary.contains(bundleID))
+                }, completion: { _ in done.fulfill() })
+            wait(for: [done], timeout: 5)
+        }
+    }
+
+    func testAnchorLogPreservesAXFailureCodesAndNeverParsesFailedReads() {
+        for code: Int32 in [-25202, -25204, -25205, -25212] {
+            let field = DictationCorrectionObserver.fieldSnapshot(
+                value: screen("PRIVATE-SENTINEL-9K"), selectedRange: nil,
+                bundleID: DictationWittyInput.bundleID, axError: code)
+            XCTAssertNil(field.value)
+            let done = expectation(description: "AX failure \(code)")
+            DictationAnchorSearch.run(
+                pasted: "PRIVATE-SENTINEL-9K", attempts: 1, retrySeconds: 0,
+                queue: DispatchQueue(label: "test.ax-errors"),
+                read: { field }, isCurrent: { true }, diagnostic: { report in
+                    XCTAssertEqual(report.result, .valueUnavailable)
+                    XCTAssertTrue(report.logSummary.contains("read=ax_error"))
+                    XCTAssertTrue(report.logSummary.contains("ax_error=\(code)"))
+                    XCTAssertNil(report.rawValueLength)
+                    XCTAssertFalse(report.logSummary.contains("PRIVATE-SENTINEL-9K"))
+                }, completion: { result in
+                    XCTAssertEqual(result, .notFound)
+                    done.fulfill()
+                })
+            wait(for: [done], timeout: 5)
+        }
+    }
+
+    func testAnchorLogIdentifiesAValueThatNeverChangedAfterPaste() {
+        let field = DictationCorrectionObserver.fieldSnapshot(
+            value: screen("old"), selectedRange: nil, bundleID: DictationWittyInput.bundleID)
+        let done = expectation(description: "unchanged value")
+        DictationAnchorSearch.run(
+            pasted: "new ", beforePaste: field, attempts: 2, retrySeconds: 0.001,
+            queue: DispatchQueue(label: "test.unchanged-diagnostics"),
+            read: { field }, isCurrent: { true }, diagnostic: { report in
+                XCTAssertTrue(report.logSummary.contains("anchor=value_unchanged"), report.logSummary)
+                XCTAssertEqual(report.attempts, 2)
+            }, completion: { result in
+                XCTAssertEqual(result, .notFound)
+                done.fulfill()
+            })
+        wait(for: [done], timeout: 5)
+    }
+
     func testPlaceholderIsEmptyAndOnlyTheFinalComposerIsReturned() throws {
         let input = try XCTUnwrap(DictationWittyInput.parse(screen("Ask Codex to do anything",
             history: "› Previous user message\n\nAssistant output", footer: "Main [default] · ← for agents    42% context left")))
@@ -86,6 +152,31 @@ final class DictationWittyInputTests: XCTestCase {
         XCTAssertNil(anchor.span(in: " OTHER We have a server called Miles and use it to run our tests. "))
     }
 
+    func testCodexCJKWrapPreservesPasteProofAndInteriorCorrection() throws {
+        // Native Codex wraps a continuous CJK sentence between characters;
+        // joining every display row with a space changes the inserted text.
+        let before = try XCTUnwrap(DictationWittyInput.parse(screen("Ask Codex to do anything")))
+        let pasted = "我们使用 Mies 运行测试，这段合成文字用于检查输入框换行后是否仍然可以学习。"
+        let after = try XCTUnwrap(DictationWittyInput.parse(screen(
+            "我们使用 Mies 运行测试，这段合成文字用于检查输入框\n换行后是否仍然可以学习。")))
+        let span = try XCTUnwrap(anchor(before, after, pasted: pasted))
+        let edited = try XCTUnwrap(DictationWittyInput.parse(screen(
+            "我们使用 Miles 运行测试，这段合成文字用于检查输入\n框换行后是否仍然可以学习。")))
+        XCTAssertEqual(span.span(in: try XCTUnwrap(edited.value(matching: after))),
+                       "我们使用 Miles 运行测试，这段合成文字用于检查输入框换行后是否仍然可以学习。 ")
+        XCTAssertFalse(edited.value.contains("PRIVATE OUTPUT"))
+    }
+
+    func testCodexCJKWrapDoesNotProveAnExplicitSpaceOrBlankLine() throws {
+        let before = try XCTUnwrap(DictationWittyInput.parse(screen("Ask Codex to do anything")))
+        let after = try XCTUnwrap(DictationWittyInput.parse(screen("这是合成文字\n只用于测试")))
+        XCTAssertNil(anchor(before, after, pasted: "这是合成文字 只用于测试"),
+                     "A visually ambiguous space must not become a proved insertion")
+        let blank = try XCTUnwrap(DictationWittyInput.parse(screen("这是合成文字\n\n只用于测试")))
+        XCTAssertEqual(blank.value, " 这是合成文字 只用于测试 ")
+        XCTAssertNil(anchor(before, blank, pasted: "这是合成文字只用于测试"))
+    }
+
     func testTwoRowContextStatusCanAnchorAndObserveAnEdit() throws {
         // The narrow live terminal has a model/context row followed by navigation.
         // These are the exact two rows observed through AX20 while a draft was live.
@@ -102,6 +193,95 @@ final class DictationWittyInputTests: XCTestCase {
         XCTAssertFalse(edited.value.contains("OUTPUT"))
         XCTAssertFalse(edited.value.contains("Context"))
         XCTAssertEqual(DictationWittyInput.parse(screen("We use Miles", footer: wide))?.value, edited.value)
+    }
+
+    func testNarrowCodexNavigationPreservesTheBeforePasteSnapshot() throws {
+        // Observed in a narrow native terminal pane: the shortcut hint loses
+        // trailing letters without an ellipsis while warning/F2 stay visible.
+        let status = "GPT-6-Astra high Fast · Context 27% l…"
+        for label in ["s", "sh", "sho", "shor", "short", "shortc", "shortcu", "shortcut", "shortcuts"] {
+            for suffix in ["", "  ⚠ 1 · f2", "  ⚠ 2 warnings · f2 to view"] {
+                let footer = status + "\n  ← for agents · ? for " + label + suffix
+                let before = try XCTUnwrap(DictationWittyInput.parse(screen(
+                    "Ask Codex to do anything", footer: footer)))
+                let after = try XCTUnwrap(DictationWittyInput.parse(screen(
+                    "We use Mies", footer: status + "\n  tab to queue message")))
+                let span = try XCTUnwrap(anchor(before, after, pasted: "We use Mies"))
+                let edited = try XCTUnwrap(DictationWittyInput.parse(screen(
+                    "We use Miles", footer: status + "\n  tab to queue message")))
+                XCTAssertEqual(span.span(in: try XCTUnwrap(edited.value(matching: after))), "We use Miles ")
+                XCTAssertFalse(edited.value.contains("PRIVATE OUTPUT"))
+            }
+        }
+    }
+
+    func testCompletedGoalFooterStillAnchorsTheEditableComposer() throws {
+        let footer = "GPT-6-Astra hi… Goal achieved (20m)\n  ← for agents · ? for short  ⚠ 1 · f2"
+        let before = try XCTUnwrap(DictationWittyInput.parse(screen("Ask Codex to do anything", footer: footer)))
+        let after = try XCTUnwrap(DictationWittyInput.parse(screen("We use Mies", footer: footer)))
+        let span = try XCTUnwrap(anchor(before, after, pasted: "We use Mies"))
+        let edited = try XCTUnwrap(DictationWittyInput.parse(screen("We use Miles", history: "CHANGED OUTPUT", footer: footer)))
+        XCTAssertEqual(span.span(in: try XCTUnwrap(edited.value(matching: after))), "We use Miles ")
+        XCTAssertNil(DictationWittyInput.parse(screen("old", footer: footer) + "\nUNRELATED OUTPUT"))
+        XCTAssertNil(DictationWittyInput.parse(screen("draft\n  " + footer, footer: footer)))
+        for status in ["Goal achieved (20m)", "Model Goal achieved (unknown)",
+                       "Model Goal achieved (20m) arbitrary output", "Model Goal imagined (20m)"] {
+            XCTAssertNil(DictationWittyInput.parse(screen("draft", footer:
+                status + "\n  ← for agents · ? for short  ⚠ 1 · f2")))
+        }
+    }
+
+    func testNarrowCodexNavigationStillRejectsUnknownAndTranscriptRows() {
+        let status = "GPT-6-Astra high Fast · Context 27% l…"
+        let valid = status + "\n  ← for agents · ? for shortc  ⚠ 1 · f2"
+        for label in ["short story", "something", "shortcuts extra", "SHORT", "shortcx"] {
+            XCTAssertNil(DictationWittyInput.parse(screen("draft", footer:
+                status + "\n  ← for agents · ? for " + label + "  ⚠ 1 · f2")))
+        }
+        XCTAssertNil(DictationWittyInput.parse(screen("[Pasted Content 2000 chars]", footer: valid)))
+        XCTAssertNil(DictationWittyInput.parse(screen("draft\n" + status
+            + "\n← for agents · ? for shortc  ⚠ 1 · f2", footer: valid)))
+        XCTAssertNil(DictationWittyInput.parse(screen("draft", footer:
+            "unrecognized status\n  ← for agents · ? for shortc  ⚠ 1 · f2")))
+        // A former composer in transcript output cannot bypass the final footer.
+        XCTAssertNil(DictationWittyInput.parse(screen("old draft", footer: valid)
+            + "\n\nUNRELATED OUTPUT"))
+    }
+
+    func testTmuxCodexNarrowFooterAnchorsOnlyTheEditedPane() throws {
+        let footer = "Model · Context 27% l…\n  ← for agents · ? for shortc  ⚠ 1 · f2"
+        let other = screen("unchanged draft", footer: footer)
+        let before = try XCTUnwrap(DictationWittyInput.parse(tmux([
+            other, screen("Ask Codex to do anything", footer: footer)])))
+        let after = try XCTUnwrap(DictationWittyInput.parse(tmux([
+            other, screen("We use Mies", footer: footer)])))
+        let span = try XCTUnwrap(anchor(before, after, pasted: "We use Mies"))
+        let edited = try XCTUnwrap(DictationWittyInput.parse(tmux([
+            other, screen("We use Miles", history: "CHANGED OUTPUT", footer: footer)])))
+        XCTAssertEqual(span.span(in: try XCTUnwrap(edited.value(matching: after))), "We use Miles ")
+        let elsewhere = try XCTUnwrap(DictationWittyInput.parse(tmux([
+            screen("changed draft", footer: footer), screen("We use Miles", footer: footer)])))
+        XCTAssertNil(span.span(in: elsewhere.value))
+    }
+
+    func testProjectStatusAndStalledGoalInTmuxStillAnchorOnlyTheEditedPane() throws {
+        let statuses = ["workspace git:(main) +14% (2d) · Ma…",
+                        "workspace git:(feature/cleanup) -23% (6h) · Max",
+                        "workspace… Goal stalled (/goal resume)"]
+        for status in statuses {
+            let footer = status + "\n  ? for shortcuts               ⚠ 2 · f2"
+            let other = screen("untouched draft", footer: "Model · Context 53% l…\n  ← for agents · ? for short  ⚠ 1 · f2")
+            let before = try XCTUnwrap(DictationWittyInput.parse(tmux([other, screen("Ask Codex to do anything", footer: footer)], width: 80)))
+            let after = try XCTUnwrap(DictationWittyInput.parse(tmux([other, screen("We use Mies", footer: footer)], width: 80)))
+            let inserted = try XCTUnwrap(anchor(before, after, pasted: "We use Mies"))
+            let edited = try XCTUnwrap(DictationWittyInput.parse(tmux([other, screen("We use Miles", history: "CHANGED OUTPUT", footer: footer)], width: 80)))
+            XCTAssertEqual(inserted.span(in: try XCTUnwrap(edited.value(matching: after))), "We use Miles ")
+            XCTAssertNil(DictationWittyInput.parse(screen("old", footer: footer) + "\nUNRELATED OUTPUT"))
+        }
+        for status in ["workspace git:(main) +14% arbitrary output", "workspace Goal stalled (arbitrary)",
+                       "workspace git:(main) +14% (2d) ·", "workspace git:(main) +14% (never) · Max"] {
+            XCTAssertNil(DictationWittyInput.parse(screen("draft", footer: status + "\n  ? for shortcuts  ⚠ 2 · f2")))
+        }
     }
 
     func testObservedTwoRowFooterHandlesEmptyAndMultilineDrafts() throws {

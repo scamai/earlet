@@ -10,16 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/scamai/earlet/releases/latest"><strong>Download for Mac →</strong></a>
-  &nbsp; · &nbsp;
-  <a href="#quick-start">Build from source</a>
-  &nbsp; · &nbsp;
-  <a href="SUPPORT.md">Get help</a>
+  <a href="https://github.com/scamai/earlet/releases/latest"><img src="docs/assets/download-mac.svg" alt="Download Earlet for Mac" width="234" height="52"></a><br>
+  <sub>macOS 14+ · Apple Silicon · 0.2.4 preview<br>
+  Signed and notarized by Apple.</sub>
 </p>
 
 <p align="center">
-  <sub>macOS 14+ · Apple Silicon · 0.2.4 preview<br>
-  Signed and notarized by Apple.</sub>
+  <a href="#quick-start">Build from source</a>
+  &nbsp; · &nbsp;
+  <a href="SUPPORT.md">Get help</a>
 </p>
 
 <p align="center">
@@ -88,13 +87,15 @@ recording. Retention and deletion stay under your control.
 
 ## Install
 
+<a href="https://github.com/scamai/earlet/releases/latest"><img src="docs/assets/download-mac.svg" alt="Download Earlet for Mac" width="234" height="52"></a>
+
 Download `Earlet-0.2.4-macos-arm64.dmg` from
 [Releases](https://github.com/scamai/earlet/releases/latest), open it and drag
 Earlet to Applications. It needs an Apple Silicon Mac with macOS 14 or later.
 The image is signed with Reality Inc.'s Developer ID and notarized by Apple,
 so it opens like any other downloaded app. The Python runtime and the
 [MLX Whisper Large v3 Turbo, 4-bit](https://huggingface.co/mlx-community/whisper-large-v3-turbo-4bit)
-model are inside, so the download is about 850 MB and nothing else needs
+model are inside, so the download is over 500 MB and nothing else needs
 installing. Then continue with [Your first dictation](#your-first-dictation).
 
 ## Quick start
