@@ -9,3 +9,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/scamai/earlet/security/advisories/new
     about: Report it privately to the maintainers. Never open a public issue for a vulnerability.
+  - name: Send a log or anything private
+    url: https://github.com/scamai/earlet/blob/main/SUPPORT.md#sharing-something-privately
+    about: Issues are public. When a maintainer asks for a log, an app or microphone name, or dictated text, send it privately.

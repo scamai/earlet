@@ -174,13 +174,15 @@ can be read for learning.
 ## Privacy and local data
 
 No account is required, and logs do not contain dictated words. Speech
-recognition uses a local model. Logs can identify the destination app; review
-them before sharing. **Copy last text** holds the latest usable result in memory.
+recognition uses a local model. Logs can identify the destination app and
+name your microphone, so never post them publicly; send an excerpt only when
+a maintainer asks, [privately](SUPPORT.md#sharing-something-privately).
+**Copy last text** holds the latest usable result in memory.
 
 - **Mac History.** Delivered words and kept recordings are encrypted with AES-256-GCM and a key in the login keychain. By default, words are kept forever and recordings for 30 days. Change retention or turn History off in Settings; Delete All History destroys its key.
 - **Recovery audio.** The Mac writes an **unencrypted** temporary audio file while recording. A successful delivery, usable text/clipboard fallback, or cancellation removes it; at most one failed or interrupted take remains for up to seven days.
 - **Vocabulary.** `learning.json` keeps vocabulary and correction evidence in **plain text**. Disable learning or inspect and remove learned words in the app.
-- **Mac updates.** Once a day the Mac app fetches a small public file (`appcast.xml`) from Earlet's GitHub Releases to check for a new version. It sends no account, install ID, system profile or anything about your audio, text or words; GitHub sees your IP address, the time and the request headers, including a user agent naming Earlet and its version. Each check starts without cookies from an earlier check; redirects within that check can use cookies GitHub just set. Updates come from the same place, are signature-checked, and install when Earlet quits. Under Settings → General → Update Earlet, choose Notify only to decide on each update yourself, or Off to stop checking. See [Updates](docs/design-macos.md#updates).
+- **Mac updates.** Once a day the Mac app fetches a small public file (`appcast.xml`) from Earlet's GitHub Releases to check for a new version. It sends no account, install ID, cookie, system profile or anything about your audio, text or words; GitHub sees your IP address, the time and the request headers, including a user agent naming Earlet and its version. GitHub sets cookies when it answers, and the redirect to github.com within that check returns them; Earlet deletes them before the next check, so no cookie links one check to the next. Updates come from the same place, are signature-checked, and install when Earlet quits. Under Settings → General → Update Earlet, choose Notify only to decide on each update yourself, or Off to stop checking. See [Updates](docs/design-macos.md#updates).
 
 Mac History lives under
 `~/Library/Application Support/Dictation/dictation/history`; recovery audio
@@ -207,7 +209,9 @@ sensitive material. Report security concerns [privately](SECURITY.md).
 
 Automated checks do not establish microphone quality or recognition accuracy on
 your voice. For a reproducible report, include the build, OS, approximate time,
-steps, and destination app, without private dictated text or recordings.
+steps and the kind of app you dictated into, without private dictated text,
+recordings or logs; anything a maintainer asks for beyond that goes
+[privately](SUPPORT.md#sharing-something-privately).
 [SUPPORT.md](SUPPORT.md) explains the diagnostic files and reporting channels.
 
 ## Community

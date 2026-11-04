@@ -6,8 +6,15 @@ body:
     attributes:
       value: |
         Recognition reports help most when the same words go wrong more than
-        once. Type out what you said; never attach a recording of anyone
-        else's voice, and think twice before attaching your own.
+        once. **This issue is public:** anyone can read what you write here.
+        Rather than quoting something you dictated for real, dictate a
+        neutral test sentence that shows the problem (for example, one that
+        uses the word that goes wrong) and type out that sentence and what
+        Earlet typed. Never attach a recording of anyone else's voice, and
+        think twice before attaching your own. If a maintainer asks for
+        something you would rather not post publicly, send it through the
+        private channel in
+        [SUPPORT.md](https://github.com/scamai/earlet/blob/main/SUPPORT.md#sharing-something-privately).
   - type: dropdown
     id: platform
     attributes:
@@ -36,14 +43,16 @@ body:
     id: said
     attributes:
       label: What you said
+      description: Optional, and public. A neutral test sentence works best; leave out anything private.
     validations:
-      required: true
+      required: false
   - type: textarea
     id: typed
     attributes:
       label: What was typed
+      description: Optional, and public. What Earlet typed for that sentence.
     validations:
-      required: true
+      required: false
   - type: dropdown
     id: vocabulary
     attributes:
@@ -67,4 +76,4 @@ body:
     id: context
     attributes:
       label: Anything else
-      description: Background noise, accent, speaking speed, how often it happens.
+      description: Background noise, accent, speaking speed, how often it happens. No logs or microphone names here.

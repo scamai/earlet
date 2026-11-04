@@ -889,8 +889,10 @@ github.com to the same asset host. Each host sees
 the address the request comes from, the time and the request headers,
 including Sparkle's user agent, which names the app and its version.
 github.com also sets cookies, one of them kept for a year. Sparkle's session
-would keep them and send them back with every later check (read from
-`SPUDownloader.m`'s default session configuration), so the app empties its
+uses the default configuration (`SPUDownloader.m`), which stores them and
+sends them back: on a Mac, a session on that configuration returned a
+year-long cookie from a local server on the next request, and sent none once
+the store was emptied (`DictationUpdateCookiesTests`). So the app empties its
 cookie store at launch and before and after each check
 (`DictationUpdateCookies`). Two consecutive checks from a packaged 0.2.5
 candidate on 2026-11-04 had no Cookie header on either first request. Native
@@ -906,7 +908,9 @@ settings preserved. Notify only displayed the native update prompt without
 an archive request. After an automatic download, switching to Off or Notify
 only showed the waiting-update warning, and both cases installed on quit.
 These checks used temporary bundles and a signed local feed, not a published
-0.2.5 distribution or an additional clean machine.
+0.2.5 distribution or an additional clean machine. The published 0.2.5 then
+updated an installed 0.2.4 copy through GitHub, and that copy's next check
+accepted the signed public feed.
 
 **Log lines.** `updates:` with a build or an error code only: `found build
 …`, `up to date`, `downloaded build …`, `build … installs when Earlet quits`,

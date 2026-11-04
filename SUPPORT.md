@@ -18,6 +18,8 @@ source has not been exercised on Windows hardware.
 
 If the check does not help, use the channels below. A report should say which
 step you tried and what happened, without including private dictated text.
+Issues and discussions are public, so anything private goes
+[privately](#sharing-something-privately) instead.
 
 ## Where to go
 
@@ -28,6 +30,7 @@ step you tried and what happened, without including private dictated text.
 | Something broken | [A bug report](https://github.com/scamai/earlet/issues/new?template=bug_report.yml) |
 | Words recognised wrongly | [A recognition report](https://github.com/scamai/earlet/issues/new?template=recognition_report.yml) |
 | A security problem | Never a public issue: [SECURITY.md](SECURITY.md) |
+| A log, a name or dictated text a maintainer asked for | Never a public issue: [send it privately](#sharing-something-privately) |
 | A Code of Conduct concern | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md#enforcement) |
 
 Search the existing issues and discussions first; adding what you saw to an
@@ -35,12 +38,22 @@ open issue helps more than a duplicate.
 
 ## What to include
 
+An issue is public: anyone can read it. Put these in it:
+
 - **The version and build.** The app's window shows both under
   Troubleshooting, with the path of the copy that is running.
 - **Your computer:** macOS or Windows version, and the Mac or PC model.
-- **The hold key** you use, **the app you dictated into**, and **your
-  microphone** and how it is connected (built-in, USB or Bluetooth).
-- **What you did, what you expected and what happened instead.**
+- **The hold key** you use, **the kind of app you dictated into** (a text
+  editor, a browser text box, a terminal, a chat app) and **how your
+  microphone is connected** (built-in, USB or Bluetooth). Leave out the
+  app's name and the microphone's name; a maintainer who needs them asks.
+- **What you did, what you expected and what happened instead,** described
+  rather than quoted from what you dictated. To show a recognition problem,
+  dictate a neutral test sentence and use that.
+
+Leave these out of the issue, and send them
+[privately](#sharing-something-privately) only when a maintainer asks:
+
 - **A log excerpt** from around the time it happened. Open the log folder
   from the app (Open Log Folder on macOS, Open log folder on Windows), or
   find it here:
@@ -53,8 +66,12 @@ open issue helps more than a duplicate.
   These counts do not verify the text displayed by the receiving app.
   They can name the app you dictated into (on Windows by its
   program name, such as WINWORD), and on Windows the title of a window whose
-  app could not be identified, which may name a document. Read the excerpt
-  before you paste it, and remove anything you would rather not share.
+  app could not be identified, which may name a document. Both apps also log
+  the name of the microphone they open, as the system shows it, and a
+  headset's name can include its owner's name. Read the excerpt before you
+  send it, and remove anything you would rather not share.
+- **The name of the app you dictated into and of your microphone.**
+- **Dictated text**, if a neutral test sentence does not show the problem.
 
 For intermittent repeated characters, note the time and the build shown in
 Troubleshooting. Before the next dictation replaces it, compare Show text in
@@ -73,3 +90,16 @@ each dictation, whether the engine was still loaded, and when it was unloaded.
 Do not attach your vocabulary file (`learning.json`): it holds the words you
 taught the app or corrected. Never attach a recording of someone else's
 voice.
+
+## Sharing something privately
+
+When a maintainer asks for a log, a name or dictated text, send it in one of
+two ways, never in the issue:
+
+- **Email.** Write to contact@scam.ai with the subject line `[Earlet]`.
+  Include the link to the issue it belongs to.
+- **GitHub private vulnerability reporting.** Use **Report a vulnerability**
+  on the repository's Security tab
+  (<https://github.com/scamai/earlet/security/advisories/new>). Only the
+  maintainers can read it. A security problem always goes this way or by
+  email, as [SECURITY.md](SECURITY.md#reporting-a-vulnerability) explains.

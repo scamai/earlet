@@ -48,8 +48,9 @@ BSD_DICT_QUOTE = "The 1934 copyright has lapsed, according to the supplier."
 # that links into one of them has a dead link once published.
 NOT_PUBLISHED = ("VERIFY.md", "BRAINSTORM.md", "TODO.md", "docs/history.md", "docs/internal/", ".Codex/",
                  "import-manifest.json", "evidence/")
-# Reviewed public team mailbox for conduct reports; never a personal address.
-ROLE_ADDRESSES: tuple[str, ...] = ("support@scam.ai",)
+# Reviewed public team mailboxes, never a personal address: the first for
+# conduct reports, the second for private reports (SECURITY.md, SUPPORT.md).
+ROLE_ADDRESSES: tuple[str, ...] = ("support@scam.ai", "contact@scam.ai")
 HTML_TAGS = {"details", "summary", "br", "kbd", "picture", "source", "img", "sub", "sup", "p", "a"}
 # Network claims are withheld until traffic is measured: the usual ways of
 # saying that nothing goes over the network, leaves the computer, reaches a

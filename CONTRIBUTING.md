@@ -39,7 +39,7 @@ planned. Questions go to Discussions too ([SUPPORT.md](SUPPORT.md)).
 
 | You can help with | A useful first contribution |
 |---|---|
-| Using the Mac preview | Try one short, non-sensitive dictation in an app you use. Report the build, OS, microphone, hold key, expected result and actual result using the [reporting guide](SUPPORT.md#what-to-include). |
+| Using the Mac preview | Try one short, non-sensitive dictation in an app you use. Report the build, OS, how the microphone is connected (built-in, USB or Bluetooth), the kind of app, hold key, expected result and actual result using the [reporting guide](SUPPORT.md#what-to-include). |
 | Documentation | Identify the exact step that was confusing and propose clearer wording. Include the command or link you checked, without private paths or data. |
 | Accessibility | Describe the task, assistive technology, and step that prevented completion. A screenshot is optional; remove personal information first. |
 | Code or tests | Choose one confirmed bug or a missing failure-path test. Keep the fix and its verification in one pull request. |

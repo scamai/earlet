@@ -23,16 +23,14 @@ Security fixes land on the default branch first.
 
 ## Reporting a vulnerability
 
-During private preparation, use the maintainer contact through which you
-received repository access. GitHub private vulnerability reporting is a
-public-repository feature; the form below becomes the reporting channel
-when it is enabled at public launch. Do not include vulnerability details
-in an issue while requesting a contact.
+**Please do not report security vulnerabilities in public issues,
+discussions or pull requests.** Report them privately, in one of two ways:
 
-Report it privately through GitHub's private vulnerability reporting:
-[Report a vulnerability](https://github.com/scamai/earlet/security/advisories/new),
-under this repository's Security tab. Only the maintainers can read it. Do
-not open a public issue, discussion or pull request for a vulnerability.
+- **GitHub private vulnerability reporting (preferred).** Use **Report a
+  vulnerability** on this repository's Security tab, or go straight to
+  <https://github.com/scamai/earlet/security/advisories/new>. Only the
+  maintainers can read it.
+- **Email.** Write to contact@scam.ai with the subject line `[SECURITY][Earlet]`.
 
 A useful report gives:
 

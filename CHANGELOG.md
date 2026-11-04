@@ -50,8 +50,9 @@ notice adds a line under Unreleased in the same pull request.
 
 - **macOS: Earlet empties its cookie store around every update check.**
   github.com answers the daily check with cookies, one of them kept for a
-  year, which earlier versions, going by Sparkle's default URL session (read
-  from its source, not captured), would send back with every later check.
+  year, which earlier versions would keep and send back with later checks:
+  on a Mac, the URL session setup they use returns such a cookie on the next
+  request unless the store is emptied.
   Earlet now empties its cookie store at launch and before and after each
   check. Two consecutive checks from a packaged candidate carried no Cookie
   header on either first request; redirects within each check carried only
