@@ -43,6 +43,8 @@ ROWS = [
         claims.test_sparkle_is_embedded_without_its_sandbox_services),
     row("update feed written", "                          **update_keys(product)}, stream)", "}, stream)",
         claims.test_the_macos_bundle_follows_the_product_update_feed),
+    row("signed feed required", '"SURequireSignedFeed": True,', "",
+        claims.test_the_macos_bundle_follows_the_product_update_feed),
     row("builds ordered by build id", '"CFBundleVersion": build_id,', '"CFBundleVersion": product["version"],',
         claims.test_sparkle_orders_builds_by_a_version_that_only_grows),
     row("alias table ships", 'WORKER_DATA = ("default_aliases.json",)', "WORKER_DATA = ()",
@@ -357,6 +359,7 @@ NESTED_SIGNING = "        runner(codesign(identity, path, WORKER_ENTITLEMENTS if
 SPARKLE_SEALED = release_claims.test_sparkle_is_sealed_inside_out_before_the_app_with_no_worker_entitlements
 SKIPPED = "        if path.is_symlink() or not path.is_file() or path == main:"
 REFUSED = release_claims.test_what_cannot_become_a_notarized_release_is_refused
+UNREADABLE_FEED = release_claims.test_a_feed_the_app_would_not_read_stops_the_release
 
 RELEASE_ROWS = [
     release_row("executables get the worker set", NESTED_SIGNING, "        runner(codesign(identity, path))",
@@ -402,6 +405,20 @@ RELEASE_ROWS = [
                 case="app-only", overrides={"mode": "app-only"}, message="Only a complete package"),
     release_row("fresh output", "    if output.exists():", "    if False:", REFUSED,
                 case="output exists", overrides={}, message="Output already exists"),
+    release_row("feed signature checked", "    if not feed_signature_valid(feed_bytes, public_key):",
+                "    if False:", UNREADABLE_FEED, mac_options={"feed_seed": None}),
+    release_row("scalar below the group order", "    if a is None or r is None or s >= ED_L:",
+                "    if a is None or r is None:",
+                release_claims.test_the_feed_check_verifies_ed25519_as_rfc_8032_specifies,
+                seed=release_claims.RFC8032[0][0], public=release_claims.RFC8032[0][1],
+                message=release_claims.RFC8032[0][2], signature=release_claims.RFC8032[0][3]),
+    release_row("app must require a signed feed", '    if info.get("SURequireSignedFeed") is not True:',
+                "    if False:",
+                release_claims.test_an_app_that_would_read_an_unsigned_feed_is_refused_before_anything_is_signed),
+    release_row("security release marked", '        command += ["--critical-update-version", ""]\n', "        pass\n",
+                release_claims.test_a_security_release_is_marked_critical_for_every_older_copy),
+    release_row("critical mark checked", '    if critical and "sparkle:criticalUpdate" not in feed:',
+                "    if False:", release_claims.test_a_security_release_whose_feed_is_not_marked_critical_stops),
 ]
 
 

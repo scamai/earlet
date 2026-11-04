@@ -15,7 +15,7 @@ welcome and handled first.
 
 ## Supported versions
 
-Only the latest 0.x release gets security fixes. The latest, 0.2.4, is a
+Only the latest 0.x release gets security fixes. The latest, 0.2.5, is a
 notarized download for Apple Silicon Macs that updates itself from then on;
 a copy of 0.1.0 has to be replaced by hand once. The Windows app is source only:
 it has been built and tested on Linux and has never run on Windows hardware.
@@ -177,17 +177,32 @@ carry the most risk:
   environment variables can point the worker at another interpreter, runtime
   or model: on macOS only in a debug build (a release app keeps them inside
   its bundle), on Windows in every build.
-- The macOS app checks for updates once a day: one HTTPS request to
-  github.com for the release feed, which shows GitHub the address it comes
-  from and Earlet's version; Settings → Update Earlet automatically turns it
-  off. It installs an update only when the archive's EdDSA signature matches
-  the public key built into the app and the new app is signed by the same
-  Developer ID team, and it installs it in place, so the app's permissions
-  and keychain item carry over
-  ([Updates](docs/design-macos.md#updates)). One measured check opened that
-  single connection and no other in the twelve seconds around it; that is
-  one observation, and the Windows app's traffic has not been measured. An
-  outbound connection you did not expect is worth reporting.
+- The macOS app checks for updates once a day unless Settings → General →
+  Update Earlet is Off: one HTTPS request for the public feed
+  (`appcast.xml`) on Earlet's GitHub Releases, with no account, install ID
+  or system profile. github.com redirects it twice: to the release's own
+  address on github.com, then to GitHub's release asset host
+  (`release-assets.githubusercontent.com`), which serves the file; each sees
+  the address it comes from, the time and the request headers, including a
+  user agent naming Earlet and its version. github.com's first response sets
+  fresh cookies, one of them kept for a year. In two consecutive checks from
+  a packaged 0.2.5 candidate, native request diagnostics showed no Cookie
+  header on either first request, cookies on the in-check github.com
+  redirect, and none on the asset-host request. The app empties its cookie
+  store at launch and before and after every check.
+  Emptying the store removes cookies only: GitHub still sees the address and
+  user agent of every check. The app refuses a feed that is not signed with
+  the EdDSA key built into the app; if that keeps failing for 20 days,
+  Sparkle reads the feed in a restricted mode that ignores its critical mark
+  and release notes and never downloads on its own. The app installs an
+  update only when the archive's signature matches that key and the new app
+  is signed by the same Developer ID team, in place, so the app's
+  permissions and keychain item carry over
+  ([Updates](docs/design-macos.md#updates)). The packaged Mac request capture
+  above was made on 2026-11-04 against the published feed; a local server
+  that sets a cookie reproduced the same separation between checks.
+  The Windows app's traffic has not been measured. An outbound connection
+  you did not expect is worth reporting.
 - On Windows the keyboard hook does not receive keys typed into a window
   running as administrator (Windows' user interface privilege isolation), so
   the app can neither hear the hold key nor type there. That is a limit of

@@ -378,19 +378,16 @@ final class DictationRecordingSession: ObservableObject {
     }
 }
 
-/// Automatic updates and the manual check (docs/design-macos.md#updates).
+/// The Updates choice and the manual check (docs/design-macos.md#updates).
 private struct DictationUpdateSettings: View {
     @ObservedObject var updater: DictationUpdater
 
     var body: some View {
-        DictationRow(title: "Update Earlet automatically",
-                     detail: "Once a day Earlet asks GitHub for a newer version, downloads it and installs it when Earlet next quits. Your settings, words and permissions stay.") {
-            Toggle("Update Earlet automatically", isOn: Binding(
-                get: { updater.automaticallyChecks },
-                set: { updater.setAutomaticallyChecks($0) }
-            ))
-            .toggleStyle(.dictation)
-            .labelsHidden()
+        DictationRow(title: "Update Earlet", detail: updater.mode.detail(updateWaiting: updater.readyToInstall)) {
+            DictationChoice(title: "Update Earlet", current: updater.mode.label,
+                            selection: Binding(get: { updater.mode }, set: { updater.select($0) })) {
+                ForEach(DictationUpdateMode.allCases) { Text($0.label).tag($0) }
+            }
         }
         DictationRow(title: updater.readyToInstall ? "An update is ready" : "Updates",
                      detail: DictationInstallation.current.versionLabel, showsDivider: false) {

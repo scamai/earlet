@@ -5,6 +5,8 @@ these tests run on any platform. They prove ordering, entitlements and
 refusals; they are not evidence that Apple accepts a build or that the
 released app records, recognises or inserts anything.
 """
+import base64
+import hashlib
 import json
 from pathlib import Path
 import plistlib
@@ -20,6 +22,24 @@ from harness import ROOT, tool
 IDENTITY = "Developer ID Application: example team (ABCDE12345)"
 MH_EXECUTE, MH_DYLIB, MH_BUNDLE = 2, 6, 8
 ARM64, X86_64 = 0x0100000C, 0x01000007
+# Ed25519 keys and signatures from RFC 8032 §7.1 (TEST 1, 2 and 3): the
+# fake Mac signs the feed with the first; the second is another key.
+RFC8032 = [
+    ("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+     "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "",
+     "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"),
+    ("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
+     "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", "72",
+     "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"),
+    ("c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7",
+     "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025", "af82",
+     "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"),
+]
+FEED_SEED, FEED_PUBLIC = bytes.fromhex(RFC8032[0][0]), bytes.fromhex(RFC8032[0][1])
+OTHER_SEED = bytes.fromhex(RFC8032[1][0])
+# Loaded once, before any mutation test replaces the tool: the fake Mac's
+# signer must not change with the tool it checks.
+ED = tool("release_macos")
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -39,14 +59,19 @@ def fat(*slices):
     return bytes(image)
 
 
-def complete_app(root, mode="complete-preview", sparkle=False):
+def complete_app(root, mode="complete-preview", sparkle=False, signed_feed=True):
     """An Earlet.app laid out as tools/package.py lays out a complete package;
-    with ``sparkle``, also the updater framework the packager embeds."""
+    with ``sparkle``, also the updater framework the packager embeds and the
+    feed key, which the app requires the feed to be signed with unless
+    ``signed_feed`` is false."""
     app = root / "input/Earlet.app"
     (app / "Contents/MacOS").mkdir(parents=True)
+    info = {"CFBundleExecutable": "Dictation", "CFBundleName": "Earlet",
+            "CFBundleShortVersionString": "0.1.0", "DictationBuild": "20261024224346"}
+    if sparkle:
+        info |= {"SUPublicEDKey": base64.b64encode(FEED_PUBLIC).decode(), "SURequireSignedFeed": signed_feed}
     with (app / "Contents/Info.plist").open("wb") as stream:
-        plistlib.dump({"CFBundleExecutable": "Dictation", "CFBundleName": "Earlet",
-                       "CFBundleShortVersionString": "0.1.0", "DictationBuild": "20261024224346"}, stream)
+        plistlib.dump(info, stream)
     (app / "Contents/MacOS/Dictation").write_bytes(thin(MH_EXECUTE))
     resources = app / "Contents/Resources"
     (resources / "python/bin").mkdir(parents=True)
@@ -73,9 +98,13 @@ def complete_app(root, mode="complete-preview", sparkle=False):
 class FakeMac:
     """Records every command; acts out the few whose files later steps read."""
 
-    def __init__(self, status="Accepted", hardened=True, unsigned_feed=False):
+    def __init__(self, status="Accepted", hardened=True, unsigned_feed=False, feed_seed=FEED_SEED,
+                 altered_feed=False, honours_critical=True):
         self.commands, self.status, self.hardened = [], status, hardened
         self.unsigned_feed, self.no_key, self.appcast_input = unsigned_feed, False, None
+        # The feed's own signature: made with ``feed_seed`` (none when None),
+        # over the feed, or over a feed changed afterwards.
+        self.feed_seed, self.altered_feed, self.honours_critical = feed_seed, altered_feed, honours_critical
 
     def __call__(self, command, **kwargs):
         self.commands.append(command)
@@ -110,7 +139,17 @@ class FakeMac:
             delta.write_bytes(b"delta")
         signature = "" if self.unsigned_feed else ' sparkle:edSignature="c2lnbmF0dXJl"'
         items = "".join(f'<enclosure url="{prefix}{path.name}"{signature}/>' for path in [newest, *deltas])
-        Path(command[command.index("-o") + 1]).write_text(f"<rss><channel><item>{items}</item></channel></rss>")
+        if "--critical-update-version" in command and self.honours_critical:
+            items += "<sparkle:criticalUpdate/>"
+        content = f"<rss><channel><item>{items}</item></channel></rss>\n".encode()
+        feed = content
+        if self.feed_seed is not None:
+            # As generate_appcast signs a feed the app requires signed.
+            edSignature = base64.b64encode(ed25519_sign(self.feed_seed, content)).decode()
+            if self.altered_feed:
+                content = content.replace(b"<item>", b"<item><title>changed</title>")
+            feed = content + f"<!-- sparkle-signatures:\nedSignature: {edSignature}\nlength: {len(content)}\n-->\n".encode()
+        Path(command[command.index("-o") + 1]).write_bytes(feed)
 
     @staticmethod
     def finish(command, returncode, stdout, stderr, kwargs):
@@ -136,16 +175,32 @@ class FakeMac:
         raise AssertionError(f"never ran {prefix} {target or ''}")
 
 
+def ed25519_sign(seed: bytes, message: bytes) -> bytes:
+    """RFC 8032 §5.1.6, for the fake Mac: the release tool only verifies."""
+    def encode(point):
+        inverse = pow(point[2], ED.ED_P - 2, ED.ED_P)
+        x, y = point[0] * inverse % ED.ED_P, point[1] * inverse % ED.ED_P
+        return (y | ((x & 1) << 255)).to_bytes(32, "little")
+    expanded = hashlib.sha512(seed).digest()
+    secret = (int.from_bytes(expanded[:32], "little") & ((1 << 254) - 8)) | (1 << 254)
+    public = encode(ED.ed_mul(secret, ED.ED_BASE))
+    nonce = int.from_bytes(hashlib.sha512(expanded[32:] + message).digest(), "little") % ED.ED_L
+    commitment = encode(ED.ed_mul(nonce, ED.ED_BASE))
+    challenge = int.from_bytes(hashlib.sha512(commitment + public + message).digest(), "little") % ED.ED_L
+    return commitment + ((nonce + challenge * secret) % ED.ED_L).to_bytes(32, "little")
+
+
 def arguments(tmp_path, app, **overrides):
     values = {"app": app, "output": tmp_path / "release", "identity": IDENTITY,
-              "notary_profile": "example-profile", "no_notarize": False, "appcast": False, "previous_dmg": []}
+              "notary_profile": "example-profile", "no_notarize": False, "appcast": False, "previous_dmg": [],
+              "critical_update": False}
     values.update(overrides)
     return SimpleNamespace(**values)
 
 
-def released(tmp_path, mac=None, sparkle=False, module=None, **overrides):
+def released(tmp_path, mac=None, sparkle=False, module=None, signed_feed=True, **overrides):
     mac = mac or FakeMac()
-    app = complete_app(tmp_path, sparkle=sparkle)
+    app = complete_app(tmp_path, sparkle=sparkle, signed_feed=signed_feed)
     dmg = (module or tool("release_macos")).release(arguments(tmp_path, app, **overrides), mac)
     return mac, app, dmg
 
@@ -339,8 +394,7 @@ def test_sparkle_is_sealed_inside_out_before_the_app_with_no_worker_entitlements
                                          "Contents/Frameworks/Sparkle.framework"]
 
 
-@pytest.fixture
-def appcast_tool(tmp_path):
+def appcast_module(tmp_path):
     """The release tool, its Sparkle tools replaced by a stand-in the fake Mac acts out."""
     bin_dir = tmp_path / "sparkle-bin"
     bin_dir.mkdir()
@@ -348,6 +402,11 @@ def appcast_tool(tmp_path):
     module = tool("release_macos")
     module.SPARKLE_BIN = bin_dir
     return module
+
+
+@pytest.fixture
+def appcast_tool(tmp_path):
+    return appcast_module(tmp_path)
 
 
 def test_the_feed_names_only_this_release_and_its_deltas(tmp_path, appcast_tool):
@@ -366,7 +425,9 @@ def test_the_feed_names_only_this_release_and_its_deltas(tmp_path, appcast_tool)
     assert "c2VjcmV0LXNlZWQ=" not in " ".join(" ".join(c) for c in mac.commands)
     assert option("--download-url-prefix") == "https://github.com/scamai/earlet/releases/download/v0.1.0/"
     assert option("--maximum-versions") == "1"
+    assert "--critical-update-version" not in command
     receipt = json.loads((tmp_path / "release/release-receipt.json").read_text())["appcast"]
+    assert receipt["critical"] is False
     names = [asset["name"] for asset in receipt["assets"]]
     assert names == sorted(["appcast.xml", dmg.name, f"Earlet2-{old.stem}.delta"])
     assert old.name not in names and receipt["deltas_from"] == [old.name]
@@ -393,3 +454,103 @@ def test_a_keychain_without_the_signing_key_stops_the_release(tmp_path, appcast_
     with pytest.raises(RuntimeError, match="no update signing key"):
         released(tmp_path, mac, sparkle=True, module=appcast_tool, appcast=True)
 
+
+# ─── The feed's own signature ────────────────────────────────────────────────
+
+@pytest.mark.parametrize("seed, public, message, signature", RFC8032)
+def test_the_feed_check_verifies_ed25519_as_rfc_8032_specifies(seed, public, message, signature):
+    public, message, signature = bytes.fromhex(public), bytes.fromhex(message), bytes.fromhex(signature)
+    module = tool("release_macos")
+    assert module.ed25519_verify(public, message, signature)
+    # The fake Mac's signer is the reference algorithm too: deterministic, so
+    # it reproduces the RFC's signature exactly.
+    assert ed25519_sign(bytes.fromhex(seed), message) == signature
+    changed = bytes([signature[0] ^ 1]) + signature[1:]
+    malleable = signature[:32] + (int.from_bytes(signature[32:], "little") + module.ED_L).to_bytes(32, "little")
+    assert not module.ed25519_verify(public, message + b"x", signature)
+    assert not module.ed25519_verify(public, message, changed)
+    assert not module.ed25519_verify(public, message, malleable)
+    assert not module.ed25519_verify(bytes.fromhex(RFC8032[2][1]) if public == FEED_PUBLIC else FEED_PUBLIC,
+                                     message, signature)
+    assert not module.ed25519_verify(public, message, signature[:63])
+
+
+def test_the_published_feed_is_signed_with_the_key_the_app_carries(tmp_path):
+    module = appcast_module(tmp_path)
+    released(tmp_path, sparkle=True, module=module, appcast=True)
+    feed = (tmp_path / "release/updates/appcast.xml").read_bytes()
+    assert module.feed_signature_valid(feed, FEED_PUBLIC)
+    assert feed.rstrip().endswith(b"-->")
+
+
+@pytest.mark.parametrize("replacement", [b" edSignature:", b"edSignature :", b"\xff\nedSignature:",
+                                           b"\x1cedSignature:", b"edSignature:\x1c"],
+                         ids=["indented-key", "space-before-colon", "invalid-utf8", "control-line", "control-value"])
+def test_feed_metadata_sparkle_cannot_parse_is_rejected(tmp_path, replacement):
+    module = appcast_module(tmp_path)
+    released(tmp_path, sparkle=True, module=module, appcast=True)
+    feed = (tmp_path / "release/updates/appcast.xml").read_bytes()
+    assert module.feed_signature_valid(feed, FEED_PUBLIC)
+    # Only unsigned metadata changes: the signed content and signature stay valid.
+    altered = feed.replace(b"\nedSignature:", b"\n" + replacement)
+    assert altered != feed
+    assert not module.feed_signature_valid(altered, FEED_PUBLIC)
+
+
+@pytest.mark.parametrize("separator", [b"\r", b"\xc2\x85", b"\xe2\x80\xa8", b"\xe2\x80\xa9"])
+def test_a_hidden_last_signature_cannot_bypass_sparkles_line_parser(tmp_path, separator):
+    module = appcast_module(tmp_path)
+    released(tmp_path, sparkle=True, module=module, appcast=True)
+    feed = (tmp_path / "release/updates/appcast.xml").read_bytes()
+    start, end = feed.rsplit(b"-->", 1)
+    altered = start + b"other:" + separator + b"edSignature:invalid\n-->" + end
+    assert module.feed_signature_valid(feed, FEED_PUBLIC)
+    assert not module.feed_signature_valid(altered, FEED_PUBLIC)
+
+
+@pytest.mark.parametrize("mac_options", [{"feed_seed": None}, {"feed_seed": OTHER_SEED}, {"altered_feed": True}],
+                         ids=["no feed signature", "another key", "changed after signing"])
+def test_a_feed_the_app_would_not_read_stops_the_release(tmp_path, mac_options):
+    with pytest.raises(RuntimeError, match="own signature"):
+        released(tmp_path, FakeMac(**mac_options), sparkle=True, module=appcast_module(tmp_path), appcast=True)
+
+
+def test_an_app_that_would_read_an_unsigned_feed_is_refused_before_anything_is_signed(tmp_path):
+    mac = FakeMac()
+    with pytest.raises(ValueError, match="SURequireSignedFeed"):
+        released(tmp_path, mac, sparkle=True, module=appcast_module(tmp_path), signed_feed=False, appcast=True)
+    assert mac.commands == []
+
+
+def test_an_app_without_a_whole_feed_key_is_refused_before_anything_is_signed(tmp_path):
+    module = tool("release_macos")
+    for key in ("", "short", "A" * 43 + "=" * 2):
+        with pytest.raises(ValueError, match="SUPublicEDKey"):
+            module.feed_public_key({"SURequireSignedFeed": True, "SUPublicEDKey": key})
+    assert module.feed_public_key({"SURequireSignedFeed": True,
+                                   "SUPublicEDKey": base64.b64encode(FEED_PUBLIC).decode()}) == FEED_PUBLIC
+
+
+# ─── Security releases ───────────────────────────────────────────────────────
+
+def test_a_security_release_is_marked_critical_for_every_older_copy(tmp_path):
+    module = appcast_module(tmp_path)
+    mac, _app, _dmg = released(tmp_path, sparkle=True, module=module, appcast=True, critical_update=True)
+    command = next(c for c in mac.commands if Path(c[0]).name == "generate_appcast")
+    # An empty version: critical for a copy of any older version.
+    assert command[command.index("--critical-update-version") + 1] == ""
+    assert b"<sparkle:criticalUpdate/>" in (tmp_path / "release/updates/appcast.xml").read_bytes()
+    assert json.loads((tmp_path / "release/release-receipt.json").read_text())["appcast"]["critical"] is True
+
+
+def test_a_security_release_whose_feed_is_not_marked_critical_stops(tmp_path):
+    with pytest.raises(RuntimeError, match="critical"):
+        released(tmp_path, FakeMac(honours_critical=False), sparkle=True, module=appcast_module(tmp_path),
+                 appcast=True, critical_update=True)
+
+
+def test_a_critical_mark_without_a_feed_is_refused(tmp_path):
+    mac = FakeMac()
+    with pytest.raises(ValueError, match="--appcast"):
+        released(tmp_path, mac, sparkle=True, critical_update=True)
+    assert mac.commands == []

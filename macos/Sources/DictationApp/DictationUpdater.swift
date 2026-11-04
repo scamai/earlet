@@ -8,13 +8,16 @@ import Sparkle
 /// against the EdDSA key in Info.plist and Apple's code signature, and
 /// installs it when Earlet quits, at the same path and under the same
 /// Developer ID, so the microphone, Accessibility and Input Monitoring grants
-/// carry over. A copy without a feed (`DictationUpdateFeed`) never starts it.
+/// carry over. The Updates choice can make it only tell, or not check at all
+/// (`DictationUpdateMode`). No cookie outlives a check
+/// (`DictationUpdateCookies`). A copy without a feed (`DictationUpdateFeed`)
+/// never starts it.
 @MainActor
 final class DictationUpdater: NSObject, ObservableObject {
     /// Whether this copy follows a feed at all.
     let isAvailable: Bool
     @Published private(set) var canCheck = false
-    @Published private(set) var automaticallyChecks = false
+    @Published private(set) var mode = DictationUpdateMode.off
     /// Set when a downloaded update is waiting for Earlet to quit.
     @Published private(set) var readyToInstall = false
 
@@ -31,6 +34,8 @@ final class DictationUpdater: NSObject, ObservableObject {
         let controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self,
                                                       userDriverDelegate: nil)
         self.controller = controller
+        // What an older copy, or a check cut short by quitting, left behind.
+        DictationUpdateCookies.forget()
         do {
             try controller.updater.start()
         } catch {
@@ -42,20 +47,31 @@ final class DictationUpdater: NSObject, ObservableObject {
         watches.append(updater.publisher(for: \.canCheckForUpdates).receive(on: RunLoop.main)
             .sink { [weak self] in self?.canCheck = $0 })
         watches.append(updater.publisher(for: \.automaticallyChecksForUpdates).receive(on: RunLoop.main)
-            .sink { [weak self] in self?.automaticallyChecks = $0 })
+            .sink { [weak self] _ in self?.readMode() })
+        watches.append(updater.publisher(for: \.automaticallyDownloadsUpdates).receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.readMode() })
+        readMode()
     }
 
     func checkForUpdates() {
         controller?.checkForUpdates(nil)
     }
 
-    func setAutomaticallyChecks(_ on: Bool) {
+    func select(_ mode: DictationUpdateMode) {
         guard let updater = controller?.updater else { return }
-        updater.automaticallyChecksForUpdates = on
-        // Checking and installing go together: a found update is applied the
-        // next time Earlet quits, without a prompt.
-        updater.automaticallyDownloadsUpdates = on
-        DictationLogSink.shared.log("updates: automatic checks \(on ? "on" : "off")")
+        // Checks first: Sparkle ignores a change to automatic downloads while
+        // automatic checks are off.
+        updater.automaticallyChecksForUpdates = mode.automaticallyChecks
+        updater.automaticallyDownloadsUpdates = mode.automaticallyDownloads
+        DictationLogSink.shared.log("updates: set to \(mode.rawValue)")
+    }
+
+    /// The choice as Sparkle's settings now stand, which is also how the
+    /// 0.2.x switch is carried over (`DictationUpdateMode`).
+    private func readMode() {
+        guard let updater = controller?.updater else { return }
+        mode = DictationUpdateMode(automaticallyChecks: updater.automaticallyChecksForUpdates,
+                                   automaticallyDownloads: updater.automaticallyDownloadsUpdates)
     }
 
     /// Installs the waiting update now; Sparkle quits and relaunches Earlet.
@@ -69,6 +85,16 @@ final class DictationUpdater: NSObject, ObservableObject {
 extension DictationUpdater: @MainActor SPUUpdaterDelegate {
     func feedURLString(for updater: SPUUpdater) -> String? {
         feed?.absoluteString
+    }
+
+    // Every check, scheduled or asked for, starts and ends with an empty
+    // cookie store, so no cookie github.com sets ties one check to the next.
+    func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
+        DictationUpdateCookies.forget()
+    }
+
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
+        DictationUpdateCookies.forget()
     }
 
     // The log records builds and outcomes, never URLs or error text.

@@ -8,6 +8,17 @@ notice adds a line under Unreleased in the same pull request.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-04
+
+### Changed
+
+- **macOS: choose how Earlet updates.** Settings → General → Update Earlet
+  replaces the "Update Earlet automatically" switch with three choices:
+  Install automatically, still the default and unchanged; Notify only, which
+  tells you about a new version and installs it only if you choose to; and
+  Off. A copy that had the switch on starts on Install automatically, and one
+  that had it off on Off.
+
 ### Fixed
 
 - **macOS: correction capture after Chinese text wraps in Codex.** Display
@@ -34,6 +45,27 @@ notice adds a line under Unreleased in the same pull request.
 
 - macOS: keep correction capture available in the observed Codex completed-goal
   layout, where a goal status replaces the context counter.
+
+### Security
+
+- **macOS: Earlet empties its cookie store around every update check.**
+  github.com answers the daily check with cookies, one of them kept for a
+  year, which earlier versions, going by Sparkle's default URL session (read
+  from its source, not captured), would send back with every later check.
+  Earlet now empties its cookie store at launch and before and after each
+  check. Two consecutive checks from a packaged candidate carried no Cookie
+  header on either first request; redirects within each check carried only
+  that check's cookies. GitHub still sees the address
+  and user agent of every check. The check that brings this version can
+  still carry a cookie an earlier copy kept; its first launch deletes it.
+- **macOS: the update feed itself must be signed.** Earlet refuses a list of
+  updates that does not carry the signature of the key built into the app, as
+  every update already had to. If a list still fails that check 20 days
+  after it first did, Earlet reads it in a restricted mode that ignores its
+  important mark and release notes and downloads nothing until you choose
+  to; every update is still signature-checked. A release that fixes a
+  security problem can be marked important: Earlet's update window then
+  offers no Skip This Version, though no update is ever forced.
 
 ## [0.2.4] - 2026-10-30
 

@@ -134,8 +134,8 @@ narrow window):
    how it is stored, and Delete All History… ([History](#history)).
 3. General: "Open Earlet at login", with a note when macOS refused the
    change or the user must allow it under Login Items; then, in a packaged
-   copy, "Update Earlet automatically" and the version with Check for
-   Updates… or Restart to Update ([Updates](#updates)).
+   copy, "Update Earlet" (Off, Notify only or Install automatically) and the
+   version with Check for Updates… or Restart to Update ([Updates](#updates)).
 4. Troubleshooting, a closed disclosure: this copy's version, build and path
    with Show This Copy in Finder, then Check Permissions Again, Restart
    Earlet and Open Log Folder (one row, or one under another when the column
@@ -802,23 +802,62 @@ free text.
 
 A packaged app updates itself with Sparkle 2 (`DictationUpdater`), from the
 signed feed at `https://github.com/scamai/earlet/releases/latest/download/appcast.xml`
-(`SUFeedURL`, from `product.json`). Once a day it asks for the feed; a newer
-build is downloaded in the background and installed when Earlet next quits,
-without a prompt (`SUEnableAutomaticChecks`, `SUAutomaticallyUpdate`,
-`SUScheduledCheckInterval` 86400). Settings → General → **Update Earlet
-automatically** turns checking, downloading and installing off together; the
-row below it shows the version with **Check for Updates…**, and **Restart to
-Update** while a downloaded build waits. The app menu has the same command
-under About Earlet.
+(`SUFeedURL`, from `product.json`). Settings → General → **Update Earlet**
+has three choices (`DictationUpdateMode`):
 
-**What is accepted.** Only an archive whose EdDSA signature matches
-`SUPublicEDKey` in the running app, checked before it is unpacked
-(`SUVerifyUpdateBeforeExtraction`), and whose app is signed by the same
-Developer ID team. The update replaces the app at the same path under the same
-bundle identifier and team, which is what the Microphone, Accessibility and
-Input Monitoring grants and the History key are tied to, so none of them is
-asked for again. Sparkle's XPC services, which serve sandboxed apps, are not
-shipped ([development: releasing](development.md#releasing-a-mac-build)).
+- **Install automatically**, what a new install starts with: once a day the
+  app asks for the feed; a newer build is downloaded in the background and
+  installed when Earlet next quits, without a prompt
+  (`SUEnableAutomaticChecks`, `SUAutomaticallyUpdate`,
+  `SUScheduledCheckInterval` 86400).
+- **Notify only**: the same daily check, but a newer build is shown in
+  Sparkle's update window and downloads and installs only if the user
+  chooses to.
+- **Off**: no check unless the user asks for one.
+
+The choice is stored as Sparkle's own two settings, automatic checks and
+automatic downloads. The 0.2.x switch, "Update Earlet automatically", set
+both together, so a copy that had it on reads as Install automatically and
+one that had it off as Off, with nothing migrated on disk. The row below
+shows the version with **Check for Updates…**, which works under every
+choice, and **Restart to Update** while a downloaded build waits. The app
+menu has the same command under About Earlet.
+
+An update already downloaded still installs when Earlet quits. Once Install
+automatically has downloaded a build that waits for the quit, switching to
+Notify only or Off changes only later checks: Sparkle 2.9.6 keeps that session
+running (`SPUAutomaticUpdateDriver.m`), does nothing with a changed setting
+while a session is in progress (`SPUUpdater.m`), and has no public call that
+cancels a staged install. While Restart to Update is shown, Settings says so
+under Off and Notify only (`DictationUpdateMode.detail(updateWaiting:)`). This
+was verified on a Mac with a staged signed update on 2026-11-04.
+
+**What is accepted.** A feed signed with the EdDSA key in the running app
+(`SURequireSignedFeed`: Sparkle's `generate_appcast` adds the signature as a
+comment at the end of the feed); a feed without a valid signature is refused.
+If that lasts 20 days (Sparkle's `SUSignedFeedFailureExpirationInterval`
+default, counted from the first failure and reset by a valid feed), Sparkle
+reads the feed in a restricted mode that ignores its critical mark and
+release notes, never downloads on its own, and still checks every archive.
+An archive is accepted only when its signature matches the same key
+(`SUPublicEDKey`), checked before it is unpacked
+(`SUVerifyUpdateBeforeExtraction`), and its app is signed by the same
+Developer ID team. Copies built before `SURequireSignedFeed` read the feed
+without checking its signature and still check every archive. The update
+replaces the app at the same path under the same bundle identifier and team,
+which is what the Microphone, Accessibility and Input Monitoring grants and
+the History key are tied to, so none of them is asked for again. Sparkle's
+XPC services, which serve sandboxed apps, are not shipped
+([development: releasing](development.md#releasing-a-mac-build)).
+
+**Security releases.** A release built with `--critical-update` is marked
+`sparkle:criticalUpdate` in the feed. In Sparkle 2.9.6's update window, which
+Notify only and a manual check show, the release is then titled as an
+important update and has no Skip This Version or Remind Me Later button.
+Nothing is forced: closing the window still declines it, Off still never
+checks on its own, and a copy that is out of date keeps working. There is no
+phased rollout: every copy that checks finds a new release at its next daily
+check, within a day of publication.
 
 **Patches.** The feed lists the newest release only, with a delta from each
 earlier build the release names. A copy on one of those builds downloads the
@@ -827,21 +866,52 @@ other copy, or a delta that does not apply, downloads the whole image.
 
 **Which copies follow it.** Every package from `tools/package.py`, local ones
 included; a `swift run` build has no feed and never checks.
-`DICTATION_UPDATE_FEED_URL` points one launch at another feed, HTTPS or the
-loopback only (`DictationUpdateFeed`). A copy older than the first build with
-the updater (0.1.0) must be replaced by hand once.
+`DICTATION_UPDATE_FEED_URL` points one launch at a local test feed: the
+loopback only (127.0.0.1, case-insensitive localhost or ::1, over HTTP or HTTPS), and any other
+value turns updates off for that launch (`DictationUpdateFeed`). Every
+package is a release build, so the override cannot be compiled out; kept to
+the loopback, it cannot send the daily check to another server. Every
+package from this source requires a signed feed, so a local test feed must be
+signed with the release key after any edit: run
+`sign_update --account <account> appcast.xml` (Sparkle 2.9.6 embeds the feed
+signature; the account is `product.json`'s `updates.keychain_account`), or
+run `generate_appcast --account <account>` with a loopback `--download-url-prefix`. An unsigned
+or edited feed is refused. A copy older than the first build with the updater
+(0.1.0) must be replaced by hand once.
 
-**Network.** A check is one HTTPS request for the feed to github.com, which
-sees the address it comes from and Sparkle's user agent, naming the app and
-its version; no system profile is sent. A found update then comes from
-GitHub's download host. In one measured check (2026-10-25, the Mac app) the
-app opened a single connection, to github.com, and no other in the twelve
-seconds around it.
+**Network.** A check is one HTTPS GET of the feed's address, with no query
+string, install ID or system profile: `SUEnableSystemProfiling` is unset, and
+the app adds no feed parameters or headers (`tests/test_update_privacy.py`).
+github.com answers with a redirect to the release's own address, and then
+another to GitHub's release asset host, `release-assets.githubusercontent.com`,
+which serves the file; a found update's archive is one redirect, from
+github.com to the same asset host. Each host sees
+the address the request comes from, the time and the request headers,
+including Sparkle's user agent, which names the app and its version.
+github.com also sets cookies, one of them kept for a year. Sparkle's session
+would keep them and send them back with every later check (read from
+`SPUDownloader.m`'s default session configuration), so the app empties its
+cookie store at launch and before and after each check
+(`DictationUpdateCookies`). Two consecutive checks from a packaged 0.2.5
+candidate on 2026-11-04 had no Cookie header on either first request. Native
+CFNetwork diagnostics showed both redirects: the in-check github.com request
+carried the cookies that response had just set, and the asset-host request
+carried none. A loopback server that sets a cookie reproduced the same
+separation between checks. Clearing cookies removes that link only: every
+check still shows GitHub its address and request headers. The public 0.2.4
+feed lacked a whole-feed signature and was rejected after download, as
+required; the local signed feed was accepted. A real 0.2.4 copy downloaded
+the candidate delta, installed it on quit and relaunched with its update
+settings preserved. Notify only displayed the native update prompt without
+an archive request. After an automatic download, switching to Off or Notify
+only showed the waiting-update warning, and both cases installed on quit.
+These checks used temporary bundles and a signed local feed, not a published
+0.2.5 distribution or an additional clean machine.
 
 **Log lines.** `updates:` with a build or an error code only: `found build
 …`, `up to date`, `downloaded build …`, `build … installs when Earlet quits`,
-`download failed (code …)`, `check ended (code …)` and `automatic checks
-on|off`. Never a URL or an error's text.
+`download failed (code …)`, `check ended (code …)` and `set to
+off|notify-only|install-automatically`. Never a URL or an error's text.
 
 ## The floating indicator on macOS
 

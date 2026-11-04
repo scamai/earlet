@@ -940,7 +940,12 @@ def test_the_macos_bundle_follows_the_product_update_feed(tmp_path, monkeypatch)
     assert info["SUPublicEDKey"] == updates["ed25519_public"]
     assert info["SUEnableAutomaticChecks"] is True and info["SUAutomaticallyUpdate"] is True
     assert info["SUScheduledCheckInterval"] == 86400
+    # The app requires a feed signed with its key, and checks the archive
+    # before unpacking it.
+    assert info["SURequireSignedFeed"] is True
     assert info["SUVerifyUpdateBeforeExtraction"] is True
+    # A check sends no system profile: Sparkle's switch for it stays unset.
+    assert "SUEnableSystemProfiling" not in info and "SUSendProfileInfo" not in info
 
 
 @pytest.mark.parametrize("updates, accepted", [

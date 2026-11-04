@@ -10,18 +10,26 @@ import Foundation
 public enum DictationUpdateFeed {
     public static let environmentKey = "DICTATION_UPDATE_FEED_URL"
 
-    /// The feed to follow, or `nil` when updates are off for this copy. Only
-    /// HTTPS is accepted, or plain HTTP to this Mac's loopback address for a
-    /// local test: the archive is checked against the EdDSA key either way,
-    /// but a feed fetched in the clear could still be held back.
+    /// The names of this Mac's loopback address, where a local test feed runs.
+    static let loopbackHosts: Set<String> = ["127.0.0.1", "localhost", "::1"]
+
+    /// The feed to follow, or `nil` when updates are off for this copy.
+    ///
+    /// Info.plist's feed must be HTTPS: the archive is checked against the
+    /// EdDSA key either way, but a feed fetched in the clear could be held
+    /// back. The environment may point only at the loopback, over HTTP or
+    /// HTTPS: every package is a release build, so the override cannot be
+    /// compiled out, and kept to this Mac it cannot send the daily check to
+    /// another server. Any other override turns updates off for that launch.
     public static func url(infoPlistFeed: String?, environment: [String: String]) -> URL? {
-        let candidate = environment[environmentKey].flatMap { $0.isEmpty ? nil : $0 } ?? infoPlistFeed
-        guard let candidate, let url = URL(string: candidate), let host = url.host, !host.isEmpty else { return nil }
-        switch url.scheme?.lowercased() {
-        case "https": return url
-        case "http": return ["127.0.0.1", "localhost", "::1"].contains(host) ? url : nil
-        default: return nil
+        if let override = environment[environmentKey], !override.isEmpty {
+            guard let url = URL(string: override), let host = url.host, loopbackHosts.contains(host.lowercased()),
+                  let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
+            return url
         }
+        guard let infoPlistFeed, let url = URL(string: infoPlistFeed), let host = url.host, !host.isEmpty,
+              url.scheme?.lowercased() == "https" else { return nil }
+        return url
     }
 
     /// The feed for the running copy, from its Info.plist and environment.

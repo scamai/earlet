@@ -36,10 +36,25 @@ struct DictationUpdateFeedTests {
         #expect(DictationUpdateFeed.url(infoPlistFeed: release, environment: [DictationUpdateFeed.environmentKey: feed]) == nil)
     }
 
-    @Test("the loopback may serve a local test feed over HTTP",
-          arguments: ["http://127.0.0.1:8765/appcast.xml", "http://localhost:8765/appcast.xml"])
+    @Test("the loopback may serve a local test feed",
+          arguments: ["http://127.0.0.1:8765/appcast.xml", "http://localhost:8765/appcast.xml",
+                      "https://127.0.0.1:8765/appcast.xml", "http://LOCALHOST:8765/appcast.xml",
+                      "http://[::1]:8765/appcast.xml"])
     func loopback(_ feed: String) {
         #expect(DictationUpdateFeed.url(infoPlistFeed: nil, environment: [DictationUpdateFeed.environmentKey: feed]) != nil)
+    }
+
+    @Test("the environment cannot send the check to another server, over HTTPS either",
+          arguments: ["https://example.com/appcast.xml", "https://127.0.0.1.example.com/appcast.xml",
+                      "https://localhost@example.com/appcast.xml"])
+    func elsewhere(_ feed: String) {
+        // Updates are off for that launch, rather than back on the release feed.
+        #expect(DictationUpdateFeed.url(infoPlistFeed: release, environment: [DictationUpdateFeed.environmentKey: feed]) == nil)
+    }
+
+    @Test("Info.plist's feed is HTTPS, even to this Mac")
+    func packagedFeedIsHTTPS() {
+        #expect(DictationUpdateFeed.url(infoPlistFeed: "http://127.0.0.1:8765/appcast.xml", environment: [:]) == nil)
     }
 }
 #endif

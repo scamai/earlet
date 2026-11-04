@@ -274,6 +274,18 @@ python3 tools/release_macos.py --app dist/macos-complete/Earlet.app \
   --appcast --previous-dmg dist/previous/Earlet-0.2.0-macos-arm64.dmg
 ```
 
+The tool then checks the feed as an installed copy will: it must end in a
+signature made with the `SUPublicEDKey` of the app being released, which
+`generate_appcast` adds because the app requires a signed feed
+(`SURequireSignedFeed`). An app packaged without that requirement is refused
+before anything is signed; a feed that is unsigned, signed with another key
+or changed after signing stops the release.
+
+For a release that fixes a security problem, add `--critical-update`: the
+feed marks it `sparkle:criticalUpdate` for a copy of any older version, which
+then cannot skip it, and the receipt's `appcast.critical` says so. It forces
+nothing ([Updates](design-macos.md#updates)).
+
 Before a release, raise `version` in `product.json`; Sparkle orders builds by
 `CFBundleVersion`, which the packager sets to the build id. The feed's
 download addresses name the tag `v<version>`, so the release must carry that
@@ -351,7 +363,7 @@ the development build.
 | `DICTATION_CAPTURE_WATCHDOG` | Windows `DictationEnvironment.cs`, `DictationController.Takes.cs` | The in-hold watchdog that ends a take whose microphone stopped delivering audio (0.3 s with no buffer, after its graces), keeping what was captured: `0` turns it off; any other value, or none, leaves it on. The field switch for a device whose buffering the gap misreads, as the Mac's `dictation.capture.watchdog` defaults flag is ([long takes](design-windows.md#long-takes-are-never-lost)). Read once a run |
 | `DICTATION_HUD_RENDER_DIR` | Mac `DictationApp.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders every indicator state to PNGs in that directory (on the Mac also the menu bar icon's waiting badge, `hud-menu-icon-*.png`), then exits, non-zero when a shadow is cut at the image's edge or two busy states differ in size. Honoured by every build, release included. Windows draws each state at 100, 150 and 200% in light, dark and high contrast (the pill in the theme's colours), also fails when the shadow ring or the one busy width fails on the layout, and writes `render-report.txt` beside them; built and tested on Linux, never run ([render modes](design-windows.md#render-modes-on-windows)) |
 | `DICTATION_WINDOW_RENDER_DIR` | Mac `DictationApp.swift`, `DictationWindowRender.swift`; Windows `DictationEnvironment.cs`, `DictationRenderMode.cs` | Renders the window to PNGs (each scenario, width and appearance), then exits. Honoured by every build, release included. The Mac exits 0 whatever it wrote; Windows also draws 100, 150 and 200% and high contrast, every header state and the notification-area icon's pictures, and exits non-zero when a scenario or an image failed. With both variables set, the Mac renders only the indicator and Windows renders both |
-| `DICTATION_UPDATE_FEED_URL` | Mac `DictationUpdateFeed.swift` | The update feed for one launch instead of Info.plist's `SUFeedURL`: HTTPS, or HTTP to 127.0.0.1 or localhost to try an update against a local feed. Any other value turns updates off for that launch ([Updates](design-macos.md#updates)) |
+| `DICTATION_UPDATE_FEED_URL` | Mac `DictationUpdateFeed.swift` | The update feed for one launch instead of Info.plist's `SUFeedURL`, to try an update against a local feed: 127.0.0.1, localhost or ::1 only, over HTTP or HTTPS. Any other value, another server included, turns updates off for that launch. Every package from this source requires a signed feed, so a local test feed must be signed with the release key after any edit: `sign_update --account <account> appcast.xml` (Sparkle 2.9.6 embeds the feed signature; the account is `product.json`'s `updates.keychain_account`), or `generate_appcast --account <account>` with a loopback `--download-url-prefix`. An unsigned or edited feed is refused ([Updates](design-macos.md#updates)) |
 | `DICTATION_CAPTURE_TRACE` | Mac `DictationCaptureForensics.swift` | `1` logs every audio chunk of each hold |
 | `DICTATION_AUDIO_TRACE` | Mac `AudioTrace.swift` (microphone and system-audio capture) | `1` logs the capture layer's trace lines |
 | `DICTATION_IPC_TRACE` | Mac `DictationAsrTransport.swift`, `PythonEngineClient.swift` | `1` logs stage-by-stage worker transport timings |

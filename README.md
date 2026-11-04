@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/scamai/earlet/releases/latest"><img src="docs/assets/download-mac.svg" alt="Download Earlet for Mac" width="234" height="52"></a><br>
-  <sub>macOS 14+ · Apple Silicon · 0.2.4 preview<br>
+  <sub>macOS 14+ · Apple Silicon · 0.2.5 preview<br>
   Signed and notarized by Apple.</sub>
 </p>
 
@@ -89,7 +89,7 @@ recording. Retention and deletion stay under your control.
 
 <a href="https://github.com/scamai/earlet/releases/latest"><img src="docs/assets/download-mac.svg" alt="Download Earlet for Mac" width="234" height="52"></a>
 
-Download `Earlet-0.2.4-macos-arm64.dmg` from
+Download `Earlet-0.2.5-macos-arm64.dmg` from
 [Releases](https://github.com/scamai/earlet/releases/latest), open it and drag
 Earlet to Applications. It needs an Apple Silicon Mac with macOS 14 or later.
 The image is signed with Reality Inc.'s Developer ID and notarized by Apple,
@@ -180,7 +180,7 @@ them before sharing. **Copy last text** holds the latest usable result in memory
 - **Mac History.** Delivered words and kept recordings are encrypted with AES-256-GCM and a key in the login keychain. By default, words are kept forever and recordings for 30 days. Change retention or turn History off in Settings; Delete All History destroys its key.
 - **Recovery audio.** The Mac writes an **unencrypted** temporary audio file while recording. A successful delivery, usable text/clipboard fallback, or cancellation removes it; at most one failed or interrupted take remains for up to seven days.
 - **Vocabulary.** `learning.json` keeps vocabulary and correction evidence in **plain text**. Disable learning or inspect and remove learned words in the app.
-- **Mac updates.** Once a day the Mac app asks GitHub for a newer version, downloads it and installs it when Earlet quits; your settings, words and permissions carry over. Turn this off under Settings → Update Earlet automatically. See [Updates](docs/design-macos.md#updates).
+- **Mac updates.** Once a day the Mac app fetches a small public file (`appcast.xml`) from Earlet's GitHub Releases to check for a new version. It sends no account, install ID, system profile or anything about your audio, text or words; GitHub sees your IP address, the time and the request headers, including a user agent naming Earlet and its version. Each check starts without cookies from an earlier check; redirects within that check can use cookies GitHub just set. Updates come from the same place, are signature-checked, and install when Earlet quits. Under Settings → General → Update Earlet, choose Notify only to decide on each update yourself, or Off to stop checking. See [Updates](docs/design-macos.md#updates).
 
 Mac History lives under
 `~/Library/Application Support/Dictation/dictation/history`; recovery audio

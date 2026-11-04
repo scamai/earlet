@@ -473,9 +473,13 @@ def stage_resources(resources: Path, target: str, python: Path | None, model: Pa
 #: What Sparkle needs from Info.plist (docs/design-macos.md#updates). The feed
 #: and the EdDSA public key come from product.json; the rest is policy: check
 #: once a day, download and install a found update when Earlet next quits,
-#: and check the archive's signature before unpacking it.
+#: require a feed signed with that key, and check the archive's signature
+#: before unpacking it. The defaults are what a new install starts with; the
+#: Updates choice in Settings changes the first two. SUEnableSystemProfiling is
+#: left out, so Sparkle sends no system profile.
 UPDATE_POLICY = {"SUEnableAutomaticChecks": True, "SUAutomaticallyUpdate": True,
-                 "SUScheduledCheckInterval": 86400, "SUVerifyUpdateBeforeExtraction": True}
+                 "SUScheduledCheckInterval": 86400, "SURequireSignedFeed": True,
+                 "SUVerifyUpdateBeforeExtraction": True}
 
 
 def update_keys(product: dict) -> dict:
