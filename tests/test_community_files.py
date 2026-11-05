@@ -267,8 +267,8 @@ def codeowners_errors(root: Path, text: str) -> list[str]:
         patterns.append(pattern)
         if not owners:
             errors.append(f"CODEOWNERS: {pattern} has no owner")
-        errors += [f"CODEOWNERS: {owner} is not a team (owners are teams, never people)"
-                   for owner in owners if not re.fullmatch(r"@[\w-]+/[\w-]+", owner)]
+        errors += [f"CODEOWNERS: {owner} is not a GitHub username or team"
+                   for owner in owners if not re.fullmatch(r"@[A-Za-z0-9-]+(?:/[A-Za-z0-9-]+)?", owner)]
         if pattern != "*" and not re.search(r"[*?\[]", pattern) and not (root / pattern.strip("/")).exists():
             errors.append(f"CODEOWNERS: {pattern} does not exist")
     if patterns[:1] != ["*"]:
@@ -838,8 +838,9 @@ def test_pull_request_and_security_checks_fire():
 
 def test_codeowners_and_dependabot_checks_fire():
     owners = read(".github/CODEOWNERS")
-    assert codeowners_errors(ROOT, owners + "/tools/ @a-person\n") == [
-        "CODEOWNERS: @a-person is not a team (owners are teams, never people)"]
+    assert codeowners_errors(ROOT, "* @example-maintainer\n/tools/ @example/maintainers\n") == []
+    assert codeowners_errors(ROOT, owners + "/tools/ invalid-owner\n") == [
+        "CODEOWNERS: invalid-owner is not a GitHub username or team"]
     assert codeowners_errors(ROOT, owners + "/gone.md @example/maintainers\n") == [
         "CODEOWNERS: /gone.md does not exist"]
     assert "\n* " in owners
